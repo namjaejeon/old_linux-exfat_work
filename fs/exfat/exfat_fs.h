@@ -532,6 +532,8 @@ void __exfat_fs_error(struct super_block *sb, int report, const char *fmt, ...)
 		fmt, ## args)
 void exfat_msg(struct super_block *sb, const char *lv, const char *fmt, ...)
 		__printf(3, 4) __cold;
+void exfat_time_min(struct exfat_date_time *tp);
+void exfat_time_max(struct exfat_date_time *tp);
 void exfat_time_fat2unix(struct exfat_sb_info *sbi, struct timespec64 *ts,
 		struct exfat_date_time *tp);
 void exfat_time_unix2fat(struct exfat_sb_info *sbi, struct timespec64 *ts,

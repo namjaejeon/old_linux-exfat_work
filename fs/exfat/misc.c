@@ -62,6 +62,28 @@ void exfat_msg(struct super_block *sb, const char *level, const char *fmt, ...)
 	va_end(args);
 }
 
+void exfat_time_min(struct exfat_date_time *tp)
+{
+	tp->milli_second = 0;
+	tp->second = 0;
+	tp->minute = 0;
+	tp->hour = 0;
+	tp->day = 1;
+	tp->month = 1;
+	tp->year = 0;
+}
+
+void exfat_time_max(struct exfat_date_time *tp)
+{
+	tp->milli_second = 999;
+	tp->second = 59;
+	tp->minute = 59;
+	tp->hour = 23;
+	tp->day = 31;
+	tp->month = 12;
+	tp->year = 127;
+}
+
 #define UNIX_SECS_1980    315532800L
 #define UNIX_SECS_2108    4354819200LL
 
@@ -101,24 +123,12 @@ void exfat_time_unix2fat(struct exfat_sb_info *sbi, struct timespec64 *ts,
 
 	/* Jan 1 GMT 00:00:00 1980. But what about another time zone? */
 	if (second < UNIX_SECS_1980) {
-		tp->milli_second = 0;
-		tp->second = 0;
-		tp->minute = 0;
-		tp->hour = 0;
-		tp->day = 1;
-		tp->month = 1;
-		tp->year = 0;
+		exfat_time_min(tp);
 		return;
 	}
 
 	if (second >= UNIX_SECS_2108) {
-		tp->milli_second = 999;
-		tp->second = 59;
-		tp->minute = 59;
-		tp->hour = 23;
-		tp->day = 31;
-		tp->month = 12;
-		tp->year = 127;
+		exfat_time_max(tp);
 		return;
 	}
 

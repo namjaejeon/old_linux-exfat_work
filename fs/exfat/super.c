@@ -516,6 +516,8 @@ static int exfat_fill_super(struct super_block *sb, struct fs_context *fc)
 	struct exfat_mount_options *opts = &sbi->options;
 	struct inode *root_inode;
 	int err;
+	struct timespec64 ts;
+	struct exfat_date_time tp;
 
 	if (opts->allow_utime == (unsigned short)-1)
 		opts->allow_utime = ~opts->fs_dmask & 0022;
@@ -532,6 +534,16 @@ static int exfat_fill_super(struct super_block *sb, struct fs_context *fc)
 	sb->s_flags |= SB_NODIRATIME;
 	sb->s_magic = EXFAT_SUPER_MAGIC;
 	sb->s_op = &exfat_sops;
+
+	sb->s_time_gran = 1;
+
+	exfat_time_min(&tp);
+	exfat_time_fat2unix(sbi, &ts, &tp);
+	sb->s_time_min = ts.tv_sec;
+
+	exfat_time_max(&tp);
+	exfat_time_fat2unix(sbi, &ts, &tp);
+	sb->s_time_max = ts.tv_sec;
 
 	sb->s_d_op = &exfat_dentry_ops;
 
