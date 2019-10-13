@@ -1,0 +1,29 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+config EXFAT_FS
+	tristate "exfat filesystem support"
+	default y
+	select NLS
+	help
+	  If you want to use the exFAT file system, then you must say Y or M
+	  here to inlucde exFAT support.
+
+	  To compile this as a module, choose M here: the module will be called
+	  sdfat_core and sdfat_fs.
+
+config EXFAT_DEFAULT_CODEPAGE
+	int "Default codepage for exFAT"
+	default 437
+	depends on EXFAT_FS
+	help
+	  This option should be set to the codepage of your exFAT filesystems.
+
+config EXFAT_DEFAULT_IOCHARSET
+	string "Default iocharset for exFAT"
+	default "utf8"
+	depends on EXFAT_FS
+	help
+	  Set this to the default input/output character set you'd
+	  like exFAT to use. It should probably match the character set
+	  that most of your exFAT filesystems use, and can be overridden
+	  with the "iocharset" mount option for exFAT filesystems.
