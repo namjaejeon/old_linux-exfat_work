@@ -99,8 +99,10 @@ int __exfat_umount(struct super_block *sb)
 
 static void exfat_write_super(struct super_block *sb)
 {
+	mutex_lock(&EXFAT_SB(sb)->s_lock);
 	set_sb_clean(sb);
 	sync_blockdev(sb->s_bdev);
+	mutex_unlock(&EXFAT_SB(sb)->s_lock);
 }
 
 static void exfat_put_super(struct super_block *sb)
@@ -139,12 +141,14 @@ static int exfat_sync_fs(struct super_block *sb, int wait)
 	int err = 0;
 
 	/* If there are some dirty buffers in the bdev inode */
+	mutex_lock(&EXFAT_SB(sb)->s_lock);
 	if (is_sb_dirty(sb)) {
 		set_sb_clean(sb);
 		sync_blockdev(sb->s_bdev);
 		if (exfat_set_vol_flags(sb, VOL_CLEAN))
 			err = -EIO;
 	}
+	mutex_unlock(&EXFAT_SB(sb)->s_lock);
 
 	return err;
 }
@@ -343,20 +347,6 @@ static const match_table_t exfat_tokens = {
 	{Opt_discard, "discard"},
 	{Opt_err, NULL}
 };
-
-static inline void lock_exfat(struct super_block *sb)
-{
-	struct exfat_sb_info *sbi = EXFAT_SB(sb);
-
-	mutex_lock(&sbi->s_lock);
-}
-
-static inline void unlock_exfat(struct super_block *sb)
-{
-	struct exfat_sb_info *sbi = EXFAT_SB(sb);
-
-	mutex_unlock(&sbi->s_lock);
-}
 
 static int parse_options(struct super_block *sb, char *options, int silent,
 		struct exfat_mount_options *opts)
@@ -1054,7 +1044,7 @@ static int exfat_fill_super(struct super_block *sb, void *data, int silent)
 		sbi->use_vmalloc = 1;
 	}
 
-	mutex_init(&sbi->s_vlock);
+	mutex_init(&sbi->s_lock);
 	sb->s_fs_info = sbi;
 	sb->s_flags |= SB_NODIRATIME;
 	sb->s_magic = EXFAT_SUPER_MAGIC;

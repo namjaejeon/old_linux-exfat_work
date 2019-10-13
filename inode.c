@@ -302,6 +302,7 @@ void exfat_truncate(struct inode *inode, loff_t old_size)
 	loff_t aligned_size;
 	int err;
 
+	mutex_lock(&sbi->s_lock);
 	if (EXFAT_I(inode)->fid.start_clu == 0) {
 		/*
 		 * Empty start_clu != ~0 (not allocated)
@@ -334,6 +335,7 @@ out:
 
 	if (EXFAT_I(inode)->i_size_aligned > i_size_read(inode))
 		EXFAT_I(inode)->i_size_aligned = aligned_size;
+	mutex_unlock(&sbi->s_lock);
 }
 
 /*
@@ -582,6 +584,7 @@ static int exfat_get_block(struct inode *inode, sector_t iblock,
 	loff_t pos;
 	int bmap_create = create ? BMAP_ADD_CLUSTER : BMAP_NOT_CREATE;
 
+	mutex_lock(&EXFAT_SB(sb)->s_lock);
 	err = exfat_bmap(inode, iblock, &phys, &mapped_blocks, &bmap_create);
 	if (err) {
 		if (err != -ENOSPC)
@@ -633,6 +636,7 @@ static int exfat_get_block(struct inode *inode, sector_t iblock,
 
 	bh_result->b_size = max_blocks << sb->s_blocksize_bits;
 unlock_ret:
+	mutex_unlock(&EXFAT_SB(sb)->s_lock);
 	return err;
 }
 

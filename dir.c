@@ -249,6 +249,7 @@ static int exfat_iterate(struct file *filp, struct dir_context *ctx)
 	int err = 0, fake_offset = 0;
 
 	exfat_init_namebuf(nb);
+	mutex_lock(&EXFAT_SB(sb)->s_lock);
 
 	cpos = ctx->pos;
 	if (!dir_emit_dots(filp, ctx))
@@ -318,7 +319,7 @@ get_new:
 	if (!dir_emit(ctx, nb->lfn, strlen(nb->lfn), inum,
 			(de.attr & ATTR_SUBDIR) ? DT_DIR : DT_REG))
 		goto out_unlocked;
-
+	mutex_unlock(&EXFAT_SB(sb)->s_lock);
 	ctx->pos = cpos;
 	goto get_new;
 
@@ -327,6 +328,7 @@ end_of_dir:
 		cpos = ITER_POS_FILLED_DOTS;
 	ctx->pos = cpos;
 out:
+	mutex_unlock(&EXFAT_SB(sb)->s_lock);
 out_unlocked:
 	/*
 	 * To improve performance, free namebuf after unlock sb_lock.

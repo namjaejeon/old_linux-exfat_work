@@ -427,6 +427,8 @@ static int exfat_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 	loff_t i_pos;
 	int err;
 
+	mutex_lock(&EXFAT_SB(sb)->s_lock);
+
 	err = __exfat_create(dir, (unsigned char *) dentry->d_name.name,
 		FM_REGULAR, &fid);
 	if (err) {
@@ -455,6 +457,7 @@ static int exfat_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 	d_instantiate(dentry, inode);
 out:
 	__unlock_d_revalidate(dentry);
+	mutex_unlock(&EXFAT_SB(sb)->s_lock);
 	return err;
 }
 
@@ -674,6 +677,7 @@ static struct dentry *exfat_lookup(struct inode *dir, struct dentry *dentry,
 	unsigned long long ret;
 	mode_t i_mode;
 
+	mutex_lock(&EXFAT_SB(sb)->s_lock);
 	err = exfat_find(dir, &dentry->d_name, &fid);
 	if (err) {
 		if (err == -ENOENT) {
@@ -736,16 +740,19 @@ static struct dentry *exfat_lookup(struct inode *dir, struct dentry *dentry,
 			d_move(alias, dentry);
 		}
 		iput(inode);
+		mutex_unlock(&EXFAT_SB(sb)->s_lock);
 		return alias;
 	}
 	dput(alias);
 out:
 	/* initialize d_time even though it is positive dentry */
 	dentry->d_time = inode_peek_iversion_raw(dir);
+	mutex_unlock(&EXFAT_SB(sb)->s_lock);
 
 	dentry = d_splice_alias(inode, dentry);
 	return dentry;
 error:
+	mutex_unlock(&EXFAT_SB(sb)->s_lock);
 	return ERR_PTR(err);
 }
 
@@ -787,6 +794,7 @@ static int exfat_unlink(struct inode *dir, struct dentry *dentry)
 	struct exfat_file_id *fid = &(EXFAT_I(inode)->fid);
 	int err = 0;
 
+	mutex_lock(&EXFAT_SB(sb)->s_lock);
 	fid->size = i_size_read(inode);
 
 	cdir.dir = fid->dir.dir;
@@ -835,6 +843,7 @@ static int exfat_unlink(struct inode *dir, struct dentry *dentry)
 	dentry->d_time = inode_peek_iversion_raw(dir);
 out:
 	__unlock_d_revalidate(dentry);
+	mutex_unlock(&EXFAT_SB(sb)->s_lock);
 
 	return err;
 }
@@ -1122,6 +1131,7 @@ static int exfat_symlink(struct inode *dir, struct dentry *dentry,
 	if (!EXFAT_SB(sb)->options.symlink)
 		return -ENOTSUPP;
 
+	mutex_lock(&EXFAT_SB(sb)->s_lock);
 	err = __exfat_create(dir, (unsigned char *) dentry->d_name.name,
 		FM_SYMLINK, &fid);
 	if (err)
@@ -1164,6 +1174,7 @@ static int exfat_symlink(struct inode *dir, struct dentry *dentry,
 	d_instantiate(dentry, inode);
 out:
 	__unlock_d_revalidate(dentry);
+	mutex_unlock(&EXFAT_SB(sb)->s_lock);
 	return err;
 }
 
@@ -1252,6 +1263,7 @@ static int exfat_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 	loff_t i_pos;
 	int err;
 
+	mutex_lock(&EXFAT_SB(sb)->s_lock);
 	/* check the validity of directory name in the given old pathname */
 	err = resolve_path(dir, (unsigned char *) dentry->d_name.name,
 		&cdir, &uni_name);
@@ -1290,6 +1302,7 @@ static int exfat_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 
 out:
 	__unlock_d_revalidate(dentry);
+	mutex_unlock(&EXFAT_SB(sb)->s_lock);
 	return err;
 }
 
@@ -1408,6 +1421,7 @@ static int exfat_rmdir(struct inode *dir, struct dentry *dentry)
 	struct inode *inode = dentry->d_inode;
 	int err;
 
+	mutex_lock(&EXFAT_SB(inode->i_sb)->s_lock);
 	EXFAT_I(inode)->fid.size = i_size_read(inode);
 
 	err = __exfat_rmdir(dir, &(EXFAT_I(inode)->fid));
@@ -1430,6 +1444,7 @@ static int exfat_rmdir(struct inode *dir, struct dentry *dentry)
 	dentry->d_time = inode_peek_iversion_raw(dir);
 out:
 	__unlock_d_revalidate(dentry);
+	mutex_unlock(&EXFAT_SB(inode->i_sb)->s_lock);
 	return err;
 }
 
@@ -1793,6 +1808,7 @@ static int exfat_rename(struct inode *old_dir, struct dentry *old_dentry,
 	if (flags & ~RENAME_NOREPLACE)
 		return -EINVAL;
 
+	mutex_lock(&EXFAT_SB(sb)->s_lock);
 	old_inode = old_dentry->d_inode;
 	new_inode = new_dentry->d_inode;
 
@@ -1854,6 +1870,7 @@ static int exfat_rename(struct inode *old_dir, struct dentry *old_dentry,
 out:
 	__unlock_d_revalidate(old_dentry);
 	__unlock_d_revalidate(new_dentry);
+	mutex_unlock(&EXFAT_SB(sb)->s_lock);
 	return err;
 }
 
