@@ -93,7 +93,6 @@ int __exfat_umount(struct super_block *sb)
 
 	if (sbi->prev_eio)
 		ret = -EIO;
-	/* close the block device */
 	return ret;
 }
 
@@ -220,7 +219,6 @@ static int __exfat_set_vol_flags(struct super_block *sb,
 
 	if (sync)
 		sync_dirty_buffer(sbi->pbr_bh);
-
 	return err;
 }
 

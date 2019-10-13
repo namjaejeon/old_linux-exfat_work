@@ -344,7 +344,6 @@ struct exfat_sb_info {
 		struct exfat_cache_entry hash_list[BUF_CACHE_HASH_SIZE];
 	} dcache;
 
-	struct mutex s_vlock;   /* volume lock */
 	int use_vmalloc;
 
 	int s_dirt;
