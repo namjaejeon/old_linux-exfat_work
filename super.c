@@ -1000,7 +1000,7 @@ free_upcase:
 	free_upcase_table(sb);
 bd_close:
 	return ret;
-} /* end of __exfat_mount */
+}
 
 /* mount the file system volume */
 int exfat_mount(struct super_block *sb)

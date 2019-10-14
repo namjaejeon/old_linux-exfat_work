@@ -207,7 +207,7 @@ int ___readdir(struct inode *inode, struct exfat_dir_entry *dir_entry)
 	fid->rwoffset = (s64)dentry;
 
 	return 0;
-} /* end of ___readdir */
+}
 
 static void exfat_init_namebuf(struct exfat_dentry_namebuf *nb)
 {
