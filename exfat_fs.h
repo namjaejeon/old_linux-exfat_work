@@ -238,11 +238,6 @@ struct exfat_entry_set_cache {
 	void    *__buf;     // __buf should be the last member
 };
 
-/* FAT directory entry (32 bytes) */
-struct exfat_dentry {
-	__u8       dummy[32];
-};
-
 struct exfat_cache_lru {
 	spinlock_t cache_lru_lock;
 	struct list_head cache_lru;

@@ -94,6 +94,10 @@ typedef struct {
 	__le16  signature;
 } pbr_t;
 
+/* FAT directory entry (32 bytes) */
+struct exfat_dentry {
+	__u8       dummy[32];
+};
 
 /* EXFAT stream extension directory entry (32 bytes) */
 struct exfat_strm_dentry {
