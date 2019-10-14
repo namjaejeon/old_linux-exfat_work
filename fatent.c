@@ -9,20 +9,6 @@
 #include "exfat_raw.h"
 #include "exfat_fs.h"
 
-static inline void lock_exfat(struct super_block *sb)
-{
-	struct exfat_sb_info *sbi = EXFAT_SB(sb);
-
-	mutex_lock(&sbi->s_lock);
-}
-
-static inline void unlock_exfat(struct super_block *sb)
-{
-	struct exfat_sb_info *sbi = EXFAT_SB(sb);
-
-	mutex_unlock(&sbi->s_lock);
-}
-
 unsigned int exfat_get_entry_type(struct exfat_dentry *p_entry)
 {
 	struct exfat_file_dentry *ep = (struct exfat_file_dentry *) p_entry;
