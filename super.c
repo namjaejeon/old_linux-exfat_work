@@ -129,10 +129,7 @@ static void exfat_put_super(struct super_block *sb)
 	}
 
 	sb->s_fs_info = NULL;
-	if (!sbi->use_vmalloc)
-		kfree(sbi);
-	else
-		vfree(sbi);
+	kfree(sbi);
 }
 
 static int exfat_sync_fs(struct super_block *sb, int wait)
@@ -1033,12 +1030,8 @@ static int exfat_fill_super(struct super_block *sb, void *data, int silent)
 	 * it and have no inodes etc active!
 	 */
 	sbi = kzalloc(sizeof(struct exfat_sb_info), GFP_KERNEL);
-	if (!sbi) {
-		sbi = vzalloc(sizeof(struct exfat_sb_info));
-		if (!sbi)
-			return -ENOMEM;
-		sbi->use_vmalloc = 1;
-	}
+	if (!sbi)
+		return -ENOMEM;
 
 	mutex_init(&sbi->s_lock);
 	sb->s_fs_info = sbi;
@@ -1128,10 +1121,7 @@ failed_mount:
 	if (sbi->options.iocharset != exfat_default_iocharset)
 		kfree(sbi->options.iocharset);
 	sb->s_fs_info = NULL;
-	if (!sbi->use_vmalloc)
-		kfree(sbi);
-	else
-		vfree(sbi);
+	kfree(sbi);
 	return err;
 }
 

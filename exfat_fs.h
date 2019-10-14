@@ -329,8 +329,6 @@ struct exfat_sb_info {
 		struct exfat_cache_entry hash_list[BUF_CACHE_HASH_SIZE];
 	} dcache;
 
-	int use_vmalloc;
-
 	int s_dirt;
 	struct mutex s_lock;    /* superblock lock */
 	struct super_block *host_sb;		/* sb pointer */
