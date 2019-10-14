@@ -297,13 +297,7 @@ int exfat_write_inode(struct inode *inode, struct writeback_control *wbc)
 
 int exfat_sync_inode(struct inode *inode)
 {
-	int ret;
-
-	mutex_lock(&EXFAT_SB(inode->i_sb)->s_lock);
-	ret = __exfat_write_inode(inode, 1);
-	mutex_unlock(&EXFAT_SB(inode->i_sb)->s_lock);
-
-	return ret;
+	return = __exfat_write_inode(inode, 1);
 }
 
 void exfat_truncate(struct inode *inode, loff_t old_size)
