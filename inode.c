@@ -207,7 +207,7 @@ int __exfat_truncate(struct inode *inode, unsigned long long old_size,
 /* set the information of a given file
  * REMARK : This function does not need any file name on linux
  */
-int __exfat_write_inode(struct inode *inode, int sync)
+static int __exfat_write_inode(struct inode *inode, int sync)
 {
 	int ret = -EIO;
 	unsigned long long on_disk_size;
@@ -349,7 +349,7 @@ out:
  * Output: errcode, cluster number
  * *clu = (~0), if it's unable to allocate a new cluster
  */
-int __exfat_map_clus(struct inode *inode, unsigned int clu_offset,
+static int __exfat_map_clus(struct inode *inode, unsigned int clu_offset,
 		unsigned int *clu, int dest)
 {
 	int ret, modified = false;

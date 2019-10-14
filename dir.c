@@ -9,7 +9,7 @@
 #include "exfat_raw.h"
 #include "exfat_fs.h"
 
-void exfat_get_uniname_from_dos_entry(struct super_block *sb, struct exfat_dos_dentry *ep,
+static void exfat_get_uniname_from_dos_entry(struct super_block *sb, struct exfat_dos_dentry *ep,
 		struct exfat_uni_name *p_uniname, unsigned char mode)
 {
 	struct exfat_dos_name dos_name;
@@ -24,7 +24,7 @@ void exfat_get_uniname_from_dos_entry(struct super_block *sb, struct exfat_dos_d
 }
 
 /* read a directory entry from the opened directory */
-int exfat_readdir(struct inode *inode, struct exfat_dir_entry *dir_entry)
+static int exfat_readdir(struct inode *inode, struct exfat_dir_entry *dir_entry)
 {
 	int i;
 	int dentries_per_clu, dentries_per_clu_bits = 0;

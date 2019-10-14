@@ -390,7 +390,7 @@ static inline int exfat_resolve_path_for_lookup(struct inode *inode,
 }
 
 /* create a file */
-int __exfat_create(struct inode *inode, unsigned char *path, unsigned char mode,
+static int __exfat_create(struct inode *inode, unsigned char *path, unsigned char mode,
 		struct exfat_file_id *fid)
 {
 	int ret/*, dentry*/;
@@ -567,7 +567,7 @@ static int exfat_d_anon_disconn(struct dentry *dentry)
 }
 
 /* read data from a opened file */
-int exfat_read_link(struct inode *inode, struct exfat_file_id *fid, void *buffer,
+static int exfat_read_link(struct inode *inode, struct exfat_file_id *fid, void *buffer,
 	unsigned long long count, unsigned long long *rcount)
 {
 	int ret = 0;
@@ -849,7 +849,7 @@ out:
 }
 
 /* remove a file */
-int __exfat_remove(struct inode *inode, struct exfat_file_id *fid)
+static int __exfat_remove(struct inode *inode, struct exfat_file_id *fid)
 {
 	int ret;
 	int dentry;
@@ -904,7 +904,7 @@ out:
 }
 
 /* write data into a opened file */
-int exfat_write_link(struct inode *inode, struct exfat_file_id *fid, void *buffer,
+static int exfat_write_link(struct inode *inode, struct exfat_file_id *fid, void *buffer,
 		unsigned long long count, unsigned long long *wcount)
 {
 	int ret = 0;
@@ -1364,7 +1364,7 @@ int exfat_check_dir_empty(struct super_block *sb, struct exfat_chain *p_dir)
 }
 
 /* remove a directory */
-int __exfat_rmdir(struct inode *inode, struct exfat_file_id *fid)
+static int __exfat_rmdir(struct inode *inode, struct exfat_file_id *fid)
 {
 	int ret;
 	int dentry;

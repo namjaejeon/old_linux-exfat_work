@@ -195,7 +195,7 @@ void exfat_set_entry_time(struct exfat_dentry *p_entry, struct exfat_timestamp *
 	}
 }
 
-void exfat_init_file_entry(struct super_block *sb, struct exfat_file_dentry *ep,
+static void exfat_init_file_entry(struct super_block *sb, struct exfat_file_dentry *ep,
 		unsigned int type)
 {
 	struct exfat_timestamp tm, *tp;
