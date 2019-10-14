@@ -12,7 +12,7 @@
 /* skip iterating emit_dots when dir is empty */
 #define ITER_POS_FILLED_DOTS    (2)
 
-void get_uniname_from_dos_entry(struct super_block *sb, struct exfat_dos_dentry *ep,
+void exfat_get_uniname_from_dos_entry(struct super_block *sb, struct exfat_dos_dentry *ep,
 		struct exfat_uni_name *p_uniname, unsigned char mode)
 {
 	struct exfat_dos_name dos_name;
@@ -27,7 +27,7 @@ void get_uniname_from_dos_entry(struct super_block *sb, struct exfat_dos_dentry 
 }
 
 /* read a directory entry from the opened directory */
-int ___readdir(struct inode *inode, struct exfat_dir_entry *dir_entry)
+int exfat_readdir(struct inode *inode, struct exfat_dir_entry *dir_entry)
 {
 	int i;
 	int dentries_per_clu, dentries_per_clu_bits = 0;
@@ -105,7 +105,7 @@ int ___readdir(struct inode *inode, struct exfat_dir_entry *dir_entry)
 			i = dentry & (dentries_per_clu-1);
 
 		for ( ; i < dentries_per_clu; i++, dentry++) {
-			ep = get_dentry_in_dir(sb, &clu, i, &sector);
+			ep = exfat_get_dentry_in_dir(sb, &clu, i, &sector);
 			if (!ep)
 				return -EIO;
 
@@ -145,14 +145,14 @@ int ___readdir(struct inode *inode, struct exfat_dir_entry *dir_entry)
 			exfat_get_uniname_from_ext_entry(sb, &dir, dentry,
 				uni_name.name);
 			if (*(uni_name.name) == 0x0)
-				get_uniname_from_dos_entry(sb,
+				exfat_get_uniname_from_dos_entry(sb,
 					(struct exfat_dos_dentry *) ep, &uni_name, 0x1);
 			nls_uni16s_to_vfsname(sb, &uni_name,
 				dir_entry->namebuf.lfn,
 				dir_entry->namebuf.lfnbuf_len);
 			dcache_unlock(sb, sector);
 
-			ep = get_dentry_in_dir(sb, &clu, i+1, NULL);
+			ep = exfat_get_dentry_in_dir(sb, &clu, i+1, NULL);
 			if (!ep)
 				return -EIO;
 			dir_entry->size = exfat_get_entry_size(ep);
@@ -221,7 +221,6 @@ static void exfat_free_namebuf(struct exfat_dentry_namebuf *nb)
 	exfat_init_namebuf(nb);
 }
 
-//instead of exfat_readdir
 static int exfat_iterate(struct file *filp, struct dir_context *ctx)
 {
 	struct inode *inode = filp->f_path.dentry->d_inode;
@@ -260,7 +259,7 @@ get_new:
 	if (cpos >= EXFAT_I(inode)->fid.size)
 		goto end_of_dir;
 
-	err = ___readdir(inode, &de);
+	err = exfat_readdir(inode, &de);
 	if (err) {
 		// at least we tried to read a sector
 		// move cpos to next sector position (should be aligned)

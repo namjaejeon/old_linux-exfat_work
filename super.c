@@ -83,7 +83,7 @@ int __exfat_umount(struct super_block *sb)
 
 	free_upcase_table(sb);
 
-	free_alloc_bmp(sb);
+	exfat_free_alloc_bmp(sb);
 
 	if (fcache_release_all(sb))
 		ret = -EIO;
@@ -535,7 +535,7 @@ static int exfat_read_root(struct inode *inode)
 	return 0;
 }
 
-static void setup_dops(struct super_block *sb)
+static void exfat_setup_dops(struct super_block *sb)
 {
 	if (EXFAT_SB(sb)->options.casesensitive == 0)
 		sb->s_d_op = &exfat_ci_dentry_ops;
@@ -605,7 +605,7 @@ static bool is_exfat(pbr_t *pbr)
 	return i ? false : true;
 }
 
-static int __load_upcase_table(struct super_block *sb,
+static int exfat_load_upcase_table(struct super_block *sb,
 	unsigned long long sector, unsigned long long num_sectors,
 	unsigned int utbl_checksum)
 {
@@ -701,7 +701,7 @@ error:
 	return ret;
 }
 
-static int __load_default_upcase_table(struct super_block *sb)
+static int exfat_load_default_upcase_table(struct super_block *sb)
 {
 	int i, ret = -EIO;
 	unsigned int j;
@@ -780,7 +780,7 @@ static int load_upcase_table(struct super_block *sb)
 
 	while (!IS_CLUS_EOF(clu.dir)) {
 		for (i = 0; i < sbi->dentries_per_clu; i++) {
-			ep = (struct exfat_case_dentry *) get_dentry_in_dir(sb, &clu, i,
+			ep = (struct exfat_case_dentry *) exfat_get_dentry_in_dir(sb, &clu, i,
 				NULL);
 			if (!ep)
 				return -EIO;
@@ -797,7 +797,7 @@ static int load_upcase_table(struct super_block *sb)
 
 			sector = CLUS_TO_SECT(sbi, tbl_clu);
 			num_sectors = ((tbl_size - 1) >> blksize_bits) + 1;
-			ret = __load_upcase_table(sb, sector, num_sectors,
+			ret = exfat_load_upcase_table(sb, sector, num_sectors,
 					le32_to_cpu(ep->checksum));
 
 			if (ret && (ret != -EIO))
@@ -813,10 +813,10 @@ static int load_upcase_table(struct super_block *sb)
 
 load_default:
 	/* load default upcase table */
-	return __load_default_upcase_table(sb);
+	return exfat_load_default_upcase_table(sb);
 } /* end of load_upcase_table */
 
-inline pbr_t *read_pbr_with_logical_sector(struct super_block *sb,
+inline pbr_t *exfat_read_pbr_with_logical_sector(struct super_block *sb,
 		struct buffer_head **prev_bh)
 {
 	pbr_t *p_pbr = (pbr_t *) (*prev_bh)->b_data;
@@ -903,7 +903,7 @@ int __exfat_mount(struct super_block *sb)
 	}
 
 	/* check logical sector size */
-	p_pbr = read_pbr_with_logical_sector(sb, &tmp_bh);
+	p_pbr = exfat_read_pbr_with_logical_sector(sb, &tmp_bh);
 	if (!p_pbr) {
 		brelse(tmp_bh);
 		ret = -EIO;
@@ -979,7 +979,7 @@ free_bh:
 	}
 
 	/* allocate-bitmap is only for exFAT */
-	ret = load_alloc_bmp(sb);
+	ret = exfat_load_alloc_bmp(sb);
 	if (ret) {
 		exfat_msg(sb, KERN_ERR, "failed to load alloc-bitmap");
 		goto free_upcase;
@@ -995,7 +995,7 @@ free_bh:
 
 	return 0;
 free_alloc_bmp:
-	free_alloc_bmp(sb);
+	exfat_free_alloc_bmp(sb);
 free_upcase:
 	free_upcase_table(sb);
 bd_close:
@@ -1053,7 +1053,7 @@ static int exfat_fill_super(struct super_block *sb, void *data, int silent)
 		goto failed_mount;
 	}
 
-	setup_dops(sb);
+	exfat_setup_dops(sb);
 
 	err = exfat_mount(sb);
 	if (err) {

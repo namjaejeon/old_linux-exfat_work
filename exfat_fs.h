@@ -106,16 +106,6 @@
 #define ES_3_ENTRIES        3
 #define ES_ALL_ENTRIES  0
 
-/* file status */
-/* this prevents
- * __exfat_write_inode, __exfat_map_clus, ... with the unlinked inodes
- * from corrupting on-disk dentry data.
- *
- * The fid->dir value of unlinked inode will be DIR_DELETED
- * and those functions must check if fid->dir is valid prior to
- * the calling of get_dentry_in_dir()
- */
-
 #define DIR_DELETED             0xFFFF0321
 
 #define VOL_CLEAN   0x0000
@@ -498,25 +488,25 @@ int exfat_init_dir_entry(struct super_block *sb, struct exfat_chain *p_dir, int 
 int exfat_init_ext_entry(struct super_block *sb, struct exfat_chain *p_dir, int entry, int num_entries,
 		struct exfat_uni_name *p_uniname, struct exfat_dos_name *p_dosname);
 int exfat_delete_dir_entry(struct super_block *sb, struct exfat_chain *p_dir, int entry, int order, int num_entries);
-int update_dir_chksum_with_entry_set(struct super_block *sb, struct exfat_entry_set_cache *es);
-void release_dentry_set(struct exfat_entry_set_cache *es);
+int exfat_update_dir_chksum_with_entry_set(struct super_block *sb, struct exfat_entry_set_cache *es);
+void exfat_release_dentry_set(struct exfat_entry_set_cache *es);
 int exfat_calc_num_entries(struct exfat_uni_name *p_uniname);
-int find_empty_entry(struct inode *inode, struct exfat_chain *p_dir, int num_entries);
+int exfat_find_empty_entry(struct inode *inode, struct exfat_chain *p_dir, int num_entries);
 int exfat_find_dir_entry(struct super_block *sb, struct exfat_file_id *fid,
 		struct exfat_chain *p_dir, struct exfat_uni_name *p_uniname, int num_entries, struct exfat_dos_name *unused, unsigned int type);
 int exfat_count_ext_entries(struct super_block *sb, struct exfat_chain *p_dir, int entry, struct exfat_dentry *p_entry);
-int chain_cont_cluster(struct super_block *sb, unsigned int chain, unsigned int len);
+int exfat_chain_cont_cluster(struct super_block *sb, unsigned int chain, unsigned int len);
 struct exfat_entry_set_cache *get_dentry_set_in_dir(struct super_block *sb,
 		struct exfat_chain *p_dir, int entry, unsigned int type, struct exfat_dentry **file_ep);
-int clear_cluster(struct inode *inode, unsigned int clu);
-int find_location(struct super_block *sb, struct exfat_chain *p_dir, int entry, unsigned long long *sector, int *offset);
+int exfat_clear_cluster(struct inode *inode, unsigned int clu);
+int exfat_find_location(struct super_block *sb, struct exfat_chain *p_dir, int entry, unsigned long long *sector, int *offset);
 
-/* bmp.c */
-int load_alloc_bmp(struct super_block *sb);
-void free_alloc_bmp(struct super_block *sb);
-int set_alloc_bitmap(struct super_block *sb, unsigned int clu);
-void clr_alloc_bitmap(struct super_block *sb, unsigned int clu);
-unsigned int test_alloc_bitmap(struct super_block *sb, unsigned int clu);
+/* balloc.c */
+int exfat_load_alloc_bmp(struct super_block *sb);
+void exfat_free_alloc_bmp(struct super_block *sb);
+int exfat_set_alloc_bitmap(struct super_block *sb, unsigned int clu);
+void exfat_clr_alloc_bitmap(struct super_block *sb, unsigned int clu);
+unsigned int exfat_test_alloc_bitmap(struct super_block *sb, unsigned int clu);
 
 /* file.c */
 int exfat_file_fsync(struct file *filp, loff_t start, loff_t end, int datasync);
@@ -553,7 +543,7 @@ unsigned char *dcache_getblk(struct super_block *sb, unsigned long long sec);
 int exfat_sync_inode(struct inode *inode);
 struct inode *exfat_build_inode(struct super_block *sb, const struct exfat_file_id *fid,
 		loff_t i_pos);
-struct exfat_dentry *get_dentry_in_dir(struct super_block *sb, struct exfat_chain *p_dir, int entry, unsigned long long *sector);
+struct exfat_dentry *exfat_get_dentry_in_dir(struct super_block *sb, struct exfat_chain *p_dir, int entry, unsigned long long *sector);
 void exfat_attach(struct inode *inode, loff_t i_pos);
 void exfat_detach(struct inode *inode);
 void exfat_truncate(struct inode *inode, loff_t old_size);
