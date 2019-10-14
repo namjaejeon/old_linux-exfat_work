@@ -9,9 +9,6 @@
 #include "exfat_raw.h"
 #include "exfat_fs.h"
 
-/* skip iterating emit_dots when dir is empty */
-#define ITER_POS_FILLED_DOTS    (2)
-
 void exfat_get_uniname_from_dos_entry(struct super_block *sb, struct exfat_dos_dentry *ep,
 		struct exfat_uni_name *p_uniname, unsigned char mode)
 {
@@ -221,6 +218,8 @@ static void exfat_free_namebuf(struct exfat_dentry_namebuf *nb)
 	exfat_init_namebuf(nb);
 }
 
+/* skip iterating emit_dots when dir is empty */
+#define ITER_POS_FILLED_DOTS    (2)
 static int exfat_iterate(struct file *filp, struct dir_context *ctx)
 {
 	struct inode *inode = filp->f_path.dentry->d_inode;
