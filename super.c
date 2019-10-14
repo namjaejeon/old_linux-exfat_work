@@ -98,10 +98,8 @@ int __exfat_umount(struct super_block *sb)
 
 static void exfat_write_super(struct super_block *sb)
 {
-	mutex_lock(&EXFAT_SB(sb)->s_lock);
 	set_sb_clean(sb);
 	sync_blockdev(sb->s_bdev);
-	mutex_unlock(&EXFAT_SB(sb)->s_lock);
 }
 
 static void exfat_put_super(struct super_block *sb)
@@ -109,10 +107,12 @@ static void exfat_put_super(struct super_block *sb)
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 	int err;
 
+	mutex_lock(&EXFAT_SB(sb)->s_lock);
 	if (is_sb_dirty(sb))
 		exfat_write_super(sb);
 
 	err = __exfat_umount(sb);
+	mutex_unlock(&EXFAT_SB(sb)->s_lock);
 
 	if (sbi->nls_disk) {
 		unload_nls(sbi->nls_disk);
@@ -159,8 +159,12 @@ static int exfat_statfs(struct dentry *dentry, struct kstatfs *buf)
 	unsigned long long id = huge_encode_dev(sb->s_bdev->bd_dev);
 
 	if (sbi->used_clusters == (unsigned int) ~0) {
-		if (exfat_count_used_clusters(sb, &sbi->used_clusters))
+		mutex_lock(&sbi->s_lock);
+		if (exfat_count_used_clusters(sb, &sbi->used_clusters)) {
+			mutex_unlock(&sbi->s_lock);
 			return -EIO;
+		}
+		mutex_unlock(&sbi->s_lock);
 	}
 
 	buf->f_type = sb->s_magic;
@@ -1003,9 +1007,6 @@ int exfat_mount(struct super_block *sb)
 {
 	int err;
 
-	/* acquire the core lock for file system ccritical section */
-	//	mutex_lock(&_lock_core);
-
 	err = meta_cache_init(sb);
 	if (err)
 		goto out;
@@ -1014,9 +1015,6 @@ int exfat_mount(struct super_block *sb)
 out:
 	if (err)
 		meta_cache_shutdown(sb);
-
-	/* release the core lock for file system critical section */
-	//	mutex_unlock(&_lock_core);
 
 	return err;
 }

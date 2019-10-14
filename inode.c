@@ -286,12 +286,24 @@ int __exfat_write_inode(struct inode *inode, int sync)
 
 int exfat_write_inode(struct inode *inode, struct writeback_control *wbc)
 {
-	return __exfat_write_inode(inode, wbc->sync_mode == WB_SYNC_ALL);
+	int ret;
+
+	mutex_lock(&EXFAT_SB(inode->i_sb)->s_lock);
+	ret = __exfat_write_inode(inode, wbc->sync_mode == WB_SYNC_ALL);
+	mutex_unlock(&EXFAT_SB(inode->i_sb)->s_lock);
+
+	return ret;
 }
 
 int exfat_sync_inode(struct inode *inode)
 {
-	return __exfat_write_inode(inode, 1);
+	int ret;
+
+	mutex_lock(&EXFAT_SB(inode->i_sb)->s_lock);
+	ret = __exfat_write_inode(inode, 1);
+	mutex_unlock(&EXFAT_SB(inode->i_sb)->s_lock);
+
+	return ret;
 }
 
 void exfat_truncate(struct inode *inode, loff_t old_size)
@@ -1195,7 +1207,6 @@ int exfat_read_inode(struct inode *inode, struct exfat_dir_entry *info)
 		if (count < 0)
 			return -EIO;
 		info->num_subdirs = count;
-
 		return 0;
 	}
 
@@ -1248,7 +1259,6 @@ int exfat_read_inode(struct inode *inode, struct exfat_dir_entry *info)
 		count += EXFAT_MIN_SUBDIR;
 		info->num_subdirs = count;
 	}
-
 	return 0;
 }
 
@@ -1357,7 +1367,9 @@ void exfat_evict_inode(struct inode *inode)
 
 		i_size_write(inode, 0);
 		EXFAT_I(inode)->fid.size = old_size;
+		mutex_lock(&EXFAT_SB(inode->i_sb)->s_lock);
 		__exfat_truncate(inode, old_size, 0);
+		mutex_unlock(&EXFAT_SB(inode->i_sb)->s_lock);
 	}
 
 	invalidate_inode_buffers(inode);
