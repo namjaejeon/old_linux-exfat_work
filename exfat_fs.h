@@ -178,8 +178,8 @@ struct exfat_date_time {
 };
 
 struct exfat_dentry_namebuf {
-	s8 *lfn;
-	s8 *sfn;
+	char *lfn;
+	char *sfn;
 	int lfnbuf_len; //usally MAX_UNINAME_BUF_SIZE
 	int sfnbuf_len; //usally MAX_DOSNAME_BUF_SIZE, used only for vfat, not for exfat
 };

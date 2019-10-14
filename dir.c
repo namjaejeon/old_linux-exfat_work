@@ -135,7 +135,7 @@ static int exfat_readdir(struct inode *inode, struct exfat_dir_entry *dir_entry)
 			dir_entry->modify_timestamp.second = tm.sec;
 			dir_entry->modify_timestamp.milli_second = 0;
 
-			memset((s8 *) &dir_entry->access_timestamp, 0,
+			memset((char *) &dir_entry->access_timestamp, 0,
 				sizeof(struct exfat_date_time));
 
 			*(uni_name.name) = 0x0;

@@ -1177,9 +1177,9 @@ int exfat_read_inode(struct inode *inode, struct exfat_dir_entry *info)
 	/* if root directory */
 	if (is_dir && (fid->dir.dir == sbi->root_dir) && (fid->entry == -1)) {
 		info->attr = ATTR_SUBDIR;
-		memset((s8 *) &info->create_timestamp, 0, sizeof(struct exfat_date_time));
-		memset((s8 *) &info->modify_timestamp, 0, sizeof(struct exfat_date_time));
-		memset((s8 *) &info->access_timestamp, 0, sizeof(struct exfat_date_time));
+		memset((char *) &info->create_timestamp, 0, sizeof(struct exfat_date_time));
+		memset((char *) &info->modify_timestamp, 0, sizeof(struct exfat_date_time));
+		memset((char *) &info->access_timestamp, 0, sizeof(struct exfat_date_time));
 
 		dir.dir = sbi->root_dir;
 		dir.flags = 0x01;
@@ -1233,7 +1233,7 @@ int exfat_read_inode(struct inode *inode, struct exfat_dir_entry *info)
 	info->modify_timestamp.second = tm.sec;
 	info->modify_timestamp.milli_second = 0;
 
-	memset((s8 *) &info->access_timestamp, 0, sizeof(struct exfat_date_time));
+	memset((char *) &info->access_timestamp, 0, sizeof(struct exfat_date_time));
 
 	info->num_subdirs = 0;
 	info->size = exfat_get_entry_size(ep2);

@@ -370,9 +370,9 @@ static int __nls_uni16s_to_vfsname(struct super_block *sb,
 
 		if (len > 1) {
 			for (j = 0; j < len; j++)
-				*p_cstring++ = (s8) *(buf+j);
+				*p_cstring++ = (char) *(buf+j);
 		} else { /* len == 1 */
-			*p_cstring++ = (s8) *buf;
+			*p_cstring++ = (char) *buf;
 		}
 
 		uniname++;

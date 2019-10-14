@@ -640,14 +640,14 @@ static int exfat_read_link(struct inode *inode, struct exfat_file_id *fid, void 
 			tmp_bh = sb_bread(sb, logsector);
 			if (!tmp_bh)
 				goto err_out;
-			memcpy(((s8 *) buffer)+read_bytes,
-				((s8 *) tmp_bh->b_data), (int) oneblkread);
+			memcpy(((char *) buffer)+read_bytes,
+				((char *) tmp_bh->b_data), (int) oneblkread);
 		} else {
 			tmp_bh = sb_bread(sb, logsector);
 			if (!tmp_bh)
 				goto err_out;
-			memcpy(((s8 *) buffer)+read_bytes,
-				((s8 *) tmp_bh->b_data)+offset,
+			memcpy(((char *) buffer)+read_bytes,
+				((char *) tmp_bh->b_data)+offset,
 				(int) oneblkread);
 		}
 		count -= oneblkread;
@@ -1041,8 +1041,8 @@ static int exfat_write_link(struct inode *inode, struct exfat_file_id *fid, void
 			if (!tmp_bh)
 				goto err_out;
 
-			memcpy(((s8 *)tmp_bh->b_data),
-					((s8 *)buffer)+write_bytes,
+			memcpy(((char *)tmp_bh->b_data),
+					((char *)buffer)+write_bytes,
 					(int)oneblkwrite);
 			mark_buffer_dirty(tmp_bh);
 		} else {
@@ -1057,8 +1057,8 @@ static int exfat_write_link(struct inode *inode, struct exfat_file_id *fid, void
 					goto err_out;
 			}
 
-			memcpy(((s8 *) tmp_bh->b_data)+offset,
-				((s8 *) buffer)+write_bytes, (int) oneblkwrite);
+			memcpy(((char *) tmp_bh->b_data)+offset,
+				((char *) buffer)+write_bytes, (int) oneblkwrite);
 			mark_buffer_dirty(tmp_bh);
 		}
 
