@@ -1312,10 +1312,11 @@ int clear_cluster(struct inode *inode, unsigned int clu)
 	 */
 	for ( ; s < n; s++) {
 		tmp_bh = sb_getblk(sb, s);
-		if (tmp_bh)
+		if (!tmp_bh)
 			goto out;
 
 		memset((unsigned char *)tmp_bh->b_data, 0x0, sect_size);
+		set_buffer_uptodate(tmp_bh);
 		mark_buffer_dirty(tmp_bh);
 	}
 out:
