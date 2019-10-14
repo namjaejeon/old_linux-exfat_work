@@ -348,10 +348,6 @@ struct exfat_sb_info {
 
 	int s_dirt;
 	struct mutex s_lock;    /* superblock lock */
-	int write_super_queued;			/* Write_super work is pending? */
-	struct delayed_work write_super_work;   /* Work_queue data structrue for write_super() */
-	spinlock_t work_lock;			/* Lock for WQ */
-
 	struct super_block *host_sb;		/* sb pointer */
 	struct exfat_mount_options options;
 	struct nls_table *nls_disk; /* Codepage used on disk */
