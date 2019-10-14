@@ -375,11 +375,12 @@ static inline void __remove_from_hash(struct exfat_cache_entry *bp)
 	bp->hash.prev = bp;
 }
 
-static inline int fat_copy(struct super_block *sb, u64 sec, struct buffer_head *bh)
+static inline int fat_copy(struct super_block *sb, unsigned long long sec,
+		struct buffer_head *bh)
 {
 	struct buffer_head *c_bh;
         struct exfat_sb_info *sbi = EXFAT_SB(sb);
-        u64 sec2;
+        unsigned long long sec2;
 	int err = 0;
 
 	if (sbi->FAT2_start_sector != sbi->FAT1_start_sector) {
