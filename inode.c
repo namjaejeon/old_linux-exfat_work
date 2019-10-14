@@ -297,7 +297,7 @@ int exfat_write_inode(struct inode *inode, struct writeback_control *wbc)
 
 int exfat_sync_inode(struct inode *inode)
 {
-	return = __exfat_write_inode(inode, 1);
+	return __exfat_write_inode(inode, 1);
 }
 
 void exfat_truncate(struct inode *inode, loff_t old_size)

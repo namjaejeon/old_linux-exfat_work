@@ -514,6 +514,9 @@ int find_location(struct super_block *sb, struct exfat_chain *p_dir, int entry, 
 /* bmp.c */
 int load_alloc_bmp(struct super_block *sb);
 void free_alloc_bmp(struct super_block *sb);
+int set_alloc_bitmap(struct super_block *sb, unsigned int clu);
+void clr_alloc_bitmap(struct super_block *sb, unsigned int clu);
+unsigned int test_alloc_bitmap(struct super_block *sb, unsigned int clu);
 
 /* file.c */
 int exfat_file_fsync(struct file *filp, loff_t start, loff_t end, int datasync);
