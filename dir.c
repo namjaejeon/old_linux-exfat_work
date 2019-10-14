@@ -12,22 +12,6 @@
 /* skip iterating emit_dots when dir is empty */
 #define ITER_POS_FILLED_DOTS    (2)
 
-static inline sector_t __exfat_bio_sector(struct bio *bio)
-{
-	return bio->bi_iter.bi_sector;
-}
-
-static inline void __exfat_set_bio_iterate(struct bio *bio, sector_t sector,
-		unsigned int size, unsigned int idx, unsigned int done)
-{
-	struct bvec_iter *iter = &(bio->bi_iter);
-
-	iter->bi_sector = sector;
-	iter->bi_size = size;
-	iter->bi_idx = idx;
-	iter->bi_bvec_done = done;
-}
-
 void get_uniname_from_dos_entry(struct super_block *sb, struct exfat_dos_dentry *ep,
 		struct exfat_uni_name *p_uniname, unsigned char mode)
 {
