@@ -243,7 +243,7 @@ struct exfat_dentry {
 	__u8       dummy[32];
 };
 
-struct exfat_exfat {
+struct exfat_cache_lru {
 	spinlock_t cache_lru_lock;
 	struct list_head cache_lru;
 	int nr_caches;
@@ -359,7 +359,7 @@ struct exfat_file_id {
 	unsigned char  reserved[3];        // padding
 	unsigned int version;            // the copy of low 32bit of i_version to check the validation of hint_stat
 	s64 rwoffset;           // file offset or dentry index for readdir
-	struct exfat_exfat exfat;        // exfat cache for a file
+	struct exfat_cache_lru exfat_lru;        // exfat cache for a file
 	struct exfat_hint hint_bmap;      // hint for cluster last accessed
 	struct exfat_hint  hint_stat;      // hint for entry index we try to lookup next time
 	struct exfat_hint_femp hint_femp; // hint for first empty entry
