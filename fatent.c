@@ -269,14 +269,14 @@ int exfat_clear_cluster(struct inode *inode, unsigned int clu)
 	}
 
 	if (IS_DIRSYNC(inode)) {
-		ret = write_msect_zero(sb, s,
+		ret = exfat_zeroed_cluster(sb, s,
 			(unsigned long long)sbi->sect_per_clus);
-		if (ret != -EAGAIN)
+		if (ret == -EIO)
 			return ret;
 	}
 
 	/* Trying buffered zero writes
-	 * if it doesn't have DIRSYNC or write_msect_zero() returned -EAGAIN
+	 * if it doesn't have DIRSYNC or exfat_zeroed_cluster() returned -EAGAIN
 	 */
 	for ( ; s < n; s++) {
 		tmp_bh = sb_getblk(sb, s);

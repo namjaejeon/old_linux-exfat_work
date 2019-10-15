@@ -541,6 +541,8 @@ int exfat_get_num_entries_and_dos_name(struct super_block *sb, struct exfat_chai
 		struct exfat_dos_name *p_dosname, int lookup);
 int exfat_find_dir_entry(struct super_block *sb, struct exfat_file_id *fid,
 		struct exfat_chain *p_dir, struct exfat_uni_name *p_uniname, int num_entries, struct exfat_dos_name *unused, unsigned int type);
+int exfat_zeroed_cluster(struct super_block *sb, unsigned long long blknr,
+	unsigned long long num_secs);
 
 /* inode.c */
 int exfat_sync_inode(struct inode *inode);
@@ -585,7 +587,5 @@ extern void exfat_time_unix2fat(struct exfat_sb_info *sbi, struct timespec64 *ts
 extern struct exfat_timestamp *tm_now(struct exfat_sb_info *sbi, struct exfat_timestamp *tm);
 
 unsigned short calc_chksum_2byte(void *data, int len, unsigned short chksum, int type);
-int write_msect_zero(struct super_block *sb, unsigned long long sec,
-		unsigned long long num_secs);
 #endif /* !_EXFAT_H */
 
