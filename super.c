@@ -91,8 +91,6 @@ int __exfat_umount(struct super_block *sb)
 	if (dcache_release_all(sb))
 		ret = -EIO;
 
-	if (sbi->prev_eio)
-		ret = -EIO;
 	return ret;
 }
 
@@ -253,8 +251,6 @@ static int __exfat_show_options(struct seq_file *m, struct super_block *sb)
 	struct exfat_mount_options *opts = &sbi->options;
 
 	/* Show partition info */
-	if (sbi->prev_eio)
-		seq_printf(m, ",eio=0x%x", sbi->prev_eio);
 	if (!uid_eq(opts->fs_uid, GLOBAL_ROOT_UID))
 		seq_printf(m, ",uid=%u",
 				from_kuid_munged(&init_user_ns, opts->fs_uid));
@@ -873,9 +869,6 @@ int __exfat_mount(struct super_block *sb)
 	pbr64_t *p_bpb;
 	struct buffer_head *tmp_bh = NULL;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
-
-	/* initialize previous I/O error */
-	sbi->prev_eio = 0;
 
 	/* set block size to read super block */
 	sb_min_blocksize(sb, 512);

@@ -309,8 +309,6 @@ struct exfat_sb_info {
 	unsigned int      clu_srch_ptr;           // cluster search pointer
 	unsigned int      used_clusters;          // number of used clusters
 
-	unsigned int      prev_eio;            // block device operation error flag
-
 	int       reserved_clusters;  // # of reserved clusters (DA)
 	void        *amap;                  // AU Allocation Map
 
