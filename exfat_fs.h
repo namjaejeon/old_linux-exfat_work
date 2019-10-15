@@ -472,6 +472,8 @@ int exfat_clear_cluster(struct inode *inode, unsigned int clu);
 int exfat_find_location(struct super_block *sb, struct exfat_chain *p_dir, int entry, unsigned long long *sector, int *offset);
 int exfat_find_last_cluster(struct super_block *sb, struct exfat_chain *p_chain,
 		unsigned int *ret_clu);
+int exfat_mirror_bhs(struct super_block *sb, unsigned long long sec,
+	struct buffer_head *bh);
 
 /* balloc.c */
 int exfat_load_alloc_bmp(struct super_block *sb);

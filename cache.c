@@ -373,32 +373,6 @@ static inline void __remove_from_hash(struct exfat_cache_entry *bp)
 	bp->hash.prev = bp;
 }
 
-static inline int fat_copy(struct super_block *sb, unsigned long long sec,
-		struct buffer_head *bh)
-{
-	struct buffer_head *c_bh;
-        struct exfat_sb_info *sbi = EXFAT_SB(sb);
-        unsigned long long sec2;
-	int err = 0;
-
-	if (sbi->FAT2_start_sector != sbi->FAT1_start_sector) {
-		sec2 = sec - sbi->FAT1_start_sector + sbi->FAT2_start_sector;
-		c_bh = sb_getblk(sb, sec2);
-		if (!c_bh) {
-			err = -ENOMEM;
-			goto out;
-		}
-		memcpy(c_bh->b_data, bh->b_data, sb->s_blocksize);
-		set_buffer_uptodate(c_bh);
-		mark_buffer_dirty(c_bh);
-		if (sb->s_flags & SB_SYNCHRONOUS)
-			err = sync_dirty_buffer(c_bh);
-		brelse(c_bh);
-	}
-out:
-        return err;
-}
-
 static struct exfat_cache_entry *__dcache_find(struct super_block *sb,
 		unsigned long long sec)
 {
@@ -580,7 +554,7 @@ int fcache_modify(struct super_block *sb, unsigned long long sec)
 	set_buffer_uptodate(bp->bh);
 	mark_buffer_dirty(bp->bh);
 
-	ret = fat_copy(sb, sec, bp->bh);
+	ret = exfat_mirror_bhs(sb, sec, bp->bh);
 out:
 	return ret;
 }
