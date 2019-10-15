@@ -489,7 +489,7 @@ int exfat_find_dir_entry(struct super_block *sb, struct exfat_file_id *fid,
 		struct exfat_chain *p_dir, struct exfat_uni_name *p_uniname, int num_entries, struct exfat_dos_name *unused, unsigned int type);
 int exfat_count_ext_entries(struct super_block *sb, struct exfat_chain *p_dir, int entry, struct exfat_dentry *p_entry);
 int exfat_chain_cont_cluster(struct super_block *sb, unsigned int chain, unsigned int len);
-struct exfat_entry_set_cache *get_dentry_set_in_dir(struct super_block *sb,
+struct exfat_entry_set_cache *exfat_get_dentry_set_in_dir(struct super_block *sb,
 		struct exfat_chain *p_dir, int entry, unsigned int type, struct exfat_dentry **file_ep);
 int exfat_clear_cluster(struct inode *inode, unsigned int clu);
 int exfat_find_location(struct super_block *sb, struct exfat_chain *p_dir, int entry, unsigned long long *sector, int *offset);

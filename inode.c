@@ -144,7 +144,7 @@ int __exfat_truncate(struct inode *inode, unsigned long long old_size,
 
 	/* (1) update the directory entry */
 	if (!evict) {
-		es = get_dentry_set_in_dir(sb, &(fid->dir), fid->entry,
+		es = exfat_get_dentry_set_in_dir(sb, &(fid->dir), fid->entry,
 			ES_ALL_ENTRIES, &ep);
 		if (!es)
 			return -EIO;
@@ -243,7 +243,7 @@ static int __exfat_write_inode(struct inode *inode, int sync)
 	exfat_set_vol_flags(sb, VOL_DIRTY);
 
 	/* get the directory entry of given file or directory */
-	es = get_dentry_set_in_dir(sb, &(fid->dir), fid->entry, ES_ALL_ENTRIES,
+	es = exfat_get_dentry_set_in_dir(sb, &(fid->dir), fid->entry, ES_ALL_ENTRIES,
 		&ep);
 	if (!es)
 		return -EIO;
@@ -473,7 +473,7 @@ static int __exfat_map_clus(struct inode *inode, unsigned int clu_offset,
 		*clu = new_clu.dir;
 
 		if (fid->dir.dir != DIR_DELETED) {
-			es = get_dentry_set_in_dir(sb, &(fid->dir), fid->entry,
+			es = exfat_get_dentry_set_in_dir(sb, &(fid->dir), fid->entry,
 				ES_ALL_ENTRIES, &ep);
 			if (!es)
 				return -EIO;
@@ -1206,7 +1206,7 @@ int exfat_read_inode(struct inode *inode, struct exfat_dir_entry *info)
 
 	/* get the directory entry of given file or directory */
 	/* es should be released */
-	es = get_dentry_set_in_dir(sb, &(fid->dir), fid->entry, ES_2_ENTRIES,
+	es = exfat_get_dentry_set_in_dir(sb, &(fid->dir), fid->entry, ES_2_ENTRIES,
 		&ep);
 	if (!es)
 		return -EIO;

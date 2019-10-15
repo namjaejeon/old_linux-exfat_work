@@ -247,7 +247,7 @@ int exfat_init_dir_entry(struct super_block *sb, struct exfat_chain *p_dir, int 
 	flags = (type == TYPE_FILE) ? 0x01 : 0x03;
 
 	/*
-	 * we cannot use get_dentry_set_in_dir here because file ep is not
+	 * we cannot use exfat_get_dentry_set_in_dir here because file ep is not
 	 * initialized yet.
 	 */
 	file_ep = (struct exfat_file_dentry *)exfat_get_dentry_in_dir(sb, p_dir, entry,
@@ -524,7 +524,7 @@ int exfat_find_location(struct super_block *sb, struct exfat_chain *p_dir, int e
 #define ES_MODE_GET_STRM_ENTRY			2
 #define ES_MODE_GET_NAME_ENTRY			3
 #define ES_MODE_GET_CRITICAL_SEC_ENTRY		4
-struct exfat_entry_set_cache *get_dentry_set_in_dir(struct super_block *sb,
+struct exfat_entry_set_cache *exfat_get_dentry_set_in_dir(struct super_block *sb,
 	struct exfat_chain *p_dir, int entry, unsigned int type, struct exfat_dentry **file_ep)
 {
 	int ret;
@@ -968,7 +968,7 @@ void exfat_get_uniname_from_ext_entry(struct super_block *sb, struct exfat_chain
 	struct exfat_dentry *ep;
 	struct exfat_entry_set_cache *es;
 
-	es = get_dentry_set_in_dir(sb, p_dir, entry, ES_ALL_ENTRIES, &ep);
+	es = exfat_get_dentry_set_in_dir(sb, p_dir, entry, ES_ALL_ENTRIES, &ep);
 	if (!es)
 		return;
 

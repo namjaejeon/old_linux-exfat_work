@@ -524,7 +524,7 @@ static int exfat_find(struct inode *dir, struct qstr *qname, struct exfat_file_i
 		fid->size = 0;
 		fid->start_clu = sbi->root_dir;
 	} else {
-		es = get_dentry_set_in_dir(sb, &cdir, dentry, ES_2_ENTRIES, &ep);
+		es = exfat_get_dentry_set_in_dir(sb, &cdir, dentry, ES_2_ENTRIES, &ep);
 		if (!es)
 			return -EIO;
 		ep2 = ep+1;
@@ -1078,7 +1078,7 @@ static int exfat_write_link(struct inode *inode, struct exfat_file_id *fid, void
 
 	/* (3) update the direcoty entry */
 	/* get_entry_(set_)in_dir shoulb be check DIR_DELETED flag. */
-	es = get_dentry_set_in_dir(sb, &(fid->dir), fid->entry, ES_ALL_ENTRIES,
+	es = exfat_get_dentry_set_in_dir(sb, &(fid->dir), fid->entry, ES_ALL_ENTRIES,
 			&ep);
 	if (!es) {
 		ret = -EIO;
