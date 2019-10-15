@@ -265,6 +265,251 @@ static int exfat_get_num_entries_and_dos_name(struct super_block *sb, struct exf
 	return 0;
 }
 
+/* used only in search empty_slot() */
+#define CNT_UNUSED_NOHIT        (-1)
+#define CNT_UNUSED_HIT          (-2)
+/* search EMPTY CONTINUOUS "num_entries" entries */
+static int exfat_search_empty_slot(struct super_block *sb, struct exfat_hint_femp *hint_femp,
+		struct exfat_chain *p_dir, int num_entries)
+{
+	int i, dentry, num_empty = 0;
+	int dentries_per_clu;
+	unsigned int type;
+	struct exfat_chain clu;
+	struct exfat_dentry *ep;
+	struct exfat_sb_info *sbi = EXFAT_SB(sb);
+
+	if (IS_CLUS_FREE(p_dir->dir)) /* FAT16 root_dir */
+		dentries_per_clu = sbi->dentries_in_root;
+	else
+		dentries_per_clu = sbi->dentries_per_clu;
+
+	WARN_ON(-1 > hint_femp->eidx);
+
+	if (hint_femp->eidx != -1) {
+		clu.dir = hint_femp->cur.dir;
+		clu.size = hint_femp->cur.size;
+		clu.flags = hint_femp->cur.flags;
+
+		dentry = hint_femp->eidx;
+
+		if (num_entries <= hint_femp->count) {
+			hint_femp->eidx = -1;
+			return dentry;
+		}
+	} else {
+		clu.dir = p_dir->dir;
+		clu.size = p_dir->size;
+		clu.flags = p_dir->flags;
+
+		dentry = 0;
+	}
+
+	while (!IS_CLUS_EOF(clu.dir)) {
+		/* FAT16 root_dir */
+		if (IS_CLUS_FREE(p_dir->dir))
+			i = dentry % dentries_per_clu;
+		else
+			i = dentry & (dentries_per_clu-1);
+
+		for ( ; i < dentries_per_clu; i++, dentry++) {
+			ep = exfat_get_dentry_in_dir(sb, &clu, i, NULL);
+			if (!ep)
+				return -EIO;
+
+			type = exfat_get_entry_type(ep);
+
+			if ((type == TYPE_UNUSED) || (type == TYPE_DELETED)) {
+				num_empty++;
+				if (hint_femp->eidx == -1) {
+					hint_femp->eidx = dentry;
+					hint_femp->count = CNT_UNUSED_NOHIT;
+
+					hint_femp->cur.dir = clu.dir;
+					hint_femp->cur.size = clu.size;
+					hint_femp->cur.flags = clu.flags;
+				}
+
+				if ((type == TYPE_UNUSED) &&
+						(hint_femp->count != CNT_UNUSED_HIT)) {
+					hint_femp->count = CNT_UNUSED_HIT;
+				}
+			} else {
+				if ((hint_femp->eidx != -1) &&
+						(hint_femp->count == CNT_UNUSED_HIT)) {
+					/* unused empty group means
+					 * an empty group which includes
+					 * unused dentry
+					 */
+					exfat_fs_error(sb,
+							"found bogus dentry(%d) beyond unused empty group(%d) (start_clu : %u, cur_clu : %u)",
+							dentry, hint_femp->eidx,
+							p_dir->dir, clu.dir);
+					return -EIO;
+				}
+
+				num_empty = 0;
+				hint_femp->eidx = -1;
+			}
+
+			if (num_empty >= num_entries) {
+				/* found and invalidate hint_femp */
+				hint_femp->eidx = -1;
+				return (dentry - (num_entries-1));
+			}
+		}
+
+		if (IS_CLUS_FREE(p_dir->dir))
+			break; /* FAT16 root_dir */
+
+		if (clu.flags == 0x03) {
+			if ((--clu.size) > 0)
+				clu.dir++;
+			else
+				clu.dir = CLUS_EOF;
+		} else {
+			if (get_next_clus_safe(sb, &(clu.dir)))
+				return -EIO;
+		}
+	}
+
+	return -ENOSPC;
+}
+
+static int exfat_check_max_dentries(struct exfat_file_id *fid)
+{
+	if ((fid->size >> DENTRY_SIZE_BITS) >= MAX_EXFAT_DENTRIES) {
+		/*
+		 * exFAT spec allows a dir to grow upto 8388608(256MB)
+		 * dentries
+		 */
+		return -ENOSPC;
+	}
+	return 0;
+}
+
+/* find empty directory entry.
+ * if there isn't any empty slot, expand cluster chain.
+ */
+static int exfat_find_empty_entry(struct inode *inode, struct exfat_chain *p_dir, int num_entries)
+{
+	int dentry;
+	unsigned int ret, last_clu;
+	unsigned long long sector;
+	unsigned long long size = 0;
+	struct exfat_chain clu;
+	struct exfat_dentry *ep = NULL;
+	struct super_block *sb = inode->i_sb;
+	struct exfat_sb_info *sbi = EXFAT_SB(sb);
+	struct exfat_file_id *fid = &(EXFAT_I(inode)->fid);
+	struct exfat_hint_femp hint_femp;
+
+	hint_femp.eidx = -1;
+
+	WARN_ON(-1 > fid->hint_femp.eidx);
+
+	if (fid->hint_femp.eidx != -1) {
+		memcpy(&hint_femp, &fid->hint_femp, sizeof(struct exfat_hint_femp));
+		fid->hint_femp.eidx = -1;
+	}
+
+	/* FAT16 root_dir */
+	if (IS_CLUS_FREE(p_dir->dir))
+		return exfat_search_empty_slot(sb, &hint_femp, p_dir, num_entries);
+
+	while ((dentry = exfat_search_empty_slot(sb, &hint_femp, p_dir,
+					num_entries)) < 0) {
+		if (dentry == -EIO)
+			break;
+
+		if (exfat_check_max_dentries(fid))
+			return -ENOSPC;
+
+		/* we trust p_dir->size regardless of FAT type */
+		if (exfat_find_last_cluster(sb, p_dir, &last_clu))
+			return -EIO;
+
+		/*
+		 * Allocate new cluster to this directory
+		 */
+		clu.dir = last_clu + 1;
+		clu.size = 0; /* UNUSED */
+		clu.flags = p_dir->flags;
+
+		/* (0) check if there are reserved clusters.
+		 * (reference comments of create_dir.
+		 */
+		if (!IS_CLUS_EOF(sbi->used_clusters) &&
+				((sbi->used_clusters + sbi->reserved_clusters) >=
+				 (sbi->num_clusters - 2)))
+			return -ENOSPC;
+
+		/* (1) allocate a cluster */
+		ret = exfat_alloc_cluster(sb, 1, &clu, ALLOC_HOT);
+		if (ret)
+			return ret;
+
+		if (exfat_clear_cluster(inode, clu.dir))
+			return -EIO;
+
+		/* (2) append to the FAT chain */
+		if (clu.flags != p_dir->flags) {
+			/* no-fat-chain bit is disabled,
+			 * so fat-chain should be synced with alloc-bmp
+			 */
+			exfat_chain_cont_cluster(sb, p_dir->dir, p_dir->size);
+			p_dir->flags = 0x01;
+			hint_femp.cur.flags = 0x01;
+		}
+
+		if (clu.flags == 0x01)
+			if (exfat_ent_set(sb, last_clu, clu.dir))
+				return -EIO;
+
+		if (hint_femp.eidx == -1) {
+			/* the special case that new dentry
+			 * should be allocated from the start of new cluster
+			 */
+			hint_femp.eidx = (int)(p_dir->size <<
+					(sbi->cluster_size_bits - DENTRY_SIZE_BITS));
+			hint_femp.count = sbi->dentries_per_clu;
+
+			hint_femp.cur.dir = clu.dir;
+			hint_femp.cur.size = 0;
+			hint_femp.cur.flags = clu.flags;
+		}
+		hint_femp.cur.size++;
+		p_dir->size++;
+		size = (p_dir->size << sbi->cluster_size_bits);
+
+		/* (3) update the directory entry */
+		if (p_dir->dir != sbi->root_dir) {
+			ep = exfat_get_dentry_in_dir(sb,
+					&(fid->dir), fid->entry + 1, &sector);
+			if (!ep)
+				return -EIO;
+			exfat_set_entry_size(ep, size);
+			exfat_set_entry_flag(ep, p_dir->flags);
+			if (dcache_modify(sb, sector))
+				return -EIO;
+
+			if (update_dir_chksum(sb, &(fid->dir), fid->entry))
+				return -EIO;
+		}
+
+		/* directory inode should be updated in here */
+		i_size_write(inode, (loff_t)size);
+		EXFAT_I(inode)->i_size_ondisk += sbi->cluster_size;
+		EXFAT_I(inode)->i_size_aligned += sbi->cluster_size;
+		EXFAT_I(inode)->fid.size = size;
+		EXFAT_I(inode)->fid.flags = p_dir->flags;
+		inode->i_blocks += 1 << (sbi->cluster_size_bits -
+				sb->s_blocksize_bits);
+	}
+
+	return dentry;
+}
+
 static int exfat_create_file(struct inode *inode, struct exfat_chain *p_dir,
 	struct exfat_uni_name *p_uniname, unsigned char mode, struct exfat_file_id *fid)
 {

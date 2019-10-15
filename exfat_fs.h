@@ -481,10 +481,10 @@ int exfat_init_dir_entry(struct super_block *sb, struct exfat_chain *p_dir, int 
 int exfat_init_ext_entry(struct super_block *sb, struct exfat_chain *p_dir, int entry, int num_entries,
 		struct exfat_uni_name *p_uniname, struct exfat_dos_name *p_dosname);
 int exfat_delete_dir_entry(struct super_block *sb, struct exfat_chain *p_dir, int entry, int order, int num_entries);
+int update_dir_chksum(struct super_block *sb, struct exfat_chain *p_dir, int entry);
 int exfat_update_dir_chksum_with_entry_set(struct super_block *sb, struct exfat_entry_set_cache *es);
 void exfat_release_dentry_set(struct exfat_entry_set_cache *es);
 int exfat_calc_num_entries(struct exfat_uni_name *p_uniname);
-int exfat_find_empty_entry(struct inode *inode, struct exfat_chain *p_dir, int num_entries);
 int exfat_find_dir_entry(struct super_block *sb, struct exfat_file_id *fid,
 		struct exfat_chain *p_dir, struct exfat_uni_name *p_uniname, int num_entries, struct exfat_dos_name *unused, unsigned int type);
 int exfat_count_ext_entries(struct super_block *sb, struct exfat_chain *p_dir, int entry, struct exfat_dentry *p_entry);
@@ -493,6 +493,8 @@ struct exfat_entry_set_cache *exfat_get_dentry_set_in_dir(struct super_block *sb
 		struct exfat_chain *p_dir, int entry, unsigned int type, struct exfat_dentry **file_ep);
 int exfat_clear_cluster(struct inode *inode, unsigned int clu);
 int exfat_find_location(struct super_block *sb, struct exfat_chain *p_dir, int entry, unsigned long long *sector, int *offset);
+int exfat_find_last_cluster(struct super_block *sb, struct exfat_chain *p_chain,
+		unsigned int *ret_clu);
 
 /* balloc.c */
 int exfat_load_alloc_bmp(struct super_block *sb);
