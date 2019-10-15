@@ -245,26 +245,6 @@ const struct dentry_operations exfat_ci_dentry_ops = {
 	.d_compare      = exfat_cmpi,
 };
 
-/* input  : dir, uni_name
- * output : num_of_entry, dos_name(format : aaaaaa~1.bbb)
- */
-static int exfat_get_num_entries_and_dos_name(struct super_block *sb, struct exfat_chain *p_dir,
-		struct exfat_uni_name *p_uniname, int *entries,
-		struct exfat_dos_name *p_dosname, int lookup)
-{
-	int num_entries;
-
-	/* Init null char. */
-	p_dosname->name[0] = '\0';
-
-	num_entries = exfat_calc_num_entries(p_uniname);
-	if (num_entries == 0)
-		return -EINVAL;
-
-	*entries = num_entries;
-	return 0;
-}
-
 /* used only in search empty_slot() */
 #define CNT_UNUSED_NOHIT        (-1)
 #define CNT_UNUSED_HIT          (-2)
@@ -391,7 +371,7 @@ static int exfat_check_max_dentries(struct exfat_file_id *fid)
 /* find empty directory entry.
  * if there isn't any empty slot, expand cluster chain.
  */
-static int exfat_find_empty_entry(struct inode *inode, struct exfat_chain *p_dir, int num_entries)
+int exfat_find_empty_entry(struct inode *inode, struct exfat_chain *p_dir, int num_entries)
 {
 	int dentry;
 	unsigned int ret, last_clu;
@@ -1421,81 +1401,6 @@ out:
 	__unlock_d_revalidate(dentry);
 	mutex_unlock(&EXFAT_SB(sb)->s_lock);
 	return err;
-}
-
-static int exfat_create_dir(struct inode *inode, struct exfat_chain *p_dir,
-		struct exfat_uni_name *p_uniname, struct exfat_file_id *fid)
-{
-	int dentry, num_entries;
-	unsigned long long ret;
-	unsigned long long size;
-	struct exfat_chain clu;
-	struct exfat_dos_name dos_name;
-	struct super_block *sb = inode->i_sb;
-	struct exfat_sb_info *sbi = EXFAT_SB(sb);
-
-	ret = exfat_get_num_entries_and_dos_name(sb, p_dir, p_uniname, &num_entries,
-		&dos_name, 0);
-	if (ret)
-		return ret;
-
-	/* exfat_find_empty_entry must be called before alloc_cluster */
-	dentry = exfat_find_empty_entry(inode, p_dir, num_entries);
-	if (dentry < 0)
-		return dentry; /* -EIO or -ENOSPC */
-
-	clu.dir = CLUS_EOF;
-	clu.size = 0;
-	clu.flags = 0x03;
-
-	/* (0) Check if there are reserved clusters up to max. */
-	if ((sbi->used_clusters + sbi->reserved_clusters) >=
-			(sbi->num_clusters - CLUS_BASE))
-		return -ENOSPC;
-
-	/* (1) allocate a cluster */
-	ret = exfat_alloc_cluster(sb, 1, &clu, ALLOC_HOT);
-	if (ret)
-		return ret;
-
-	ret = exfat_clear_cluster(inode, clu.dir);
-	if (ret)
-		return ret;
-
-	size = sbi->cluster_size;
-
-	/* (2) update the directory entry */
-	/* make sub-dir entry in parent directory */
-	ret = exfat_init_dir_entry(sb, p_dir, dentry, TYPE_DIR, clu.dir, size);
-	if (ret)
-		return ret;
-
-	ret = exfat_init_ext_entry(sb, p_dir, dentry, num_entries, p_uniname,
-		&dos_name);
-	if (ret)
-		return ret;
-
-	fid->dir.dir = p_dir->dir;
-	fid->dir.size = p_dir->size;
-	fid->dir.flags = p_dir->flags;
-	fid->entry = dentry;
-
-	fid->attr = ATTR_SUBDIR;
-	fid->flags = 0x03;
-	fid->size = size;
-	fid->start_clu = clu.dir;
-
-	fid->type = TYPE_DIR;
-	fid->rwoffset = 0;
-	fid->hint_bmap.off = CLUS_EOF;
-
-	/* hint_stat will be used if this is directory. */
-	fid->version = 0;
-	fid->hint_stat.eidx = 0;
-	fid->hint_stat.clu = fid->start_clu;
-	fid->hint_femp.eidx = -1;
-
-	return 0;
 }
 
 static int exfat_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
