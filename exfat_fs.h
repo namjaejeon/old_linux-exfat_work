@@ -503,7 +503,7 @@ int exfat_unlock_dcache(struct super_block *sb, unsigned long long sec);
 int exfat_update_dcache(struct super_block *sb, unsigned long long sec);
 int exfat_release_fcaches(struct super_block *sb);
 int exfat_release_dcaches(struct super_block *sb);
-int meta_cache_init(struct super_block *sb);
+int exfat_meta_cache_init(struct super_block *sb);
 int exfat_release_dcache(struct super_block *sb, unsigned long long sec);
 unsigned char *exfat_fcache_getblk(struct super_block *sb, unsigned long long sec);
 int exfat_update_fcache(struct super_block *sb, unsigned long long sec);

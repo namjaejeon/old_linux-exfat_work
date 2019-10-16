@@ -996,7 +996,7 @@ int exfat_mount(struct super_block *sb)
 {
 	int err;
 
-	err = meta_cache_init(sb);
+	err = exfat_meta_cache_init(sb);
 	if (err)
 		goto out;
 

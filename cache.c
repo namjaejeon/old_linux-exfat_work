@@ -557,7 +557,7 @@ out:
 	return ret;
 }
 
-int meta_cache_init(struct super_block *sb)
+int exfat_meta_cache_init(struct super_block *sb)
 {
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 	int i;
