@@ -20,7 +20,7 @@ static int __exfat_ent_get(struct super_block *sb, unsigned int loc,
 	sec = sbi->FAT1_start_sector + (loc >> (sb->s_blocksize_bits-2));
 	off = (loc << 2) & (unsigned int)(sb->s_blocksize - 1);
 
-	fat_sector = fcache_getblk(sb, sec);
+	fat_sector = exfat_fcache_getblk(sb, sec);
 	if (!fat_sector)
 		return -EIO;
 
@@ -46,14 +46,14 @@ int exfat_ent_set(struct super_block *sb, unsigned int loc,
 	sec = sbi->FAT1_start_sector + (loc >> (sb->s_blocksize_bits-2));
 	off = (loc << 2) & (unsigned int)(sb->s_blocksize - 1);
 
-	fat_sector = fcache_getblk(sb, sec);
+	fat_sector = exfat_fcache_getblk(sb, sec);
 	if (!fat_sector)
 		return -EIO;
 
 	fat_entry = (__le32 *)&(fat_sector[off]);
 	*fat_entry = cpu_to_le32(content);
 
-	return fcache_modify(sb, sec);
+	return exfat_update_fcache(sb, sec);
 }
 
 static inline bool is_reserved_clus(unsigned int clus)
@@ -179,7 +179,7 @@ int exfat_free_cluster(struct super_block *sb, struct exfat_chain *p_chain, int 
 			if (do_relse) {
 				sector = CLUS_TO_SECT(sbi, clu);
 				for (i = 0; i < sbi->sect_per_clus; i++) {
-					if (dcache_release(sb, sector+i) ==
+					if (exfat_release_dcache(sb, sector+i) ==
 							-EIO)
 						goto out;
 				}
@@ -195,7 +195,7 @@ int exfat_free_cluster(struct super_block *sb, struct exfat_chain *p_chain, int 
 			if (do_relse) {
 				sector = CLUS_TO_SECT(sbi, clu);
 				for (i = 0; i < sbi->sect_per_clus; i++) {
-					if (dcache_release(sb, sector+i) ==
+					if (exfat_release_dcache(sb, sector+i) ==
 							-EIO)
 						goto out;
 				}

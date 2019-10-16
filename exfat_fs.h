@@ -498,17 +498,17 @@ void exfat_cache_init_inode(struct inode *inode);
 void exfat_cache_inval_inode(struct inode *inode);
 int exfat_get_clus(struct inode *inode, unsigned int cluster, unsigned int *fclus,
 		unsigned int *dclus, unsigned int *last_dclus, int allow_eof);
-int dcache_lock(struct super_block *sb, unsigned long long sec);
-int dcache_unlock(struct super_block *sb, unsigned long long sec);
-int dcache_modify(struct super_block *sb, unsigned long long sec);
-int fcache_release_all(struct super_block *sb);
-int dcache_release_all(struct super_block *sb);
+int exfat_lock_dcache(struct super_block *sb, unsigned long long sec);
+int exfat_unlock_dcache(struct super_block *sb, unsigned long long sec);
+int exfat_update_dcache(struct super_block *sb, unsigned long long sec);
+int exfat_release_fcaches(struct super_block *sb);
+int exfat_release_dcaches(struct super_block *sb);
 int meta_cache_init(struct super_block *sb);
-int dcache_release(struct super_block *sb, unsigned long long sec);
-unsigned char *fcache_getblk(struct super_block *sb, unsigned long long sec);
-int fcache_modify(struct super_block *sb, unsigned long long sec);
-int dcache_readahead(struct super_block *sb, unsigned long long sec);
-unsigned char *dcache_getblk(struct super_block *sb, unsigned long long sec);
+int exfat_release_dcache(struct super_block *sb, unsigned long long sec);
+unsigned char *exfat_fcache_getblk(struct super_block *sb, unsigned long long sec);
+int exfat_update_fcache(struct super_block *sb, unsigned long long sec);
+int exfat_dcache_readahead(struct super_block *sb, unsigned long long sec);
+unsigned char *exfat_dcache_getblk(struct super_block *sb, unsigned long long sec);
 
 /* dir.c */
 int exfat_create_dir(struct inode *inode, struct exfat_chain *p_dir,

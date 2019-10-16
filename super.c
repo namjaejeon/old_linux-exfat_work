@@ -84,10 +84,10 @@ int __exfat_umount(struct super_block *sb)
 
 	exfat_free_alloc_bmp(sb);
 
-	if (fcache_release_all(sb))
+	if (exfat_release_fcaches(sb))
 		ret = -EIO;
 
-	if (dcache_release_all(sb))
+	if (exfat_release_dcaches(sb))
 		ret = -EIO;
 
 	return ret;

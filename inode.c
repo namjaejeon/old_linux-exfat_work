@@ -1078,9 +1078,9 @@ struct exfat_dentry *exfat_get_dentry_in_dir(struct super_block *sb, struct exfa
 	 */
 	if ((!IS_CLUS_FREE(p_dir->dir)) &&
 			!(entry & (dentries_per_page - 1)))
-		dcache_readahead(sb, sec);
+		exfat_dcache_readahead(sb, sec);
 
-	buf = dcache_getblk(sb, sec);
+	buf = exfat_dcache_getblk(sb, sec);
 	if (!buf)
 		return NULL;
 

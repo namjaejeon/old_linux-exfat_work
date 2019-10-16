@@ -324,10 +324,8 @@ int exfat_get_clus(struct inode *inode, unsigned int cluster,
 }
 
 #define LOCKBIT         (0x01)
-#define DIRTYBIT        (0x02)
-#define KEEPBIT         (0x04)
 
-static void push_to_mru(struct exfat_cache_entry *bp, struct exfat_cache_entry *list)
+static void exfat_push_to_mru(struct exfat_cache_entry *bp, struct exfat_cache_entry *list)
 {
 	bp->next = list->next;
 	bp->prev = list;
@@ -335,7 +333,7 @@ static void push_to_mru(struct exfat_cache_entry *bp, struct exfat_cache_entry *
 	list->next = bp;
 }
 
-static void push_to_lru(struct exfat_cache_entry *bp, struct exfat_cache_entry *list)
+static void exfat_push_to_lru(struct exfat_cache_entry *bp, struct exfat_cache_entry *list)
 {
 	bp->prev = list->prev;
 	bp->next = list;
@@ -343,21 +341,21 @@ static void push_to_lru(struct exfat_cache_entry *bp, struct exfat_cache_entry *
 	list->prev = bp;
 }
 
-static void move_to_mru(struct exfat_cache_entry *bp, struct exfat_cache_entry *list)
+static void exfat_move_to_mru(struct exfat_cache_entry *bp, struct exfat_cache_entry *list)
 {
 	bp->prev->next = bp->next;
 	bp->next->prev = bp->prev;
-	push_to_mru(bp, list);
+	exfat_push_to_mru(bp, list);
 }
 
-static void move_to_lru(struct exfat_cache_entry *bp, struct exfat_cache_entry *list)
+static void exfat_move_to_lru(struct exfat_cache_entry *bp, struct exfat_cache_entry *list)
 {
 	bp->prev->next = bp->next;
 	bp->next->prev = bp->prev;
-	push_to_lru(bp, list);
+	exfat_push_to_lru(bp, list);
 }
 
-static inline int __check_hash_valid(struct exfat_cache_entry *bp)
+static inline int exfat_check_hash_valid(struct exfat_cache_entry *bp)
 {
 	if ((bp->hash.next == bp) || (bp->hash.prev == bp))
 		return -EINVAL;
@@ -365,7 +363,7 @@ static inline int __check_hash_valid(struct exfat_cache_entry *bp)
 	return 0;
 }
 
-static inline void __remove_from_hash(struct exfat_cache_entry *bp)
+static inline void exfat_remove_from_hash(struct exfat_cache_entry *bp)
 {
 	(bp->hash.prev)->hash.next = bp->hash.next;
 	(bp->hash.next)->hash.prev = bp->hash.prev;
@@ -373,7 +371,7 @@ static inline void __remove_from_hash(struct exfat_cache_entry *bp)
 	bp->hash.prev = bp;
 }
 
-static struct exfat_cache_entry *__dcache_find(struct super_block *sb,
+static struct exfat_cache_entry *exfat_find_dcache(struct super_block *sb,
 		unsigned long long sec)
 {
 	int off;
@@ -393,7 +391,7 @@ static struct exfat_cache_entry *__dcache_find(struct super_block *sb,
 	return NULL;
 }
 
-static struct exfat_cache_entry *__dcache_get(struct super_block *sb)
+static struct exfat_cache_entry *exfat_get_dcache(struct super_block *sb)
 {
 	struct exfat_cache_entry *bp;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
@@ -402,11 +400,11 @@ static struct exfat_cache_entry *__dcache_get(struct super_block *sb)
 	while (bp->flag & LOCKBIT)
 		bp = bp->prev;
 
-	move_to_mru(bp, &sbi->dcache.lru_list);
+	exfat_move_to_mru(bp, &sbi->dcache.lru_list);
 	return bp;
 }
 
-static void __dcache_insert_hash(struct super_block *sb, struct exfat_cache_entry *bp)
+static void exfat_insert_dcache_hash(struct super_block *sb, struct exfat_cache_entry *bp)
 {
 	int off;
 	struct exfat_cache_entry *hp;
@@ -422,12 +420,12 @@ static void __dcache_insert_hash(struct super_block *sb, struct exfat_cache_entr
 	hp->hash.next = bp;
 }
 
-static void __dcache_remove_hash(struct exfat_cache_entry *bp)
+static void exfat_remove_dcache_hash(struct exfat_cache_entry *bp)
 {
-	__remove_from_hash(bp);
+	exfat_remove_from_hash(bp);
 }
 
-static struct exfat_cache_entry *__fcache_find(struct super_block *sb,
+static struct exfat_cache_entry *exfat_find_fcache(struct super_block *sb,
 		unsigned long long sec)
 {
 	int off;
@@ -446,17 +444,17 @@ static struct exfat_cache_entry *__fcache_find(struct super_block *sb,
 	return NULL;
 }
 
-static struct exfat_cache_entry *__fcache_get(struct super_block *sb)
+static struct exfat_cache_entry *exfat_get_fcache(struct super_block *sb)
 {
 	struct exfat_cache_entry *bp;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 
 	bp = sbi->fcache.lru_list.prev;
-	move_to_mru(bp, &sbi->fcache.lru_list);
+	exfat_move_to_mru(bp, &sbi->fcache.lru_list);
 	return bp;
 }
 
-static void __fcache_insert_hash(struct super_block *sb, struct exfat_cache_entry *bp)
+static void exfat_insert_fcache_hash(struct super_block *sb, struct exfat_cache_entry *bp)
 {
 	int off;
 	struct exfat_cache_entry *hp;
@@ -472,12 +470,12 @@ static void __fcache_insert_hash(struct super_block *sb, struct exfat_cache_entr
 	hp->hash.next = bp;
 }
 
-static void __fcache_remove_hash(struct exfat_cache_entry *bp)
+static void exfat_remove_fcache_hash(struct exfat_cache_entry *bp)
 {
-	__remove_from_hash(bp);
+	exfat_remove_from_hash(bp);
 }
 
-static void __readahead(struct super_block *sb, unsigned long long secno,
+static void exfat_readahead_blks(struct super_block *sb, unsigned long long secno,
 		unsigned long long num_secs)
 {
 	unsigned long long i;
@@ -486,11 +484,11 @@ static void __readahead(struct super_block *sb, unsigned long long secno,
 		sb_breadahead(sb, (sector_t)(secno + i));
 }
 
-static int __fcache_ent_discard(struct super_block *sb, struct exfat_cache_entry *bp)
+static int exfat_discard_fcache(struct super_block *sb, struct exfat_cache_entry *bp)
 {
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 
-	__fcache_remove_hash(bp);
+	exfat_remove_fcache_hash(bp);
 	bp->sec = ~0;
 	bp->flag = 0;
 
@@ -498,33 +496,33 @@ static int __fcache_ent_discard(struct super_block *sb, struct exfat_cache_entry
 		__brelse(bp->bh);
 		bp->bh = NULL;
 	}
-	move_to_lru(bp, &sbi->fcache.lru_list);
+	exfat_move_to_lru(bp, &sbi->fcache.lru_list);
 	return 0;
 }
 
-unsigned char *fcache_getblk(struct super_block *sb, unsigned long long sec)
+unsigned char *exfat_fcache_getblk(struct super_block *sb, unsigned long long sec)
 {
 	struct exfat_cache_entry *bp;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 	unsigned int page_ra_count = FCACHE_MAX_RA_SIZE >> sb->s_blocksize_bits;
 
-	bp = __fcache_find(sb, sec);
+	bp = exfat_find_fcache(sb, sec);
 	if (bp) {
-		move_to_mru(bp, &sbi->fcache.lru_list);
+		exfat_move_to_mru(bp, &sbi->fcache.lru_list);
 		return bp->bh->b_data;
 	}
 
-	bp = __fcache_get(sb);
-	if (!__check_hash_valid(bp))
-		__fcache_remove_hash(bp);
+	bp = exfat_get_fcache(sb);
+	if (!exfat_check_hash_valid(bp))
+		exfat_remove_fcache_hash(bp);
 
 	bp->sec = sec;
 	bp->flag = 0;
-	__fcache_insert_hash(sb, bp);
+	exfat_insert_fcache_hash(sb, bp);
 
 	/* Naive FAT read-ahead (increase I/O unit to page_ra_count) */
 	if ((sec & (page_ra_count - 1)) == 0)
-		__readahead(sb, sec, (unsigned long long)page_ra_count);
+		exfat_readahead_blks(sb, sec, (unsigned long long)page_ra_count);
 
 	/*
 	 * When read_sect is failed, fcache should be moved to
@@ -532,19 +530,19 @@ unsigned char *fcache_getblk(struct super_block *sb, unsigned long long sec)
 	 */
 	bp->bh = sb_bread(sb, sec);
 	if (!bp->bh) {
-		__fcache_ent_discard(sb, bp);
+		exfat_discard_fcache(sb, bp);
 		return NULL;
 	}
 
 	return bp->bh->b_data;
 }
 
-int fcache_modify(struct super_block *sb, unsigned long long sec)
+int exfat_update_fcache(struct super_block *sb, unsigned long long sec)
 {
 	struct exfat_cache_entry *bp;
 	int ret = 0;
 
-	bp = __fcache_find(sb, sec);
+	bp = exfat_find_fcache(sb, sec);
 	if (!bp) {
 		exfat_fs_error(sb, "Can`t find fcache (sec 0x%016llx)", sec);
 		ret = -EIO;
@@ -574,7 +572,7 @@ int meta_cache_init(struct super_block *sb)
 		sbi->fcache.pool[i].bh = NULL;
 		sbi->fcache.pool[i].prev = NULL;
 		sbi->fcache.pool[i].next = NULL;
-		push_to_mru(&(sbi->fcache.pool[i]), &sbi->fcache.lru_list);
+		exfat_push_to_mru(&(sbi->fcache.pool[i]), &sbi->fcache.lru_list);
 	}
 
 	sbi->dcache.lru_list.next = &sbi->dcache.lru_list;
@@ -589,7 +587,7 @@ int meta_cache_init(struct super_block *sb)
 		sbi->dcache.pool[i].bh = NULL;
 		sbi->dcache.pool[i].prev = NULL;
 		sbi->dcache.pool[i].next = NULL;
-		push_to_mru(&(sbi->dcache.pool[i]), &sbi->dcache.lru_list);
+		exfat_push_to_mru(&(sbi->dcache.pool[i]), &sbi->dcache.lru_list);
 	}
 
 	/* HASH list */
@@ -602,7 +600,7 @@ int meta_cache_init(struct super_block *sb)
 	}
 
 	for (i = 0; i < FAT_CACHE_SIZE; i++)
-		__fcache_insert_hash(sb, &(sbi->fcache.pool[i]));
+		exfat_insert_fcache_hash(sb, &(sbi->fcache.pool[i]));
 
 	for (i = 0; i < BUF_CACHE_HASH_SIZE; i++) {
 		sbi->dcache.hash_list[i].sec = ~0;
@@ -614,12 +612,12 @@ int meta_cache_init(struct super_block *sb)
 	}
 
 	for (i = 0; i < BUF_CACHE_SIZE; i++)
-		__dcache_insert_hash(sb, &(sbi->dcache.pool[i]));
+		exfat_insert_dcache_hash(sb, &(sbi->dcache.pool[i]));
 
 	return 0;
 }
 
-int fcache_release_all(struct super_block *sb)
+int exfat_release_fcaches(struct super_block *sb)
 {
 	int ret = 0;
 	struct exfat_cache_entry *bp;
@@ -640,8 +638,7 @@ int fcache_release_all(struct super_block *sb)
 	return ret;
 }
 
-/* Read-ahead a cluster */
-int dcache_readahead(struct super_block *sb, unsigned long long sec)
+int exfat_dcache_readahead(struct super_block *sb, unsigned long long sec)
 {
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 	struct buffer_head *bh;
@@ -667,17 +664,17 @@ int dcache_readahead(struct super_block *sb, unsigned long long sec)
 
 	bh = sb_find_get_block(sb, sec);
 	if (!bh || !buffer_uptodate(bh))
-		__readahead(sb, sec, (unsigned long long)ra_count);
+		exfat_readahead_blks(sb, sec, (unsigned long long)ra_count);
 	brelse(bh);
 
 	return 0;
 }
 
-static int __dcache_ent_discard(struct super_block *sb, struct exfat_cache_entry *bp)
+static int exfat_discard_dcache(struct super_block *sb, struct exfat_cache_entry *bp)
 {
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 
-	__dcache_remove_hash(bp);
+	exfat_remove_dcache_hash(bp);
 	bp->sec = ~0;
 	bp->flag = 0;
 
@@ -686,35 +683,33 @@ static int __dcache_ent_discard(struct super_block *sb, struct exfat_cache_entry
 		bp->bh = NULL;
 	}
 
-	move_to_lru(bp, &sbi->dcache.lru_list);
+	exfat_move_to_lru(bp, &sbi->dcache.lru_list);
 	return 0;
 }
 
-unsigned char *dcache_getblk(struct super_block *sb, unsigned long long sec)
+unsigned char *exfat_dcache_getblk(struct super_block *sb, unsigned long long sec)
 {
 	struct exfat_cache_entry *bp;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 
-	bp = __dcache_find(sb, sec);
+	bp = exfat_find_dcache(sb, sec);
 	if (bp) {
-		if (!(bp->flag & KEEPBIT))	// already in keep list
-			move_to_mru(bp, &sbi->dcache.lru_list);
-
+		exfat_move_to_mru(bp, &sbi->dcache.lru_list);
 		return bp->bh->b_data;
 	}
 
-	bp = __dcache_get(sb);
+	bp = exfat_get_dcache(sb);
 
-	if (!__check_hash_valid(bp))
-		__dcache_remove_hash(bp);
+	if (!exfat_check_hash_valid(bp))
+		exfat_remove_dcache_hash(bp);
 
 	bp->sec = sec;
 	bp->flag = 0;
-	__dcache_insert_hash(sb, bp);
+	exfat_insert_dcache_hash(sb, bp);
 
 	bp->bh = sb_bread(sb, sec);
 	if (!bp->bh) {
-		__dcache_ent_discard(sb, bp);
+		exfat_discard_dcache(sb, bp);
 		return NULL;
 	}
 
@@ -722,13 +717,13 @@ unsigned char *dcache_getblk(struct super_block *sb, unsigned long long sec)
 
 }
 
-int dcache_modify(struct super_block *sb, unsigned long long sec)
+int exfat_update_dcache(struct super_block *sb, unsigned long long sec)
 {
 	struct exfat_cache_entry *bp;
 
 	set_sb_dirty(sb);
 
-	bp = __dcache_find(sb, sec);
+	bp = exfat_find_dcache(sb, sec);
 	if (unlikely(!bp)) {
 		exfat_fs_error(sb, "Can`t find dcache (sec 0x%016llx)", sec);
 		return -EIO;
@@ -740,11 +735,11 @@ int dcache_modify(struct super_block *sb, unsigned long long sec)
 	return 0;
 }
 
-int dcache_lock(struct super_block *sb, unsigned long long sec)
+int exfat_lock_dcache(struct super_block *sb, unsigned long long sec)
 {
 	struct exfat_cache_entry *bp;
 
-	bp = __dcache_find(sb, sec);
+	bp = exfat_find_dcache(sb, sec);
 	if (likely(bp)) {
 		bp->flag |= LOCKBIT;
 		return 0;
@@ -755,11 +750,11 @@ int dcache_lock(struct super_block *sb, unsigned long long sec)
 	return -EIO;
 }
 
-int dcache_unlock(struct super_block *sb, unsigned long long sec)
+int exfat_unlock_dcache(struct super_block *sb, unsigned long long sec)
 {
 	struct exfat_cache_entry *bp;
 
-	bp = __dcache_find(sb, sec);
+	bp = exfat_find_dcache(sb, sec);
 	if (likely(bp))  {
 		bp->flag &= ~(LOCKBIT);
 		return 0;
@@ -770,12 +765,12 @@ int dcache_unlock(struct super_block *sb, unsigned long long sec)
 	return -EIO;
 }
 
-int dcache_release(struct super_block *sb, unsigned long long sec)
+int exfat_release_dcache(struct super_block *sb, unsigned long long sec)
 {
 	struct exfat_cache_entry *bp;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 
-	bp = __dcache_find(sb, sec);
+	bp = exfat_find_dcache(sb, sec);
 	if (unlikely(!bp))
 		return -ENOENT;
 
@@ -787,11 +782,11 @@ int dcache_release(struct super_block *sb, unsigned long long sec)
 		bp->bh = NULL;
 	}
 
-	move_to_lru(bp, &sbi->dcache.lru_list);
+	exfat_move_to_lru(bp, &sbi->dcache.lru_list);
 	return 0;
 }
 
-int dcache_release_all(struct super_block *sb)
+int exfat_release_dcaches(struct super_block *sb)
 {
 	int ret = 0;
 	struct exfat_cache_entry *bp;
@@ -803,7 +798,7 @@ int dcache_release_all(struct super_block *sb)
 	 */
 	while (sbi->dcache.keep_list.prev != &sbi->dcache.keep_list) {
 		struct exfat_cache_entry *bp_keep = sbi->dcache.keep_list.prev;
-		move_to_mru(bp_keep, &sbi->dcache.lru_list);
+		exfat_move_to_mru(bp_keep, &sbi->dcache.lru_list);
 	}
 
 	bp = sbi->dcache.lru_list.next;
