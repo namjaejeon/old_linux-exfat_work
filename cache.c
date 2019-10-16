@@ -577,8 +577,6 @@ int exfat_meta_cache_init(struct super_block *sb)
 
 	sbi->dcache.lru_list.next = &sbi->dcache.lru_list;
 	sbi->dcache.lru_list.prev = sbi->dcache.lru_list.next;
-	sbi->dcache.keep_list.next = &sbi->dcache.keep_list;
-	sbi->dcache.keep_list.prev = sbi->dcache.keep_list.next;
 
 	// Initially, all the BUF_CACHEs are in the LRU list
 	for (i = 0; i < BUF_CACHE_SIZE; i++) {
@@ -791,15 +789,6 @@ int exfat_release_dcaches(struct super_block *sb)
 	int ret = 0;
 	struct exfat_cache_entry *bp;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
-
-	/*
-	 * Connect list elements:
-	 * LRU list : (A - B - ... - bp_front) + (bp_first + ... + bp_last)
-	 */
-	while (sbi->dcache.keep_list.prev != &sbi->dcache.keep_list) {
-		struct exfat_cache_entry *bp_keep = sbi->dcache.keep_list.prev;
-		exfat_move_to_mru(bp_keep, &sbi->dcache.lru_list);
-	}
 
 	bp = sbi->dcache.lru_list.next;
 	while (bp != &sbi->dcache.lru_list) {

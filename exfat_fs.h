@@ -323,7 +323,6 @@ struct exfat_sb_info {
 	struct {
 		struct exfat_cache_entry pool[BUF_CACHE_SIZE];
 		struct exfat_cache_entry lru_list;
-		struct exfat_cache_entry keep_list;        // CACHEs in this list will not be kicked by normal lru operations
 		struct exfat_cache_entry hash_list[BUF_CACHE_HASH_SIZE];
 	} dcache;
 
