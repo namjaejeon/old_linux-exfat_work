@@ -615,27 +615,6 @@ int exfat_meta_cache_init(struct super_block *sb)
 	return 0;
 }
 
-int exfat_release_fcaches(struct super_block *sb)
-{
-	int ret = 0;
-	struct exfat_cache_entry *bp;
-	struct exfat_sb_info *sbi = EXFAT_SB(sb);
-
-	bp = sbi->fcache.lru_list.next;
-	while (bp != &sbi->fcache.lru_list) {
-		bp->sec = ~0;
-		bp->flag = 0;
-
-		if (bp->bh) {
-			__brelse(bp->bh);
-			bp->bh = NULL;
-		}
-		bp = bp->next;
-	}
-
-	return ret;
-}
-
 int exfat_dcache_readahead(struct super_block *sb, unsigned long long sec)
 {
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
@@ -784,14 +763,12 @@ int exfat_release_dcache(struct super_block *sb, unsigned long long sec)
 	return 0;
 }
 
-int exfat_release_dcaches(struct super_block *sb)
+void exfat_release_caches(struct exfat_cache_entry *lru_list)
 {
-	int ret = 0;
 	struct exfat_cache_entry *bp;
-	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 
-	bp = sbi->dcache.lru_list.next;
-	while (bp != &sbi->dcache.lru_list) {
+	bp = lru_list->next;
+	while (bp != lru_list) {
 		bp->sec = ~0;
 		bp->flag = 0;
 
@@ -801,6 +778,4 @@ int exfat_release_dcaches(struct super_block *sb)
 		}
 		bp = bp->next;
 	}
-
-	return ret;
 }

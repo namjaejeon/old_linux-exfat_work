@@ -76,19 +76,13 @@ static void free_upcase_table(struct super_block *sb)
 int __exfat_umount(struct super_block *sb)
 {
 	int ret = 0;
+	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 
-	if (exfat_set_vol_flags(sb, VOL_CLEAN))
-		ret = -EIO;
-
+	ret = exfat_set_vol_flags(sb, VOL_CLEAN);
 	free_upcase_table(sb);
-
 	exfat_free_alloc_bmp(sb);
-
-	if (exfat_release_fcaches(sb))
-		ret = -EIO;
-
-	if (exfat_release_dcaches(sb))
-		ret = -EIO;
+	exfat_release_caches(&sbi->fcache.lru_list);
+	exfat_release_caches(&sbi->dcache.lru_list);
 
 	return ret;
 }

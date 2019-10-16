@@ -495,10 +495,9 @@ extern int exfat_get_clus(struct inode *inode, unsigned int cluster, unsigned in
 extern int exfat_lock_dcache(struct super_block *sb, unsigned long long sec);
 extern int exfat_unlock_dcache(struct super_block *sb, unsigned long long sec);
 extern int exfat_update_dcache(struct super_block *sb, unsigned long long sec);
-extern int exfat_release_fcaches(struct super_block *sb);
-extern int exfat_release_dcaches(struct super_block *sb);
 extern int exfat_meta_cache_init(struct super_block *sb);
 extern int exfat_release_dcache(struct super_block *sb, unsigned long long sec);
+void exfat_release_caches(struct exfat_cache_entry *lru_list);
 extern unsigned char *exfat_fcache_getblk(struct super_block *sb, unsigned long long sec);
 extern int exfat_update_fcache(struct super_block *sb, unsigned long long sec);
 extern int exfat_dcache_readahead(struct super_block *sb, unsigned long long sec);
