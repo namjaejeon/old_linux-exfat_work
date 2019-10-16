@@ -881,7 +881,7 @@ static int __exfat_fill_super(struct super_block *sb)
 	if (!tmp_bh) {
 		exfat_msg(sb, KERN_ERR, "unable to read boot sector");
 		ret = -EIO;
-		goto bd_close;
+		goto out;
 	}
 
 	/* PRB is read */
@@ -892,7 +892,7 @@ static int __exfat_fill_super(struct super_block *sb)
 		exfat_msg(sb, KERN_ERR, "invalid boot record signature");
 		brelse(tmp_bh);
 		ret = -EINVAL;
-		goto bd_close;
+		goto out;
 	}
 
 	/* check logical sector size */
@@ -900,7 +900,7 @@ static int __exfat_fill_super(struct super_block *sb)
 	if (!p_pbr) {
 		brelse(tmp_bh);
 		ret = -EIO;
-		goto bd_close;
+		goto out;
 	}
 
 	if (!is_exfat(p_pbr)) {
@@ -962,13 +962,13 @@ free_bh:
 	brelse(tmp_bh);
 	if (ret) {
 		exfat_msg(sb, KERN_ERR, "failed to mount fs-core");
-		goto bd_close;
+		goto out;
 	}
 
 	ret = load_upcase_table(sb);
 	if (ret) {
 		exfat_msg(sb, KERN_ERR, "failed to load upcase table");
-		goto bd_close;
+		goto out;
 	}
 
 	/* allocate-bitmap is only for exFAT */
@@ -991,7 +991,7 @@ free_alloc_bmp:
 	exfat_free_alloc_bmp(sb);
 free_upcase:
 	free_upcase_table(sb);
-bd_close:
+out:
 	return ret;
 }
 
