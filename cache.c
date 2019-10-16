@@ -619,11 +619,6 @@ int meta_cache_init(struct super_block *sb)
 	return 0;
 }
 
-int meta_cache_shutdown(struct super_block *sb)
-{
-	return 0;
-}
-
 int fcache_release_all(struct super_block *sb)
 {
 	int ret = 0;

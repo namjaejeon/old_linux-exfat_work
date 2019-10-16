@@ -504,7 +504,6 @@ int dcache_modify(struct super_block *sb, unsigned long long sec);
 int fcache_release_all(struct super_block *sb);
 int dcache_release_all(struct super_block *sb);
 int meta_cache_init(struct super_block *sb);
-int meta_cache_shutdown(struct super_block *sb);
 int dcache_release(struct super_block *sb, unsigned long long sec);
 unsigned char *fcache_getblk(struct super_block *sb, unsigned long long sec);
 int fcache_modify(struct super_block *sb, unsigned long long sec);

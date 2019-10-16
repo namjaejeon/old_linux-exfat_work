@@ -967,7 +967,6 @@ struct exfat_entry_set_cache *exfat_get_dentry_set_in_dir(struct super_block *sb
 	/* FIXME : is available in error case? */
 	if (p_dir->dir == DIR_DELETED) {
 		exfat_msg(sb, KERN_ERR, "access to deleted dentry\n");
-		WARN_ON(!sbi->prev_eio);
 		return NULL;
 	}
 

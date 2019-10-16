@@ -1060,7 +1060,6 @@ static int __count_num_clusters(struct super_block *sb, struct exfat_chain *p_ch
 struct exfat_dentry *exfat_get_dentry_in_dir(struct super_block *sb, struct exfat_chain *p_dir, int entry,
 		unsigned long long *sector)
 {
-	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 	unsigned int dentries_per_page = PAGE_SIZE >> DENTRY_SIZE_BITS;
 	int off;
 	unsigned long long sec;
@@ -1068,7 +1067,6 @@ struct exfat_dentry *exfat_get_dentry_in_dir(struct super_block *sb, struct exfa
 
 	if (p_dir->dir == DIR_DELETED) {
 		exfat_msg(sb, KERN_ERR, "abnormal access to deleted dentry\n");
-		WARN_ON(!sbi->prev_eio);
 		return NULL;
 	}
 

@@ -76,7 +76,6 @@ static void free_upcase_table(struct super_block *sb)
 int __exfat_umount(struct super_block *sb)
 {
 	int ret = 0;
-	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 
 	if (exfat_set_vol_flags(sb, VOL_CLEAN))
 		ret = -EIO;
@@ -1003,9 +1002,6 @@ int exfat_mount(struct super_block *sb)
 
 	err = __exfat_mount(sb);
 out:
-	if (err)
-		meta_cache_shutdown(sb);
-
 	return err;
 }
 
