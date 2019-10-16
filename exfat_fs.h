@@ -265,12 +265,12 @@ struct exfat_mount_options {
 };
 
 /* cache information */
-struct exfat_cache_entry {
-	struct exfat_cache_entry *next;
-	struct exfat_cache_entry *prev;
+struct exfat_meta_cache {
+	struct exfat_meta_cache *next;
+	struct exfat_meta_cache *prev;
 	struct {
-		struct exfat_cache_entry *next;
-		struct exfat_cache_entry *prev;
+		struct exfat_meta_cache *next;
+		struct exfat_meta_cache *prev;
 	} hash;
 	unsigned long long sec;
 	unsigned int flag;
@@ -314,16 +314,16 @@ struct exfat_sb_info {
 
 	/* fat cache */
 	struct {
-		struct exfat_cache_entry pool[FAT_CACHE_SIZE];
-		struct exfat_cache_entry lru_list;
-		struct exfat_cache_entry hash_list[FAT_CACHE_HASH_SIZE];
+		struct exfat_meta_cache pool[FAT_CACHE_SIZE];
+		struct exfat_meta_cache lru_list;
+		struct exfat_meta_cache hash_list[FAT_CACHE_HASH_SIZE];
 	} fcache;
 
 	/* meta cache */
 	struct {
-		struct exfat_cache_entry pool[BUF_CACHE_SIZE];
-		struct exfat_cache_entry lru_list;
-		struct exfat_cache_entry hash_list[BUF_CACHE_HASH_SIZE];
+		struct exfat_meta_cache pool[BUF_CACHE_SIZE];
+		struct exfat_meta_cache lru_list;
+		struct exfat_meta_cache hash_list[BUF_CACHE_HASH_SIZE];
 	} dcache;
 
 	int s_dirt;
@@ -497,7 +497,7 @@ extern int exfat_unlock_dcache(struct super_block *sb, unsigned long long sec);
 extern int exfat_update_dcache(struct super_block *sb, unsigned long long sec);
 extern int exfat_meta_cache_init(struct super_block *sb);
 extern int exfat_release_dcache(struct super_block *sb, unsigned long long sec);
-void exfat_release_caches(struct exfat_cache_entry *lru_list);
+void exfat_release_caches(struct exfat_meta_cache *lru_list);
 extern unsigned char *exfat_fcache_getblk(struct super_block *sb, unsigned long long sec);
 extern int exfat_update_fcache(struct super_block *sb, unsigned long long sec);
 extern int exfat_dcache_readahead(struct super_block *sb, unsigned long long sec);
