@@ -173,7 +173,6 @@ static int __exfat_set_vol_flags(struct super_block *sb,
 {
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 	pbr64_t *bpb;
-	int err;
 	int sync = 0;
 
 	/* flags are not changed */
@@ -192,7 +191,7 @@ static int __exfat_set_vol_flags(struct super_block *sb,
 		sbi->pbr_bh = sb_bread(sb, 0);
 		if (!sbi->pbr_bh) {
 			exfat_msg(sb, KERN_ERR, "failed to read boot sector");
-			return err;
+			return -ENOMEM;
 		}
 	}
 
@@ -211,7 +210,7 @@ static int __exfat_set_vol_flags(struct super_block *sb,
 
 	if (sync)
 		sync_dirty_buffer(sbi->pbr_bh);
-	return err;
+	return 0;
 }
 
 int exfat_set_vol_flags(struct super_block *sb, unsigned short new_flag)
