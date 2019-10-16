@@ -355,12 +355,12 @@ static void exfat_move_to_lru(struct exfat_cache_entry *bp, struct exfat_cache_e
 	exfat_push_to_lru(bp, list);
 }
 
-static inline int exfat_check_hash_valid(struct exfat_cache_entry *bp)
+static inline bool exfat_check_hash_valid(struct exfat_cache_entry *bp)
 {
 	if ((bp->hash.next == bp) || (bp->hash.prev == bp))
-		return -EINVAL;
+		return true;
 
-	return 0;
+	return false;
 }
 
 static inline void exfat_remove_from_hash(struct exfat_cache_entry *bp)
@@ -513,7 +513,7 @@ unsigned char *exfat_fcache_getblk(struct super_block *sb, unsigned long long se
 	}
 
 	bp = exfat_get_fcache(sb);
-	if (!exfat_check_hash_valid(bp))
+	if (exfat_check_hash_valid(bp))
 		exfat_remove_fcache_hash(bp);
 
 	bp->sec = sec;
@@ -677,7 +677,7 @@ unsigned char *exfat_dcache_getblk(struct super_block *sb, unsigned long long se
 
 	bp = exfat_get_dcache(sb);
 
-	if (!exfat_check_hash_valid(bp))
+	if (exfat_check_hash_valid(bp))
 		exfat_remove_dcache_hash(bp);
 
 	bp->sec = sec;
@@ -691,7 +691,6 @@ unsigned char *exfat_dcache_getblk(struct super_block *sb, unsigned long long se
 	}
 
 	return bp->bh->b_data;
-
 }
 
 int exfat_update_dcache(struct super_block *sb, unsigned long long sec)
@@ -722,7 +721,7 @@ int exfat_lock_dcache(struct super_block *sb, unsigned long long sec)
 		return 0;
 	}
 
-	exfat_msg(sb, KERN_ERR, "failed to lock buffer(sec:%llu, bp:0x%p)",
+	exfat_msg(sb, KERN_ERR, "failed to lock buffer(sec: %llu, bp: 0x%p)",
 		sec, bp);
 	return -EIO;
 }
@@ -737,7 +736,7 @@ int exfat_unlock_dcache(struct super_block *sb, unsigned long long sec)
 		return 0;
 	}
 
-	exfat_msg(sb, KERN_ERR, "failed to unlock buffer (sec:%llu, bp:0x%p)",
+	exfat_msg(sb, KERN_ERR, "failed to unlock buffer (sec: %llu, bp: 0x%p)",
 		sec, bp);
 	return -EIO;
 }
