@@ -861,13 +861,17 @@ inline pbr_t *exfat_read_pbr_with_logical_sector(struct super_block *sb,
 }
 
 /* mount the file system volume */
-int __exfat_mount(struct super_block *sb)
+static int __exfat_fill_super(struct super_block *sb)
 {
 	int ret;
 	pbr_t *p_pbr;
 	pbr64_t *p_bpb;
 	struct buffer_head *tmp_bh = NULL;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
+
+	ret = exfat_meta_cache_init(sb);
+	if (ret)
+		return ret;
 
 	/* set block size to read super block */
 	sb_min_blocksize(sb, 512);
@@ -991,20 +995,6 @@ bd_close:
 	return ret;
 }
 
-/* mount the file system volume */
-int exfat_mount(struct super_block *sb)
-{
-	int err;
-
-	err = exfat_meta_cache_init(sb);
-	if (err)
-		goto out;
-
-	err = __exfat_mount(sb);
-out:
-	return err;
-}
-
 static int exfat_fill_super(struct super_block *sb, void *data, int silent)
 {
 	struct inode *root_inode = NULL;
@@ -1037,7 +1027,7 @@ static int exfat_fill_super(struct super_block *sb, void *data, int silent)
 
 	exfat_setup_dops(sb);
 
-	err = exfat_mount(sb);
+	err = __exfat_fill_super(sb);
 	if (err) {
 		exfat_msg(sb, KERN_ERR, "failed to recognize fat type");
 		goto failed_mount;
