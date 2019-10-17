@@ -8,6 +8,8 @@
 #define PBR_SIGNATURE   0xAA55
 #define EXFAT_SUPER_MAGIC       (0x2011BAB0UL)
 
+#define DENTRY_SIZE		32 /* directory entry size */
+#define DENTRY_SIZE_BITS	5
 #define MAX_EXFAT_DENTRIES      8388608 /* exFAT allows 8388608(256MB) directory entries */
 
 /* dentry types */
