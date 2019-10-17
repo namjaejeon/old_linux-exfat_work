@@ -58,8 +58,8 @@ int exfat_load_alloc_bmp(struct super_block *sb)
 
 	while (!IS_CLUS_EOF(clu.dir)) {
 		for (i = 0; i < sbi->dentries_per_clu; i++) {
-			ep = (struct exfat_bmap_dentry *)exfat_get_dentry(sb, &clu, i,
-				NULL);
+			ep = (struct exfat_bmap_dentry *)exfat_get_dentry(
+					sb, &clu, i, NULL);
 			if (!ep)
 				return -EIO;
 
@@ -139,7 +139,6 @@ void exfat_free_alloc_bmp(struct super_block *sb)
 	for (i = 0; i < sbi->map_sectors; i++)
 		__brelse(sbi->vol_amap[i]);
 
-	/* kfree(NULL) is safe */
 	kfree(sbi->vol_amap);
 	sbi->vol_amap = NULL;
 }
@@ -207,7 +206,7 @@ void exfat_clr_alloc_bitmap(struct super_block *sb, unsigned int clu)
 
 		if (ret_discard == -EOPNOTSUPP) {
 			exfat_msg(sb, KERN_ERR,
-					"discard not supported by device, disabling");
+				"discard not supported by device, disabling");
 			opts->discard = 0;
 		}
 	}
@@ -267,7 +266,7 @@ int exfat_count_used_clusters(struct super_block *sb, unsigned int *ret_count)
 
 	for (i = 0; i < total_clus; i += 8) {
 		unsigned char k = *(((unsigned char *)
-					sbi->vol_amap[map_i]->b_data) + map_b);
+				sbi->vol_amap[map_i]->b_data) + map_b);
 
 		count += used_bit[k];
 		if ((++map_b) >= (unsigned int)sb->s_blocksize) {
