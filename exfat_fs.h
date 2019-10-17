@@ -461,7 +461,9 @@ extern int exfat_count_ext_entries(struct super_block *sb,
 	struct exfat_chain *p_dir, int entry, struct exfat_dentry *p_entry);
 extern int exfat_chain_cont_cluster(struct super_block *sb, unsigned int chain,
 	unsigned int len);
-extern struct exfat_entry_set_cache *exfat_get_dentry_set_in_dir(struct super_block *sb,
+extern struct exfat_dentry *exfat_get_dentry(struct super_block *sb,
+	struct exfat_chain *p_dir, int entry, unsigned long long *sector);
+extern struct exfat_entry_set_cache *exfat_get_dentry_set(struct super_block *sb,
 	struct exfat_chain *p_dir, int entry, unsigned int type,
 	struct exfat_dentry **file_ep);
 extern int exfat_clear_cluster(struct inode *inode, unsigned int clu);
@@ -572,8 +574,6 @@ extern const struct inode_operations exfat_file_inode_operations;
 extern int exfat_sync_inode(struct inode *inode);
 extern struct inode *exfat_build_inode(struct super_block *sb,
 	const struct exfat_file_id *fid, loff_t i_pos);
-extern struct exfat_dentry *exfat_get_dentry_in_dir(struct super_block *sb,
-	struct exfat_chain *p_dir, int entry, unsigned long long *sector);
 extern void exfat_attach(struct inode *inode, loff_t i_pos);
 extern void exfat_detach(struct inode *inode);
 extern void exfat_truncate(struct inode *inode, loff_t old_size);

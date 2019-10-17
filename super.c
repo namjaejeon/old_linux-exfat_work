@@ -765,7 +765,7 @@ static int load_upcase_table(struct super_block *sb)
 
 	while (!IS_CLUS_EOF(clu.dir)) {
 		for (i = 0; i < sbi->dentries_per_clu; i++) {
-			ep = (struct exfat_case_dentry *) exfat_get_dentry_in_dir(sb, &clu, i,
+			ep = (struct exfat_case_dentry *)exfat_get_dentry(sb, &clu, i,
 				NULL);
 			if (!ep)
 				return -EIO;

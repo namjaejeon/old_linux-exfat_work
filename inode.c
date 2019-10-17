@@ -144,7 +144,7 @@ int __exfat_truncate(struct inode *inode, unsigned long long old_size,
 
 	/* (1) update the directory entry */
 	if (!evict) {
-		es = exfat_get_dentry_set_in_dir(sb, &(fid->dir), fid->entry,
+		es = exfat_get_dentry_set(sb, &(fid->dir), fid->entry,
 			ES_ALL_ENTRIES, &ep);
 		if (!es)
 			return -EIO;
@@ -243,7 +243,7 @@ static int __exfat_write_inode(struct inode *inode, int sync)
 	exfat_set_vol_flags(sb, VOL_DIRTY);
 
 	/* get the directory entry of given file or directory */
-	es = exfat_get_dentry_set_in_dir(sb, &(fid->dir), fid->entry, ES_ALL_ENTRIES,
+	es = exfat_get_dentry_set(sb, &(fid->dir), fid->entry, ES_ALL_ENTRIES,
 		&ep);
 	if (!es)
 		return -EIO;
@@ -473,7 +473,7 @@ static int __exfat_map_clus(struct inode *inode, unsigned int clu_offset,
 		*clu = new_clu.dir;
 
 		if (fid->dir.dir != DIR_DELETED) {
-			es = exfat_get_dentry_set_in_dir(sb, &(fid->dir), fid->entry,
+			es = exfat_get_dentry_set(sb, &(fid->dir), fid->entry,
 				ES_ALL_ENTRIES, &ep);
 			if (!es)
 				return -EIO;
@@ -1057,38 +1057,6 @@ static int __count_num_clusters(struct super_block *sb, struct exfat_chain *p_ch
 	return 0;
 }
 
-struct exfat_dentry *exfat_get_dentry_in_dir(struct super_block *sb, struct exfat_chain *p_dir, int entry,
-		unsigned long long *sector)
-{
-	unsigned int dentries_per_page = PAGE_SIZE >> DENTRY_SIZE_BITS;
-	int off;
-	unsigned long long sec;
-	unsigned char *buf;
-
-	if (p_dir->dir == DIR_DELETED) {
-		exfat_msg(sb, KERN_ERR, "abnormal access to deleted dentry\n");
-		return NULL;
-	}
-
-	if (exfat_find_location(sb, p_dir, entry, &sec, &off))
-		return NULL;
-
-	/* DIRECTORY READAHEAD :
-	 * Try to read ahead per a page except root directory of fat12/16
-	 */
-	if ((!IS_CLUS_FREE(p_dir->dir)) &&
-			!(entry & (dentries_per_page - 1)))
-		exfat_dcache_readahead(sb, sec);
-
-	buf = exfat_dcache_getblk(sb, sec);
-	if (!buf)
-		return NULL;
-
-	if (sector)
-		*sector = sec;
-	return (struct exfat_dentry *)(buf + off);
-}
-
 #define EXFAT_MIN_SUBDIR    (2)
 static int exfat_count_dos_name_entries(struct super_block *sb, struct exfat_chain *p_dir,
 		unsigned int type, unsigned int *dotcnt)
@@ -1111,7 +1079,7 @@ static int exfat_count_dos_name_entries(struct super_block *sb, struct exfat_cha
 
 	while (!IS_CLUS_EOF(clu.dir)) {
 		for (i = 0; i < dentries_per_clu; i++) {
-			ep = exfat_get_dentry_in_dir(sb, &clu, i, NULL);
+			ep = exfat_get_dentry(sb, &clu, i, NULL);
 			if (!ep)
 				return -EIO;
 
@@ -1192,7 +1160,7 @@ int exfat_read_inode(struct inode *inode, struct exfat_dir_entry *info)
 
 	/* get the directory entry of given file or directory */
 	/* es should be released */
-	es = exfat_get_dentry_set_in_dir(sb, &(fid->dir), fid->entry, ES_2_ENTRIES,
+	es = exfat_get_dentry_set(sb, &(fid->dir), fid->entry, ES_2_ENTRIES,
 		&ep);
 	if (!es)
 		return -EIO;
