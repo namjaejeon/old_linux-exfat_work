@@ -6,7 +6,6 @@
 #include <linux/types.h>
 
 #define PBR_SIGNATURE   0xAA55
-#define EXFAT_SUPER_MAGIC       (0x2011BAB0UL)
 
 #define DENTRY_SIZE		32 /* directory entry size */
 #define DENTRY_SIZE_BITS	5

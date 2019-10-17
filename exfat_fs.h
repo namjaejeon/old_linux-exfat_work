@@ -10,6 +10,9 @@
 #include <linux/fs.h>
 #include <linux/ratelimit.h>
 
+#define EXFAT_SUPER_MAGIC       (0x2011BAB0UL)
+#define EXFAT_ROOT_INO		1
+
 /* time modes */
 #define TM_CREATE	0
 #define TM_MODIFY	1
@@ -63,8 +66,6 @@
 /* directory file name */
 #define DOS_CUR_DIR_NAME	".          "
 #define DOS_PAR_DIR_NAME	"..         "
-
-#define EXFAT_ROOT_INO		1
 
 /*
  * Type Definitions
