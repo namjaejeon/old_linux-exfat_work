@@ -601,4 +601,3 @@ extern struct exfat_timestamp *tm_now(struct exfat_sb_info *sbi,
 extern unsigned short calc_chksum_2byte(void *data, int len,
 	unsigned short chksum, int type);
 #endif /* !_EXFAT_H */
-
