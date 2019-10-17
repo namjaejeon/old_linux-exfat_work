@@ -358,9 +358,9 @@ static void exfat_move_to_lru(struct exfat_meta_cache *bp, struct exfat_meta_cac
 static inline bool exfat_check_hash_valid(struct exfat_meta_cache *bp)
 {
 	if ((bp->hash.next == bp) || (bp->hash.prev == bp))
-		return true;
+		return false;
 
-	return false;
+	return true;
 }
 
 static inline void exfat_remove_from_hash(struct exfat_meta_cache *bp)
