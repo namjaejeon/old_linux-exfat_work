@@ -259,10 +259,7 @@ static int exfat_search_empty_slot(struct super_block *sb, struct exfat_hint_fem
 	struct exfat_dentry *ep;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 
-	if (IS_CLUS_FREE(p_dir->dir)) /* FAT16 root_dir */
-		dentries_per_clu = sbi->dentries_in_root;
-	else
-		dentries_per_clu = sbi->dentries_per_clu;
+	dentries_per_clu = sbi->dentries_per_clu;
 
 	WARN_ON(-1 > hint_femp->eidx);
 
@@ -286,11 +283,7 @@ static int exfat_search_empty_slot(struct super_block *sb, struct exfat_hint_fem
 	}
 
 	while (!IS_CLUS_EOF(clu.dir)) {
-		/* FAT16 root_dir */
-		if (IS_CLUS_FREE(p_dir->dir))
-			i = dentry % dentries_per_clu;
-		else
-			i = dentry & (dentries_per_clu-1);
+		i = dentry & (dentries_per_clu-1);
 
 		for ( ; i < dentries_per_clu; i++, dentry++) {
 			ep = exfat_get_dentry_in_dir(sb, &clu, i, NULL);
@@ -338,9 +331,6 @@ static int exfat_search_empty_slot(struct super_block *sb, struct exfat_hint_fem
 				return (dentry - (num_entries-1));
 			}
 		}
-
-		if (IS_CLUS_FREE(p_dir->dir))
-			break; /* FAT16 root_dir */
 
 		if (clu.flags == 0x03) {
 			if ((--clu.size) > 0)
@@ -392,10 +382,6 @@ int exfat_find_empty_entry(struct inode *inode, struct exfat_chain *p_dir, int n
 		memcpy(&hint_femp, &fid->hint_femp, sizeof(struct exfat_hint_femp));
 		fid->hint_femp.eidx = -1;
 	}
-
-	/* FAT16 root_dir */
-	if (IS_CLUS_FREE(p_dir->dir))
-		return exfat_search_empty_slot(sb, &hint_femp, p_dir, num_entries);
 
 	while ((dentry = exfat_search_empty_slot(sb, &hint_femp, p_dir,
 					num_entries)) < 0) {
@@ -1465,10 +1451,7 @@ int exfat_check_dir_empty(struct super_block *sb, struct exfat_chain *p_dir)
 	struct exfat_dentry *ep;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 
-	if (IS_CLUS_FREE(p_dir->dir)) /* FAT16 root_dir */
-		dentries_per_clu = sbi->dentries_in_root;
-	else
-		dentries_per_clu = sbi->dentries_per_clu;
+	dentries_per_clu = sbi->dentries_per_clu;
 
 	clu.dir = p_dir->dir;
 	clu.size = p_dir->size;
@@ -1488,16 +1471,8 @@ int exfat_check_dir_empty(struct super_block *sb, struct exfat_chain *p_dir)
 			if ((type != TYPE_FILE) && (type != TYPE_DIR))
 				continue;
 
-			/* FAT16 root_dir */
-			if (IS_CLUS_FREE(p_dir->dir))
-				return -ENOTEMPTY;
-
 			return -ENOTEMPTY;
 		}
-
-		/* FAT16 root_dir */
-		if (IS_CLUS_FREE(p_dir->dir))
-			return -ENOTEMPTY;
 
 		if (clu.flags == 0x03) {
 			if ((--clu.size) > 0)

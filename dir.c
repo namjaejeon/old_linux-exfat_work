@@ -53,53 +53,36 @@ static int exfat_readdir(struct inode *inode, struct exfat_dir_entry *dir_entry)
 		dir.flags = fid->flags;
 	}
 
-	if (IS_CLUS_FREE(dir.dir)) { /* FAT16 root_dir */
-		dentries_per_clu = sbi->dentries_in_root;
+	dentries_per_clu = sbi->dentries_per_clu;
+	dentries_per_clu_bits = ilog2(dentries_per_clu);
 
-		/* Prevent readdir over directory size */
-		if (dentry >= dentries_per_clu) {
-			clu.dir = CLUS_EOF;
-		} else {
-			clu.dir = dir.dir;
-			clu.size = dir.size;
-			clu.flags = dir.flags;
-		}
+	clu_offset = dentry >> dentries_per_clu_bits;
+	clu.dir = dir.dir;
+	clu.size = dir.size;
+	clu.flags = dir.flags;
+
+	if (clu.flags == 0x03) {
+		clu.dir += clu_offset;
+		clu.size -= clu_offset;
 	} else {
-		dentries_per_clu = sbi->dentries_per_clu;
-		dentries_per_clu_bits = ilog2(dentries_per_clu);
+		/* hint_information */
+		if ((clu_offset > 0) && ((fid->hint_bmap.off != CLUS_EOF) &&
+			(fid->hint_bmap.off > 0)) &&
+			(clu_offset >= fid->hint_bmap.off)) {
+			clu_offset -= fid->hint_bmap.off;
+			clu.dir = fid->hint_bmap.clu;
+		}
 
-		clu_offset = dentry >> dentries_per_clu_bits;
-		clu.dir = dir.dir;
-		clu.size = dir.size;
-		clu.flags = dir.flags;
+		while (clu_offset > 0) {
+			if (get_next_clus_safe(sb, &(clu.dir)))
+				return -EIO;
 
-		if (clu.flags == 0x03) {
-			clu.dir += clu_offset;
-			clu.size -= clu_offset;
-		} else {
-			/* hint_information */
-			if ((clu_offset > 0) &&
-				((fid->hint_bmap.off != CLUS_EOF) &&
-				(fid->hint_bmap.off > 0)) &&
-				(clu_offset >= fid->hint_bmap.off)) {
-				clu_offset -= fid->hint_bmap.off;
-				clu.dir = fid->hint_bmap.clu;
-			}
-
-			while (clu_offset > 0) {
-				if (get_next_clus_safe(sb, &(clu.dir)))
-					return -EIO;
-
-				clu_offset--;
-			}
+			clu_offset--;
 		}
 	}
 
 	while (!IS_CLUS_EOF(clu.dir)) {
-		if (IS_CLUS_FREE(dir.dir)) /* FAT16 root_dir */
-			i = dentry % dentries_per_clu;
-		else
-			i = dentry & (dentries_per_clu-1);
+		i = dentry & (dentries_per_clu-1);
 
 		for ( ; i < dentries_per_clu; i++, dentry++) {
 			ep = exfat_get_dentry_in_dir(sb, &clu, i, &sector);
@@ -154,23 +137,12 @@ static int exfat_readdir(struct inode *inode, struct exfat_dir_entry *dir_entry)
 				return -EIO;
 			dir_entry->size = exfat_get_entry_size(ep);
 
-			/*
-			 * Update hint information :
-			 * fat16 root directory does not need it.
-			 */
-			if (!IS_CLUS_FREE(dir.dir)) {
-				fid->hint_bmap.off =
-					dentry >> dentries_per_clu_bits;
-				fid->hint_bmap.clu = clu.dir;
-			}
+			fid->hint_bmap.off = dentry >> dentries_per_clu_bits;
+			fid->hint_bmap.clu = clu.dir;
 
 			fid->rwoffset = (s64) ++dentry;
 			return 0;
 		}
-
-		/* fat16 root directory */
-		if (IS_CLUS_FREE(dir.dir))
-			break;
 
 		if (clu.flags == 0x03) {
 			if ((--clu.size) > 0)
@@ -908,14 +880,6 @@ int exfat_find_location(struct super_block *sb, struct exfat_chain *p_dir, int e
 
 	off = entry << DENTRY_SIZE_BITS;
 
-	/* FAT16 root_dir */
-	if (IS_CLUS_FREE(p_dir->dir)) {
-		*offset = off & blksize_mask;
-		*sector = off >> blksize_bits;
-		*sector += sbi->root_start_sector;
-		return 0;
-	}
-
 	ret = exfat_walk_fat_chain(sb, p_dir, off, &clu);
 	if (ret)
 		return ret;
@@ -1155,14 +1119,6 @@ int exfat_find_dir_entry(struct super_block *sb, struct exfat_file_id *fid,
 	struct exfat_strm_dentry *strm_ep;
 	struct exfat_name_dentry *name_ep;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
-
-	/*
-	 * REMARK:
-	 * DOT and DOTDOT are handled by VFS layer
-	 */
-
-	if (IS_CLUS_FREE(p_dir->dir))
-		return -EIO;
 
 	dentries_per_clu = sbi->dentries_per_clu;
 
