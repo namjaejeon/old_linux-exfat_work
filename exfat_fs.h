@@ -64,9 +64,6 @@
 #define DOS_CUR_DIR_NAME	".          "
 #define DOS_PAR_DIR_NAME	"..         "
 
-#define DENTRY_SIZE		32 /* directory entry size */
-#define DENTRY_SIZE_BITS	5
-
 #define EXFAT_ROOT_INO		1
 
 /*
