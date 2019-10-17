@@ -21,9 +21,6 @@
 #define ALLOC_NOWHERE		(0)
 #define ALLOC_COLD		(1)
 #define ALLOC_HOT		(16)
-#define ALLOC_COLD_ALIGNED	(1)
-#define ALLOC_COLD_PACKING	(2)
-#define ALLOC_COLD_SEQ		(4)
 
 /*
  * exfat error flags
