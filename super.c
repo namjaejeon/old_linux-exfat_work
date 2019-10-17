@@ -17,6 +17,8 @@
 #include <linux/fs_struct.h>
 #include <linux/iversion.h>
 #include <asm/unaligned.h>
+#include <linux/nls.h>
+#include <linux/buffer_head.h>
 
 #include "exfat_raw.h"
 #include "exfat_fs.h"

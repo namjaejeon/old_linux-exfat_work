@@ -7,6 +7,8 @@
 #include <linux/namei.h>
 #include <linux/slab.h>
 #include <linux/cred.h>
+#include <linux/buffer_head.h>
+#include <linux/nls.h>
 
 #include "exfat_raw.h"
 #include "exfat_fs.h"

@@ -7,16 +7,8 @@
 #ifndef _EXFAT_H
 #define _EXFAT_H
 
-#include <linux/module.h>
-#include <linux/init.h>
-#include <linux/buffer_head.h>
-#include <linux/string.h>
-#include <linux/types.h>
-#include <linux/nls.h>
 #include <linux/fs.h>
-#include <linux/mutex.h>
 #include <linux/ratelimit.h>
-#include <linux/version.h>
 
 #define SECTOR_SIZE_BITS	9 /* VFS sector size is 512 bytes */
 
