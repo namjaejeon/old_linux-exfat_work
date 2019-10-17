@@ -33,12 +33,6 @@
 #define EXFAT_ERRORS_RO		(3)	/* remount r/o on error */
 
 /*
- * exfat allocator flags
- */
-#define EXFAT_ALLOC_DELAY	(1)	/* Delayed allocation */
-#define EXFAT_ALLOC_SMART	(2)	/* Smart allocation */
-
-/*
  * exfat nls lossy flag
  */
 #define NLS_NAME_NO_LOSSY	(0x00)	/* no lossy */
