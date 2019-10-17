@@ -39,7 +39,6 @@
 /*
  * exfat common MACRO
  */
-#define CLUSTER_16(x)	((unsigned short)((x) & 0xFFFFU))
 #define CLUSTER_32(x)	((unsigned int)((x) & 0xFFFFFFFFU))
 #define CLUS_EOF	CLUSTER_32(~0)
 #define CLUS_BAD	(0xFFFFFFF7U)
