@@ -182,7 +182,7 @@ int __exfat_truncate(struct inode *inode, unsigned long long old_size,
 
 	/* (3) invalidate cache and free the clusters */
 	/* clear exfat cache */
-	exfat_cache_inval_inode(inode);
+	exfat_cluster_cache_inval_inode(inode);
 
 	/* hint information */
 	fid->hint_bmap.off = CLUS_EOF;
@@ -1100,10 +1100,7 @@ static int exfat_count_dos_name_entries(struct super_block *sb, struct exfat_cha
 	struct exfat_dentry *ep;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 
-	if (IS_CLUS_FREE(p_dir->dir)) /* FAT16 root_dir */
-		dentries_per_clu = sbi->dentries_in_root;
-	else
-		dentries_per_clu = sbi->dentries_per_clu;
+	dentries_per_clu = sbi->dentries_per_clu;
 
 	clu.dir = p_dir->dir;
 	clu.size = p_dir->size;
@@ -1131,10 +1128,6 @@ static int exfat_count_dos_name_entries(struct super_block *sb, struct exfat_cha
 
 			count++;
 		}
-
-		/* FAT16 root_dir */
-		if (IS_CLUS_FREE(p_dir->dir))
-			break;
 
 		if (clu.flags == 0x03) {
 			if ((--clu.size) > 0)
@@ -1170,10 +1163,12 @@ int exfat_read_inode(struct inode *inode, struct exfat_dir_entry *info)
 	struct exfat_entry_set_cache *es = NULL;
 	unsigned char is_dir = (fid->type == TYPE_DIR) ? 1 : 0;
 
-	exfat_cache_init_inode(inode);
+	exfat_cluster_cache_init_inode(inode);
 
 	/* if root directory */
 	if (is_dir && (fid->dir.dir == sbi->root_dir) && (fid->entry == -1)) {
+		unsigned int num_clu;
+
 		info->attr = ATTR_SUBDIR;
 		memset((char *) &info->create_timestamp, 0, sizeof(struct exfat_date_time));
 		memset((char *) &info->modify_timestamp, 0, sizeof(struct exfat_date_time));
@@ -1183,17 +1178,10 @@ int exfat_read_inode(struct inode *inode, struct exfat_dir_entry *info)
 		dir.flags = 0x01;
 		dir.size = 0; /* UNUSED */
 
-		/* FAT16 root_dir */
-		if (IS_CLUS_FREE(sbi->root_dir)) {
-			info->size = sbi->dentries_in_root << DENTRY_SIZE_BITS;
-		} else {
-			unsigned int num_clu;
-
-			if (__count_num_clusters(sb, &dir, &num_clu))
-				return -EIO;
-			info->size = (unsigned long long)num_clu <<
-				sbi->cluster_size_bits;
-		}
+		if (__count_num_clusters(sb, &dir, &num_clu))
+			return -EIO;
+		info->size = (unsigned long long)num_clu <<
+			sbi->cluster_size_bits;
 
 		count = exfat_count_dos_name_entries(sb, &dir, TYPE_DIR, NULL);
 		if (count < 0)
@@ -1371,6 +1359,6 @@ void exfat_evict_inode(struct inode *inode)
 	 * If any other function can call it,
 	 * you should check whether volume lock is needed or not.
 	 */
-	exfat_cache_inval_inode(inode);
+	exfat_cluster_cache_inval_inode(inode);
 	exfat_detach(inode);
 }

@@ -260,13 +260,8 @@ int exfat_clear_cluster(struct inode *inode, unsigned int clu)
 	struct buffer_head *tmp_bh = NULL;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 
-	if (IS_CLUS_FREE(clu)) { /* FAT16 root_dir */
-		s = sbi->root_start_sector;
-		n = sbi->data_start_sector;
-	} else {
-		s = CLUS_TO_SECT(sbi, clu);
-		n = s + sbi->sect_per_clus;
-	}
+	s = CLUS_TO_SECT(sbi, clu);
+	n = s + sbi->sect_per_clus;
 
 	if (IS_DIRSYNC(inode)) {
 		ret = exfat_zeroed_cluster(sb, s,
