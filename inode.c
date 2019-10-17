@@ -818,7 +818,7 @@ static int exfat_writepage(struct page *page, struct writeback_control *wbc)
 	set_page_writeback(page);
 
 	exfat_submit_fullpage_bio(head->b_bdev,
-		head->b_blocknr << (sb->s_blocksize_bits - SECTOR_SIZE_BITS),
+		head->b_blocknr << (sb->s_blocksize_bits - SECTOR_SHIFT),
 		nr_blocks_towrite << inode->i_blkbits, page);
 
 	unlock_page(page);

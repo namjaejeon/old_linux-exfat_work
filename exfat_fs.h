@@ -10,8 +10,6 @@
 #include <linux/fs.h>
 #include <linux/ratelimit.h>
 
-#define SECTOR_SIZE_BITS	9 /* VFS sector size is 512 bytes */
-
 /* time modes */
 #define TM_CREATE	0
 #define TM_MODIFY	1
