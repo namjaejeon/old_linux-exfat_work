@@ -168,7 +168,6 @@ static void exfat_init_namebuf(struct exfat_dentry_namebuf *nb)
 	nb->lfn = NULL;
 	nb->sfn = NULL;
 	nb->lfnbuf_len = 0;
-	nb->sfnbuf_len = 0;
 }
 
 static int exfat_alloc_namebuf(struct exfat_dentry_namebuf *nb)
@@ -178,7 +177,6 @@ static int exfat_alloc_namebuf(struct exfat_dentry_namebuf *nb)
 		return -ENOMEM;
 	nb->sfn = nb->lfn + MAX_VFSNAME_BUF_SIZE;
 	nb->lfnbuf_len = MAX_VFSNAME_BUF_SIZE;
-	nb->sfnbuf_len = MAX_VFSNAME_BUF_SIZE;
 	return 0;
 }
 
