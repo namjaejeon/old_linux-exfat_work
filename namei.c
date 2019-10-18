@@ -1405,7 +1405,7 @@ static int exfat_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 	struct inode *inode;
 	struct exfat_file_id fid;
 	struct exfat_chain cdir;
-        struct exfat_uni_name uni_name;
+	struct exfat_uni_name uni_name;
 	loff_t i_pos;
 	int err;
 
