@@ -331,7 +331,7 @@ int exfat_create_dir(struct inode *inode, struct exfat_chain *p_dir,
 		return -ENOSPC;
 
 	/* (1) allocate a cluster */
-	ret = exfat_alloc_cluster(sb, 1, &clu, ALLOC_HOT);
+	ret = exfat_alloc_cluster(sb, 1, &clu);
 	if (ret)
 		return ret;
 

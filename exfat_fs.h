@@ -19,13 +19,6 @@
 #define TM_ACCESS	2
 
 /*
- * exfat allocator destination for smart allocation
- */
-#define ALLOC_NOWHERE		(0)
-#define ALLOC_COLD		(1)
-#define ALLOC_HOT		(16)
-
-/*
  * exfat error flags
  */
 #define EXFAT_ERRORS_CONT	(1)	/* ignore error and continue */
@@ -426,7 +419,7 @@ extern inline void set_sb_dirty(struct super_block *sb);
 #define get_next_clus_safe(sb, pclu)	exfat_ent_get_safe(sb, *(pclu), pclu)
 
 extern int exfat_alloc_cluster(struct super_block *sb, unsigned int num_alloc,
-	struct exfat_chain *p_chain, int dest);
+	struct exfat_chain *p_chain);
 extern int exfat_free_cluster(struct super_block *sb,
 	struct exfat_chain *p_chain, int do_relse);
 extern int exfat_ent_get(struct super_block *sb, unsigned int loc,

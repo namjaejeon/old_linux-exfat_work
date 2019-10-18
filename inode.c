@@ -350,7 +350,7 @@ out:
  * *clu = (~0), if it's unable to allocate a new cluster
  */
 static int __exfat_map_clus(struct inode *inode, unsigned int clu_offset,
-		unsigned int *clu, int dest)
+		unsigned int *clu, int create)
 {
 	int ret, modified = false;
 	unsigned int last_clu;
@@ -374,7 +374,7 @@ static int __exfat_map_clus(struct inode *inode, unsigned int clu_offset,
 	if (clu_offset >= num_clusters)
 		num_to_be_allocated = clu_offset - num_clusters + 1;
 
-	if ((dest == ALLOC_NOWHERE) && (num_to_be_allocated > 0)) {
+	if (!create && (num_to_be_allocated > 0)) {
 		*clu = CLUS_EOF;
 		return 0;
 	}
@@ -436,8 +436,7 @@ static int __exfat_map_clus(struct inode *inode, unsigned int clu_offset,
 			return -EIO;
 		}
 
-		ret = exfat_alloc_cluster(sb, num_to_be_allocated, &new_clu,
-			ALLOC_COLD);
+		ret = exfat_alloc_cluster(sb, num_to_be_allocated, &new_clu);
 		if (ret)
 			return ret;
 
@@ -554,12 +553,8 @@ static int exfat_bmap(struct inode *inode, sector_t sector, sector_t *phys,
 
 	EXFAT_I(inode)->fid.size = i_size_read(inode);
 
-	if (*create & BMAP_ADD_CLUSTER)
-		err = __exfat_map_clus(inode, clu_offset, &cluster, 1);
-	else
-		err = __exfat_map_clus(inode, clu_offset, &cluster,
-			ALLOC_NOWHERE);
-
+	err = __exfat_map_clus(inode, clu_offset, &cluster,
+		*create & BMAP_ADD_CLUSTER);
 	if (err) {
 		if (err != -ENOSPC)
 			return -EIO;

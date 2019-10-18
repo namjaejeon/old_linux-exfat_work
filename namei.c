@@ -413,7 +413,7 @@ int exfat_find_empty_entry(struct inode *inode, struct exfat_chain *p_dir, int n
 			return -ENOSPC;
 
 		/* (1) allocate a cluster */
-		ret = exfat_alloc_cluster(sb, 1, &clu, ALLOC_HOT);
+		ret = exfat_alloc_cluster(sb, 1, &clu);
 		if (ret)
 			return ret;
 
@@ -1199,8 +1199,7 @@ static int exfat_write_link(struct inode *inode, struct exfat_file_id *fid, void
 			new_clu.flags = fid->flags;
 
 			/* (1) allocate a chain of clusters */
-			ret = exfat_alloc_cluster(sb, num_alloc, &new_clu,
-				ALLOC_COLD);
+			ret = exfat_alloc_cluster(sb, num_alloc, &new_clu);
 			if (ret)
 				goto err_out;
 
