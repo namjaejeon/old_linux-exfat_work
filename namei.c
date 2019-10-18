@@ -2075,7 +2075,7 @@ static int exfat_sanitize_mode(const struct exfat_sb_info *sbi,
 	perm = *mode_ptr & ~(S_IFMT | mask);
 
 	/* Of the r and x bits, all (subject to umask) must be present.*/
-	if ((perm & (S_IRUGO | S_IXUGO)) != (i_mode & (S_IRUGO | S_IXUGO)))
+	if ((perm & 0555) != (i_mode & 0555))
 		return -EPERM;
 
 	if (exfat_mode_can_hold_ro(inode)) {
@@ -2083,14 +2083,14 @@ static int exfat_sanitize_mode(const struct exfat_sb_info *sbi,
 		 * Of the w bits, either all (subject to umask) or none must
 		 * be present.
 		 */
-		if ((perm & S_IWUGO) && ((perm & S_IWUGO) != (S_IWUGO & ~mask)))
+		if ((perm & 0222) && ((perm & 0222) != (0222 & ~mask)))
 			return -EPERM;
 	} else {
 		/*
 		 * If exfat_mode_can_hold_ro(inode) is false, can't change
 		 * w bits.
 		 */
-		if ((perm & S_IWUGO) != (S_IWUGO & ~mask))
+		if ((perm & 0222) != (0222 & ~mask))
 			return -EPERM;
 	}
 
@@ -2158,7 +2158,7 @@ int exfat_setattr(struct dentry *dentry, struct iattr *attr)
 			 (!gid_eq(attr->ia_gid, sbi->options.fs_gid))) ||
 			((attr->ia_valid & ATTR_MODE) &&
 			 (attr->ia_mode & ~(S_IFREG | S_IFLNK | S_IFDIR |
-				S_IRWXUGO)))) {
+				0777)))) {
 		return -EPERM;
 	}
 
