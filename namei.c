@@ -650,9 +650,8 @@ static int exfat_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 
 	err = __exfat_create(dir, (unsigned char *) dentry->d_name.name,
 		FM_REGULAR, &fid);
-	if (err) {
+	if (err)
 		goto out;
-	}
 	__lock_d_revalidate(dentry);
 
 	inode_inc_iversion(dir);
