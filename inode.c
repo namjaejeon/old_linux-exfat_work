@@ -837,8 +837,8 @@ struct inode *exfat_iget(struct super_block *sb, loff_t i_pos)
 	return inode;
 }
 
-static int __count_num_clusters(struct super_block *sb, struct exfat_chain *p_chain,
-		unsigned int *ret_count)
+static int __count_num_clusters(struct super_block *sb,
+	struct exfat_chain *p_chain, unsigned int *ret_count)
 {
 	unsigned int i, count;
 	unsigned int clu;
@@ -869,8 +869,8 @@ static int __count_num_clusters(struct super_block *sb, struct exfat_chain *p_ch
 }
 
 #define EXFAT_MIN_SUBDIR    (2)
-static int exfat_count_dos_name_entries(struct super_block *sb, struct exfat_chain *p_dir,
-		unsigned int type, unsigned int *dotcnt)
+static int exfat_count_dos_name_entries(struct super_block *sb,
+	struct exfat_chain *p_dir, unsigned int type, unsigned int *dotcnt)
 {
 	int i, count = 0;
 	int dentries_per_clu;
@@ -949,9 +949,12 @@ int exfat_read_inode(struct inode *inode, struct exfat_dir_entry *info)
 		unsigned int num_clu;
 
 		info->attr = ATTR_SUBDIR;
-		memset((char *) &info->create_timestamp, 0, sizeof(struct exfat_date_time));
-		memset((char *) &info->modify_timestamp, 0, sizeof(struct exfat_date_time));
-		memset((char *) &info->access_timestamp, 0, sizeof(struct exfat_date_time));
+		memset((char *) &info->create_timestamp, 0,
+				sizeof(struct exfat_date_time));
+		memset((char *) &info->modify_timestamp, 0,
+				sizeof(struct exfat_date_time));
+		memset((char *) &info->access_timestamp, 0,
+				sizeof(struct exfat_date_time));
 
 		dir.dir = sbi->root_dir;
 		dir.flags = 0x01;
@@ -998,7 +1001,8 @@ int exfat_read_inode(struct inode *inode, struct exfat_dir_entry *info)
 	info->modify_timestamp.second = tm.sec;
 	info->modify_timestamp.milli_second = 0;
 
-	memset((char *) &info->access_timestamp, 0, sizeof(struct exfat_date_time));
+	memset((char *) &info->access_timestamp, 0,
+			sizeof(struct exfat_date_time));
 
 	info->num_subdirs = 0;
 	info->size = exfat_get_entry_size(ep2);
@@ -1011,7 +1015,8 @@ int exfat_read_inode(struct inode *inode, struct exfat_dir_entry *info)
 		dir.dir = fid->start_clu;
 		dir.flags = fid->flags;
 		dir.size = fid->size >> sbi->cluster_size_bits;
-		count = exfat_count_dos_name_entries(sb, &dir, TYPE_DIR, &dotcnt);
+		count = exfat_count_dos_name_entries(sb, &dir, TYPE_DIR,
+				&dotcnt);
 		if (count < 0)
 			return -EIO;
 
@@ -1022,7 +1027,8 @@ int exfat_read_inode(struct inode *inode, struct exfat_dir_entry *info)
 }
 
 /* doesn't deal with root inode */
-static int exfat_fill_inode(struct inode *inode, const struct exfat_file_id *fid)
+static int exfat_fill_inode(struct inode *inode,
+		const struct exfat_file_id *fid)
 {
 	struct exfat_sb_info *sbi = EXFAT_SB(inode->i_sb);
 	struct exfat_dir_entry info;

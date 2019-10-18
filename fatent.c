@@ -148,7 +148,8 @@ int exfat_chain_cont_cluster(struct super_block *sb, unsigned int chain,
 	return 0;
 }
 
-int exfat_free_cluster(struct super_block *sb, struct exfat_chain *p_chain, int do_relse)
+int exfat_free_cluster(struct super_block *sb, struct exfat_chain *p_chain,
+		int do_relse)
 {
 	int ret = -EIO;
 	unsigned int num_clusters = 0;
@@ -318,7 +319,8 @@ int exfat_alloc_cluster(struct super_block *sb, unsigned int num_alloc,
 			sbi->clu_srch_ptr = CLUS_BASE;
 		}
 
-		hint_clu = exfat_test_alloc_bitmap(sb, sbi->clu_srch_ptr - CLUS_BASE);
+		hint_clu = exfat_test_alloc_bitmap(sb,
+				sbi->clu_srch_ptr - CLUS_BASE);
 		if (IS_CLUS_EOF(hint_clu))
 			return -ENOSPC;
 	}
@@ -405,7 +407,8 @@ error:
 	return ret;
 }
 
-int exfat_mirror_bhs(struct super_block *sb, unsigned long long sec, struct buffer_head *bh)
+int exfat_mirror_bhs(struct super_block *sb, unsigned long long sec,
+		struct buffer_head *bh)
 {
 	struct buffer_head *c_bh;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
