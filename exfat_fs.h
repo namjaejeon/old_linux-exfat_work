@@ -480,6 +480,8 @@ extern int exfat_unlock_dcache(struct super_block *sb, unsigned long long sec);
 extern int exfat_update_dcache(struct super_block *sb, unsigned long long sec);
 extern int exfat_meta_cache_init(struct super_block *sb);
 extern int exfat_release_dcache(struct super_block *sb, unsigned long long sec);
+extern int exfat_release_dcache_cluster(struct super_block *sb,
+		unsigned int clu);
 void exfat_release_caches(struct exfat_meta_cache *lru_list);
 extern unsigned char *exfat_fcache_getblk(struct super_block *sb,
 	unsigned long long sec);

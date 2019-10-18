@@ -155,8 +155,6 @@ int exfat_free_cluster(struct super_block *sb, struct exfat_chain *p_chain,
 	unsigned int num_clusters = 0;
 	unsigned int clu;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
-	int i;
-	unsigned long long sector;
 
 	/* invalid cluster number */
 	if (IS_CLUS_FREE(p_chain->dir) || IS_CLUS_EOF(p_chain->dir))
@@ -179,12 +177,9 @@ int exfat_free_cluster(struct super_block *sb, struct exfat_chain *p_chain,
 	if (p_chain->flags == 0x03) {
 		do {
 			if (do_relse) {
-				sector = CLUS_TO_SECT(sbi, clu);
-				for (i = 0; i < sbi->sect_per_clus; i++) {
-					if (exfat_release_dcache(sb, sector+i) ==
-							-EIO)
-						goto out;
-				}
+				ret = exfat_release_dcache_cluster(sb, clu);
+				if (ret)
+					goto out;
 			}
 
 			exfat_clr_alloc_bitmap(sb, clu-2);
@@ -195,12 +190,9 @@ int exfat_free_cluster(struct super_block *sb, struct exfat_chain *p_chain,
 	} else {
 		do {
 			if (do_relse) {
-				sector = CLUS_TO_SECT(sbi, clu);
-				for (i = 0; i < sbi->sect_per_clus; i++) {
-					if (exfat_release_dcache(sb, sector+i) ==
-							-EIO)
-						goto out;
-				}
+				ret = exfat_release_dcache_cluster(sb, clu);
+				if (ret)
+					goto out;
 			}
 
 			exfat_clr_alloc_bitmap(sb, (clu - CLUS_BASE));
