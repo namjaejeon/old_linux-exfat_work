@@ -22,28 +22,6 @@
 #define BMAP_ADD_CLUSTER			2
 #define BLOCK_ADDED(bmap_ops)	(bmap_ops)
 
-static inline sector_t __exfat_bio_sector(struct bio *bio)
-{
-	return bio->bi_iter.bi_sector;
-}
-
-static inline void __exfat_set_bio_iterate(struct bio *bio, sector_t sector,
-		unsigned int size, unsigned int idx, unsigned int done)
-{
-	struct bvec_iter *iter = &(bio->bi_iter);
-
-	iter->bi_sector = sector;
-	iter->bi_size = size;
-	iter->bi_idx = idx;
-	iter->bi_bvec_done = done;
-}
-
-static void __exfat_truncate_pagecache(struct inode *inode,
-		loff_t to, loff_t newsize)
-{
-	truncate_pagecache(inode, newsize);
-}
-
 /* resize the file length */
 int __exfat_truncate(struct inode *inode, unsigned long long old_size,
 		unsigned long long new_size)
@@ -658,171 +636,9 @@ static int exfat_readpages(struct file *file, struct address_space *mapping,
 	return ret;
 }
 
-static void __exfat_writepage_end_io(struct bio *bio, int err)
-{
-	struct page *page = bio->bi_io_vec->bv_page;
-
-	if (err) {
-		SetPageError(page);
-		mapping_set_error(page->mapping, err);
-	}
-
-	end_page_writeback(page);
-	bio_put(bio);
-}
-
-static void exfat_writepage_end_io(struct bio *bio)
-{
-	__exfat_writepage_end_io(bio, blk_status_to_errno(bio->bi_status));
-}
-
-static inline void __exfat_submit_bio_write(struct bio *bio)
-{
-	bio_set_op_attrs(bio, REQ_OP_WRITE, 0);
-	submit_bio(bio);
-}
-
-static inline void exfat_submit_fullpage_bio(struct block_device *bdev,
-		sector_t sector, unsigned int length, struct page *page)
-{
-	/* Single page bio submit */
-	struct bio *bio;
-
-	WARN_ON((length > PAGE_SIZE) || (length == 0));
-
-	/*
-	 * If __GFP_WAIT is set, then bio_alloc will always be able to allocate
-	 * a bio. This is due to the mempool guarantees. To make this work,
-	 * callers must never allocate more than 1 bio at a time from this pool.
-	 *
-	 * #define GFP_NOIO	(__GFP_WAIT)
-	 */
-	bio = bio_alloc(GFP_NOIO, 1);
-
-	bio_set_dev(bio, bdev);
-	bio->bi_vcnt = 1;
-	bio->bi_io_vec[0].bv_page = page;	/* Inline vec */
-	bio->bi_io_vec[0].bv_len = length;	/* PAGE_SIZE */
-	bio->bi_io_vec[0].bv_offset = 0;
-	__exfat_set_bio_iterate(bio, sector, length, 0, 0);
-
-	bio->bi_end_io = exfat_writepage_end_io;
-	__exfat_submit_bio_write(bio);
-}
-
 static int exfat_writepage(struct page *page, struct writeback_control *wbc)
 {
-	struct inode * const inode = page->mapping->host;
-	struct super_block *sb = inode->i_sb;
-	loff_t i_size = i_size_read(inode);
-	const pgoff_t end_index = i_size >> PAGE_SHIFT;
-	const unsigned int blocks_per_page = PAGE_SIZE >> inode->i_blkbits;
-	struct exfat_sb_info *sbi = EXFAT_SB(sb);
-	struct buffer_head *bh, *head;
-	sector_t block, block_0, last_phys;
-	int ret;
-	unsigned int nr_blocks_towrite = blocks_per_page;
-
-	/* Don't distinguish 0-filled/clean block.
-	 * Just write back the whole page
-	 */
-	if (sbi->cluster_size < PAGE_SIZE)
-		goto confused;
-
-	if (!PageUptodate(page))
-		goto confused;
-
-	if (page->index >= end_index) {
-		/* last page or outside i_size */
-		unsigned int offset = i_size & (PAGE_SIZE-1);
-
-		/* If a truncation is in progress */
-		if (page->index > end_index || !offset)
-			goto confused;
-
-		/* 0-fill after i_size */
-		zero_user_segment(page, offset, PAGE_SIZE);
-	}
-
-	if (!page_has_buffers(page))
-		goto confused;
-
-	block = (sector_t)page->index << (PAGE_SHIFT - inode->i_blkbits);
-	block_0 = block; /* first block */
-	head = page_buffers(page);
-	bh = head;
-
-	last_phys = 0;
-	do {
-		WARN_ON(buffer_locked(bh));
-
-		if (!buffer_dirty(bh) || !buffer_uptodate(bh)) {
-			if (nr_blocks_towrite == blocks_per_page)
-				nr_blocks_towrite =
-					(unsigned int) (block - block_0);
-
-			WARN_ON(nr_blocks_towrite >= blocks_per_page);
-
-			// !uptodate but dirty??
-			if (buffer_dirty(bh))
-				goto confused;
-
-			// Nothing to writeback in this block
-			bh = bh->b_this_page;
-			block++;
-			continue;
-		}
-
-		if (nr_blocks_towrite != blocks_per_page)
-			// Dirty -> Non-dirty -> Dirty again case
-			goto confused;
-
-		/* Map if needed */
-		if (!buffer_mapped(bh) || buffer_delay(bh)) {
-			WARN_ON(bh->b_size != (1 << (inode->i_blkbits)));
-			ret = exfat_get_block(inode, block, bh, 1);
-			if (ret)
-				goto confused;
-
-			if (buffer_new(bh)) {
-				clear_buffer_new(bh);
-				clean_bdev_aliases(bh->b_bdev, bh->b_blocknr,
-					1);
-			}
-		}
-
-		/* continuity check */
-		if (((last_phys + 1) != bh->b_blocknr) && (last_phys != 0))
-			goto confused;
-
-		last_phys = bh->b_blocknr;
-		bh = bh->b_this_page;
-		block++;
-	} while (bh != head);
-
-	if (nr_blocks_towrite == 0)
-		goto confused;
-
-	/* Write-back */
-	do {
-		clear_buffer_dirty(bh);
-		bh = bh->b_this_page;
-	} while (bh != head);
-
-	WARN_ON(PageWriteback(page));
-	set_page_writeback(page);
-
-	exfat_submit_fullpage_bio(head->b_bdev,
-		head->b_blocknr << (sb->s_blocksize_bits - SECTOR_SHIFT),
-		nr_blocks_towrite << inode->i_blkbits, page);
-
-	unlock_page(page);
-
-	return 0;
-
-confused:
-	ret = block_write_full_page(page, exfat_get_block, wbc);
-	return ret;
+	return block_write_full_page(page, exfat_get_block, wbc);
 }
 
 static int exfat_writepages(struct address_space *mapping,
@@ -836,7 +652,7 @@ static void exfat_write_failed(struct address_space *mapping, loff_t to)
 	struct inode *inode = mapping->host;
 
 	if (to > i_size_read(inode)) {
-		__exfat_truncate_pagecache(inode, to, i_size_read(inode));
+		truncate_pagecache(inode, i_size_read(inode));
 		exfat_truncate(inode, EXFAT_I(inode)->i_size_aligned);
 	}
 }
