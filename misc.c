@@ -182,7 +182,8 @@ void exfat_time_unix2fat(struct exfat_sb_info *sbi, struct timespec64 *ts,
 	tp->year = year;
 }
 
-struct exfat_timestamp *tm_now(struct exfat_sb_info *sbi, struct exfat_timestamp *tp)
+struct exfat_timestamp *tm_now(struct exfat_sb_info *sbi,
+		struct exfat_timestamp *tp)
 {
 	struct timespec64 ts;
 	struct exfat_date_time dt;
