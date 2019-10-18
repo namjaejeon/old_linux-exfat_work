@@ -7,18 +7,11 @@
 #ifndef _EXFAT_H
 #define _EXFAT_H
 
-#include <linux/module.h>
-#include <linux/init.h>
-#include <linux/buffer_head.h>
-#include <linux/string.h>
-#include <linux/types.h>
-#include <linux/nls.h>
 #include <linux/fs.h>
-#include <linux/mutex.h>
 #include <linux/ratelimit.h>
-#include <linux/version.h>
 
-#define SECTOR_SIZE_BITS	9 /* VFS sector size is 512 bytes */
+#define EXFAT_SUPER_MAGIC       (0x2011BAB0UL)
+#define EXFAT_ROOT_INO		1
 
 /* time modes */
 #define TM_CREATE	0
@@ -26,27 +19,11 @@
 #define TM_ACCESS	2
 
 /*
- * exfat allocator destination for smart allocation
- */
-#define ALLOC_NOWHERE		(0)
-#define ALLOC_COLD		(1)
-#define ALLOC_HOT		(16)
-#define ALLOC_COLD_ALIGNED	(1)
-#define ALLOC_COLD_PACKING	(2)
-#define ALLOC_COLD_SEQ		(4)
-
-/*
  * exfat error flags
  */
 #define EXFAT_ERRORS_CONT	(1)	/* ignore error and continue */
 #define EXFAT_ERRORS_PANIC	(2)	/* panic on error */
 #define EXFAT_ERRORS_RO		(3)	/* remount r/o on error */
-
-/*
- * exfat allocator flags
- */
-#define EXFAT_ALLOC_DELAY	(1)	/* Delayed allocation */
-#define EXFAT_ALLOC_SMART	(2)	/* Smart allocation */
 
 /*
  * exfat nls lossy flag
@@ -58,7 +35,6 @@
 /*
  * exfat common MACRO
  */
-#define CLUSTER_16(x)	((unsigned short)((x) & 0xFFFFU))
 #define CLUSTER_32(x)	((unsigned int)((x) & 0xFFFFFFFFU))
 #define CLUS_EOF	CLUSTER_32(~0)
 #define CLUS_BAD	(0xFFFFFFF7U)
@@ -83,11 +59,6 @@
 /* directory file name */
 #define DOS_CUR_DIR_NAME	".          "
 #define DOS_PAR_DIR_NAME	"..         "
-
-#define DENTRY_SIZE		32 /* directory entry size */
-#define DENTRY_SIZE_BITS	5
-
-#define EXFAT_ROOT_INO		1
 
 /*
  * Type Definitions
@@ -178,7 +149,6 @@ struct exfat_dentry_namebuf {
 	char *lfn;
 	char *sfn;
 	int lfnbuf_len; /* usally MAX_UNINAME_BUF_SIZE */
-	int sfnbuf_len; /* usally MAX_DOSNAME_BUF_SIZE, used only for vfat, not for exfat */
 };
 
 struct exfat_dir_entry {
@@ -448,7 +418,7 @@ extern inline void set_sb_dirty(struct super_block *sb);
 #define get_next_clus_safe(sb, pclu)	exfat_ent_get_safe(sb, *(pclu), pclu)
 
 extern int exfat_alloc_cluster(struct super_block *sb, unsigned int num_alloc,
-	struct exfat_chain *p_chain, int dest);
+	struct exfat_chain *p_chain);
 extern int exfat_free_cluster(struct super_block *sb,
 	struct exfat_chain *p_chain, int do_relse);
 extern int exfat_ent_get(struct super_block *sb, unsigned int loc,
@@ -461,7 +431,9 @@ extern int exfat_count_ext_entries(struct super_block *sb,
 	struct exfat_chain *p_dir, int entry, struct exfat_dentry *p_entry);
 extern int exfat_chain_cont_cluster(struct super_block *sb, unsigned int chain,
 	unsigned int len);
-extern struct exfat_entry_set_cache *exfat_get_dentry_set_in_dir(struct super_block *sb,
+extern struct exfat_dentry *exfat_get_dentry(struct super_block *sb,
+	struct exfat_chain *p_dir, int entry, unsigned long long *sector);
+extern struct exfat_entry_set_cache *exfat_get_dentry_set(struct super_block *sb,
 	struct exfat_chain *p_dir, int entry, unsigned int type,
 	struct exfat_dentry **file_ep);
 extern int exfat_clear_cluster(struct inode *inode, unsigned int clu);
@@ -572,8 +544,6 @@ extern const struct inode_operations exfat_file_inode_operations;
 extern int exfat_sync_inode(struct inode *inode);
 extern struct inode *exfat_build_inode(struct super_block *sb,
 	const struct exfat_file_id *fid, loff_t i_pos);
-extern struct exfat_dentry *exfat_get_dentry_in_dir(struct super_block *sb,
-	struct exfat_chain *p_dir, int entry, unsigned long long *sector);
 extern void exfat_attach(struct inode *inode, loff_t i_pos);
 extern void exfat_detach(struct inode *inode);
 extern void exfat_truncate(struct inode *inode, loff_t old_size);
@@ -623,4 +593,3 @@ extern struct exfat_timestamp *tm_now(struct exfat_sb_info *sbi,
 extern unsigned short calc_chksum_2byte(void *data, int len,
 	unsigned short chksum, int type);
 #endif /* !_EXFAT_H */
-

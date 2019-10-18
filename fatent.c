@@ -5,6 +5,7 @@
 
 #include <linux/slab.h>
 #include <asm/unaligned.h>
+#include <linux/buffer_head.h>
 
 #include "exfat_raw.h"
 #include "exfat_fs.h"
@@ -288,7 +289,7 @@ out:
 }
 
 int exfat_alloc_cluster(struct super_block *sb, unsigned int num_alloc,
-		struct exfat_chain *p_chain, int dest)
+		struct exfat_chain *p_chain)
 {
 	int ret = -ENOSPC;
 	unsigned int num_clusters = 0, total_cnt;
