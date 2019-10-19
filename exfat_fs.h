@@ -318,7 +318,7 @@ struct exfat_file_id {
 	s64 rwoffset;			/* file offset or dentry index for readdir */
 	struct exfat_cluster_cache_lru exfat_lru; /* exfat cache for a file */
 	struct exfat_hint hint_bmap;	/* hint for cluster last accessed */
-	struct exfat_hint  hint_stat;	/* hint for entry index we try to lookup next time */
+	struct exfat_hint hint_stat;	/* hint for entry index we try to lookup next time */
 	struct exfat_hint_femp hint_femp; /* hint for first empty entry */
 };
 

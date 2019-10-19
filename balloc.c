@@ -71,7 +71,7 @@ int exfat_load_alloc_bmp(struct super_block *sb)
 				continue;
 
 			if (ep->flags == 0x0) {
-				sbi->map_clu  = le32_to_cpu(ep->start_clu);
+				sbi->map_clu = le32_to_cpu(ep->start_clu);
 				map_size =
 					(unsigned int) le64_to_cpu(ep->size);
 
