@@ -148,14 +148,13 @@ int exfat_chain_cont_cluster(struct super_block *sb, unsigned int chain,
 	return 0;
 }
 
-int exfat_free_cluster(struct super_block *sb, struct exfat_chain *p_chain, int do_relse)
+int exfat_free_cluster(struct super_block *sb, struct exfat_chain *p_chain,
+		int do_relse)
 {
 	int ret = -EIO;
 	unsigned int num_clusters = 0;
 	unsigned int clu;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
-	int i;
-	unsigned long long sector;
 
 	/* invalid cluster number */
 	if (IS_CLUS_FREE(p_chain->dir) || IS_CLUS_EOF(p_chain->dir))
@@ -178,12 +177,9 @@ int exfat_free_cluster(struct super_block *sb, struct exfat_chain *p_chain, int 
 	if (p_chain->flags == 0x03) {
 		do {
 			if (do_relse) {
-				sector = CLUS_TO_SECT(sbi, clu);
-				for (i = 0; i < sbi->sect_per_clus; i++) {
-					if (exfat_release_dcache(sb, sector+i) ==
-							-EIO)
-						goto out;
-				}
+				ret = exfat_release_dcache_cluster(sb, clu);
+				if (ret)
+					goto out;
 			}
 
 			exfat_clr_alloc_bitmap(sb, clu-2);
@@ -194,12 +190,9 @@ int exfat_free_cluster(struct super_block *sb, struct exfat_chain *p_chain, int 
 	} else {
 		do {
 			if (do_relse) {
-				sector = CLUS_TO_SECT(sbi, clu);
-				for (i = 0; i < sbi->sect_per_clus; i++) {
-					if (exfat_release_dcache(sb, sector+i) ==
-							-EIO)
-						goto out;
-				}
+				ret = exfat_release_dcache_cluster(sb, clu);
+				if (ret)
+					goto out;
 			}
 
 			exfat_clr_alloc_bitmap(sb, (clu - CLUS_BASE));
@@ -318,7 +311,8 @@ int exfat_alloc_cluster(struct super_block *sb, unsigned int num_alloc,
 			sbi->clu_srch_ptr = CLUS_BASE;
 		}
 
-		hint_clu = exfat_test_alloc_bitmap(sb, sbi->clu_srch_ptr - CLUS_BASE);
+		hint_clu = exfat_test_alloc_bitmap(sb,
+				sbi->clu_srch_ptr - CLUS_BASE);
 		if (IS_CLUS_EOF(hint_clu))
 			return -ENOSPC;
 	}
@@ -405,7 +399,8 @@ error:
 	return ret;
 }
 
-int exfat_mirror_bhs(struct super_block *sb, unsigned long long sec, struct buffer_head *bh)
+int exfat_mirror_bhs(struct super_block *sb, unsigned long long sec,
+		struct buffer_head *bh)
 {
 	struct buffer_head *c_bh;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
