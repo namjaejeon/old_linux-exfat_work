@@ -353,7 +353,7 @@ static inline struct exfat_inode_info *EXFAT_I(struct inode *inode)
 }
 
 /*
- * If ->i_mode can't hold S_IWUGO (i.e. ATTR_RO), we use ->i_attrs to
+ * If ->i_mode can't hold 0222 (i.e. ATTR_RO), we use ->i_attrs to
  * save ATTR_RO instead of ->i_mode.
  *
  * If it's directory and !sbi->options.rodir, ATTR_RO isn't read-only
@@ -366,7 +366,7 @@ static inline int exfat_mode_can_hold_ro(struct inode *inode)
 	if (S_ISDIR(inode->i_mode))
 		return 0;
 
-	if ((~sbi->options.fs_fmask) & S_IWUGO)
+	if ((~sbi->options.fs_fmask) & 0222)
 		return 1;
 	return 0;
 }
@@ -379,7 +379,7 @@ static inline mode_t exfat_make_mode(struct exfat_sb_info *sbi,
 		unsigned int attr, mode_t mode)
 {
 	if ((attr & ATTR_READONLY) && !(attr & ATTR_SUBDIR))
-		mode &= ~S_IWUGO;
+		mode &= ~0222;
 
 	if (attr & ATTR_SUBDIR)
 		return (mode & ~sbi->options.fs_dmask) | S_IFDIR;
@@ -396,7 +396,7 @@ static inline unsigned int exfat_make_attr(struct inode *inode)
 
 	if (S_ISDIR(inode->i_mode))
 		attrs |= ATTR_SUBDIR;
-	if (exfat_mode_can_hold_ro(inode) && !(inode->i_mode & S_IWUGO))
+	if (exfat_mode_can_hold_ro(inode) && !(inode->i_mode & 0222))
 		attrs |= ATTR_READONLY;
 	return attrs;
 }
