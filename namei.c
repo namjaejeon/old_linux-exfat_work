@@ -1108,7 +1108,7 @@ static int __exfat_remove(struct inode *inode, struct exfat_file_id *fid)
 	/* (2) invalidate exfat cache and free the clusters
 	 */
 	/* clear exfat cache */
-	exfat_cluster_cache_inval_inode(inode);
+	exfat_clu_cache_inval_inode(inode);
 	ret = exfat_free_cluster(sb, &clu_to_free, 0);
 	/* WARN : DO NOT RETURN ERROR IN HERE */
 

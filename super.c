@@ -1163,7 +1163,7 @@ static int __init init_exfat_fs(void)
 {
 	int err;
 
-	err = exfat_cluster_cache_init();
+	err = exfat_clu_cache_init();
 	if (err)
 		goto error;
 
@@ -1178,7 +1178,7 @@ static int __init init_exfat_fs(void)
 	return 0;
 error:
 	exfat_destroy_inodecache();
-	exfat_cluster_cache_shutdown();
+	exfat_clu_cache_shutdown();
 
 	return err;
 }
@@ -1187,7 +1187,7 @@ static void __exit exit_exfat_fs(void)
 {
 	exfat_destroy_inodecache();
 	unregister_filesystem(&exfat_fs_type);
-	exfat_cluster_cache_shutdown();
+	exfat_clu_cache_shutdown();
 }
 
 module_init(init_exfat_fs);
