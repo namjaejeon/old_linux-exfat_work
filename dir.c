@@ -548,18 +548,18 @@ void exfat_get_entry_time(struct exfat_dentry *p_entry,
 	struct exfat_file_dentry *ep = (struct exfat_file_dentry *)p_entry;
 
 	switch (mode) {
-		case TM_CREATE:
-			t = le16_to_cpu(ep->create_time);
-			d = le16_to_cpu(ep->create_date);
-			break;
-		case TM_MODIFY:
-			t = le16_to_cpu(ep->modify_time);
-			d = le16_to_cpu(ep->modify_date);
-			break;
-		case TM_ACCESS:
-			t = le16_to_cpu(ep->access_time);
-			d = le16_to_cpu(ep->access_date);
-			break;
+	case TM_CREATE:
+		t = le16_to_cpu(ep->create_time);
+		d = le16_to_cpu(ep->create_date);
+		break;
+	case TM_MODIFY:
+		t = le16_to_cpu(ep->modify_time);
+		d = le16_to_cpu(ep->modify_date);
+		break;
+	case TM_ACCESS:
+		t = le16_to_cpu(ep->access_time);
+		d = le16_to_cpu(ep->access_date);
+		break;
 	}
 
 	tp->sec  = (t & 0x001F) << 1;
@@ -580,18 +580,18 @@ void exfat_set_entry_time(struct exfat_dentry *p_entry,
 	d = (tp->year <<  9) | (tp->mon << 5) |  tp->day;
 
 	switch (mode) {
-		case TM_CREATE:
-			ep->create_time = cpu_to_le16(t);
-			ep->create_date = cpu_to_le16(d);
-			break;
-		case TM_MODIFY:
-			ep->modify_time = cpu_to_le16(t);
-			ep->modify_date = cpu_to_le16(d);
-			break;
-		case TM_ACCESS:
-			ep->access_time = cpu_to_le16(t);
-			ep->access_date = cpu_to_le16(d);
-			break;
+	case TM_CREATE:
+		ep->create_time = cpu_to_le16(t);
+		ep->create_date = cpu_to_le16(d);
+		break;
+	case TM_MODIFY:
+		ep->modify_time = cpu_to_le16(t);
+		ep->modify_date = cpu_to_le16(d);
+		break;
+	case TM_ACCESS:
+		ep->access_time = cpu_to_le16(t);
+		ep->access_date = cpu_to_le16(d);
+		break;
 	}
 }
 
@@ -1024,43 +1024,43 @@ struct exfat_entry_set_cache *exfat_get_dentry_set(struct super_block *sb,
 			goto err_out;
 
 		switch (mode) {
-			case ES_MODE_STARTED:
-				if  ((entry_type == TYPE_FILE) ||
-						(entry_type == TYPE_DIR))
-					mode = ES_MODE_GET_FILE_ENTRY;
-				else
-					goto err_out;
+		case ES_MODE_STARTED:
+			if  ((entry_type == TYPE_FILE) ||
+					(entry_type == TYPE_DIR))
+				mode = ES_MODE_GET_FILE_ENTRY;
+			else
+				goto err_out;
+			break;
+		case ES_MODE_GET_FILE_ENTRY:
+			if (entry_type == TYPE_STREAM)
+				mode = ES_MODE_GET_STRM_ENTRY;
+			else
+				goto err_out;
+			break;
+		case ES_MODE_GET_STRM_ENTRY:
+			if (entry_type == TYPE_EXTEND)
+				mode = ES_MODE_GET_NAME_ENTRY;
+			else
+				goto err_out;
+			break;
+		case ES_MODE_GET_NAME_ENTRY:
+			if (entry_type == TYPE_EXTEND)
 				break;
-			case ES_MODE_GET_FILE_ENTRY:
-				if (entry_type == TYPE_STREAM)
-					mode = ES_MODE_GET_STRM_ENTRY;
-				else
-					goto err_out;
-				break;
-			case ES_MODE_GET_STRM_ENTRY:
-				if (entry_type == TYPE_EXTEND)
-					mode = ES_MODE_GET_NAME_ENTRY;
-				else
-					goto err_out;
-				break;
-			case ES_MODE_GET_NAME_ENTRY:
-				if (entry_type == TYPE_EXTEND)
-					break;
-				else if (entry_type == TYPE_STREAM)
-					goto err_out;
-				else if (entry_type & TYPE_CRITICAL_SEC)
-					mode = ES_MODE_GET_CRITICAL_SEC_ENTRY;
-				else
-					goto err_out;
-				break;
-			case ES_MODE_GET_CRITICAL_SEC_ENTRY:
-				if ((entry_type == TYPE_EXTEND) ||
-						(entry_type == TYPE_STREAM))
-					goto err_out;
-				else if ((entry_type & TYPE_CRITICAL_SEC) !=
-						TYPE_CRITICAL_SEC)
-					goto err_out;
-				break;
+			else if (entry_type == TYPE_STREAM)
+				goto err_out;
+			else if (entry_type & TYPE_CRITICAL_SEC)
+				mode = ES_MODE_GET_CRITICAL_SEC_ENTRY;
+			else
+				goto err_out;
+			break;
+		case ES_MODE_GET_CRITICAL_SEC_ENTRY:
+			if ((entry_type == TYPE_EXTEND) ||
+					(entry_type == TYPE_STREAM))
+				goto err_out;
+			else if ((entry_type & TYPE_CRITICAL_SEC) !=
+					TYPE_CRITICAL_SEC)
+				goto err_out;
+			break;
 		}
 
 		/* copy dentry */
