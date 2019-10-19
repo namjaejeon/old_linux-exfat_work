@@ -433,9 +433,9 @@ extern int exfat_chain_cont_cluster(struct super_block *sb, unsigned int chain,
 	unsigned int len);
 extern struct exfat_dentry *exfat_get_dentry(struct super_block *sb,
 	struct exfat_chain *p_dir, int entry, unsigned long long *sector);
-extern struct exfat_entry_set_cache *exfat_get_dentry_set(struct super_block *sb,
-	struct exfat_chain *p_dir, int entry, unsigned int type,
-	struct exfat_dentry **file_ep);
+extern struct exfat_entry_set_cache *exfat_get_dentry_set(
+	struct super_block *sb, struct exfat_chain *p_dir, int entry,
+	unsigned int type, struct exfat_dentry **file_ep);
 extern int exfat_clear_cluster(struct inode *inode, unsigned int clu);
 extern int exfat_find_location(struct super_block *sb,
 	struct exfat_chain *p_dir, int entry, unsigned long long *sector,
