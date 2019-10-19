@@ -394,17 +394,17 @@ int exfat_get_num_entries_and_dos_name(struct super_block *sb,
 	struct exfat_chain *p_dir, struct exfat_uni_name *p_uniname,
 	int *entries, struct exfat_dos_name *p_dosname, int lookup)
 {
-        int num_entries;
+	int num_entries;
 
-        /* Init null char. */
-        p_dosname->name[0] = '\0';
+	/* Init null char. */
+	p_dosname->name[0] = '\0';
 
-        num_entries = exfat_calc_num_entries(p_uniname);
-        if (num_entries == 0)
-                return -EINVAL;
+	num_entries = exfat_calc_num_entries(p_uniname);
+	if (num_entries == 0)
+		return -EINVAL;
 
-        *entries = num_entries;
-        return 0;
+	*entries = num_entries;
+	return 0;
 }
 
 
