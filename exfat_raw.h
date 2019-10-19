@@ -48,14 +48,14 @@
 				 ATTR_SUBDIR | ATTR_ARCHIVE | ATTR_SYMLINK) /* 0x007E */
 
 /* EXFAT BIOS parameter block (64 bytes) */
-typedef struct {
+struct bpb64 {
 	__u8 jmp_boot[3];
 	__u8 oem_name[8];
 	__u8 res_zero[53];
-} bpb64_t;
+};
 
 /* EXFAT EXTEND BIOS parameter block (56 bytes) */
-typedef struct {
+struct bsx64 {
 	__le64 vol_offset;
 	__le64 vol_length;
 	__le32 fat_offset;
@@ -72,28 +72,28 @@ typedef struct {
 	__u8 phy_drv_no;
 	__u8 perc_in_use;
 	__u8 reserved2[7];
-} bsx64_t;
+};
 
 /* EXFAT PBR[BPB+BSX] (120 bytes) */
-typedef struct {
-	bpb64_t bpb;
-	bsx64_t bsx;
-} pbr64_t;
+struct pbr64 {
+	struct bpb64 bpb;
+	struct bsx64 bsx;
+};
 
 
 /* Common PBR[Partition Boot Record] (512 bytes) */
-typedef struct {
+struct pbr {
 	union {
 		__u8 raw[64];
-		bpb64_t f64;
+		struct bpb64 f64;
 	} bpb;
 	union {
 		__u8 raw[56];
-		bsx64_t f64;
+		struct bsx64 f64;
 	} bsx;
 	__u8 boot_code[390];
 	__le16 signature;
-} pbr_t;
+};
 
 /* FAT directory entry (32 bytes) */
 struct exfat_dentry {

@@ -174,7 +174,7 @@ static int __exfat_set_vol_flags(struct super_block *sb,
 		unsigned short new_flag, int always_sync)
 {
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
-	pbr64_t *bpb;
+	struct pbr64 *bpb;
 	int sync = 0;
 
 	/* flags are not changed */
@@ -197,7 +197,7 @@ static int __exfat_set_vol_flags(struct super_block *sb,
 		}
 	}
 
-	bpb = (pbr64_t *)sbi->pbr_bh->b_data;
+	bpb = (struct pbr64 *)sbi->pbr_bh->b_data;
 	bpb->bsx.vol_flags = cpu_to_le16(new_flag);
 
 	if (always_sync)
@@ -530,9 +530,9 @@ static void exfat_setup_dops(struct super_block *sb)
 		sb->s_d_op = &exfat_dentry_ops;
 }
 
-int mount_exfat(struct super_block *sb, pbr_t *p_pbr)
+int mount_exfat(struct super_block *sb, struct pbr *p_pbr)
 {
-	pbr64_t *p_bpb = (pbr64_t *)p_pbr;
+	struct pbr64 *p_bpb = (struct pbr64 *)p_pbr;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 
 	if (!p_bpb->bsx.num_fats) {
@@ -581,7 +581,7 @@ int mount_exfat(struct super_block *sb, pbr_t *p_pbr)
 	return 0;
 } /* end of mount_exfat */
 
-static bool is_exfat(pbr_t *pbr)
+static bool is_exfat(struct pbr *pbr)
 {
 	int i = 53;
 
@@ -803,10 +803,10 @@ load_default:
 	return exfat_load_default_upcase_table(sb);
 } /* end of load_upcase_table */
 
-inline pbr_t *exfat_read_pbr_with_logical_sector(struct super_block *sb,
+inline struct pbr *exfat_read_pbr_with_logical_sector(struct super_block *sb,
 		struct buffer_head **prev_bh)
 {
-	pbr_t *p_pbr = (pbr_t *) (*prev_bh)->b_data;
+	struct pbr *p_pbr = (struct pbr *) (*prev_bh)->b_data;
 	unsigned short logical_sect = 0;
 
 	logical_sect = 1 << p_pbr->bsx.f64.sect_size_bits;
@@ -849,7 +849,7 @@ inline pbr_t *exfat_read_pbr_with_logical_sector(struct super_block *sb,
 		}
 
 		*prev_bh = bh;
-		p_pbr = (pbr_t *) bh->b_data;
+		p_pbr = (struct pbr *) bh->b_data;
 	}
 
 	return p_pbr;
@@ -859,8 +859,8 @@ inline pbr_t *exfat_read_pbr_with_logical_sector(struct super_block *sb,
 static int __exfat_fill_super(struct super_block *sb)
 {
 	int ret;
-	pbr_t *p_pbr;
-	pbr64_t *p_bpb;
+	struct pbr *p_pbr;
+	struct pbr64 *p_bpb;
 	struct buffer_head *tmp_bh = NULL;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 
@@ -880,7 +880,7 @@ static int __exfat_fill_super(struct super_block *sb)
 	}
 
 	/* PRB is read */
-	p_pbr = (pbr_t *) tmp_bh->b_data;
+	p_pbr = (struct pbr *) tmp_bh->b_data;
 
 	/* check the validity of PBR */
 	if (le16_to_cpu((p_pbr->signature)) != PBR_SIGNATURE) {
@@ -907,7 +907,7 @@ static int __exfat_fill_super(struct super_block *sb)
 	sb->s_maxbytes = 0x7fffffffffffffffLL;
 	ret = mount_exfat(sb, p_pbr);
 
-	p_bpb = (pbr64_t *)p_pbr;
+	p_bpb = (struct pbr64 *)p_pbr;
 
 	if (!p_bpb->bsx.num_fats) {
 		exfat_msg(sb, KERN_ERR, "bogus number of FAT structure");
