@@ -1263,7 +1263,6 @@ static int exfat_write_link(struct inode *inode, struct exfat_file_id *fid,
 			memcpy(((char *)tmp_bh->b_data),
 					((char *)buffer)+write_bytes,
 					(int)oneblkwrite);
-			mark_buffer_dirty(tmp_bh);
 		} else {
 			if ((offset > 0) ||
 				((fid->rwoffset+oneblkwrite) < fid->size)) {
@@ -1279,8 +1278,9 @@ static int exfat_write_link(struct inode *inode, struct exfat_file_id *fid,
 			memcpy(((char *) tmp_bh->b_data)+offset,
 				((char *) buffer)+write_bytes,
 				(int) oneblkwrite);
-			mark_buffer_dirty(tmp_bh);
 		}
+		set_buffer_uptodate(tmp_bh);
+		mark_buffer_dirty(tmp_bh);
 
 		count -= oneblkwrite;
 		write_bytes += oneblkwrite;
