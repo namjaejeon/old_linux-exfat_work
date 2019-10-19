@@ -1382,7 +1382,7 @@ int exfat_count_ext_entries(struct super_block *sb, struct exfat_chain *p_dir,
  *  Name Conversion Functions
  */
 void exfat_get_uniname_from_ext_entry(struct super_block *sb,
-		struct exfat_chain *p_dir,int entry, unsigned short *uniname)
+		struct exfat_chain *p_dir, int entry, unsigned short *uniname)
 {
 	int i;
 	struct exfat_dentry *ep;
