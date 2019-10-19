@@ -454,7 +454,7 @@ extern unsigned int exfat_test_alloc_bitmap(struct super_block *sb,
 	unsigned int clu);
 
 /* file.c */
-extern const struct file_operations exfat_file_operations; 
+extern const struct file_operations exfat_file_operations;
 extern int exfat_file_fsync(struct file *filp, loff_t start, loff_t end,
 	int datasync);
 
