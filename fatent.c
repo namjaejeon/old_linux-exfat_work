@@ -242,9 +242,6 @@ int exfat_find_last_cluster(struct super_block *sb, struct exfat_chain *p_chain,
 	return 0;
 }
 
-/*
- *  Cluster Management Functions
- */
 int exfat_clear_cluster(struct inode *inode, unsigned int clu)
 {
 	unsigned long long s, n;
