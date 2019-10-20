@@ -407,7 +407,6 @@ int exfat_get_num_entries_and_dos_name(struct super_block *sb,
 	return 0;
 }
 
-
 unsigned int exfat_get_entry_type(struct exfat_dentry *p_entry)
 {
 	struct exfat_file_dentry *ep = (struct exfat_file_dentry *) p_entry;
