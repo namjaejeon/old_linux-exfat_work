@@ -16,12 +16,16 @@
 #define MSDOS_UNUSED		0x00	/* end of directory */
 
 #define EXFAT_UNUSED		0x00	/* end of directory */
+#define EXFAT_DELETE		~(0x80)
 #define IS_EXFAT_DELETED(x)	((x) < 0x80) /* deleted file (0x01~0x7F) */
 #define EXFAT_INVAL		0x80	/* invalid value */
 #define EXFAT_BITMAP		0x81	/* allocation bitmap */
 #define EXFAT_UPCASE		0x82	/* upcase table */
 #define EXFAT_VOLUME		0x83	/* volume label */
 #define EXFAT_FILE		0x85	/* file or dir */
+#define EXFAT_GUID		0xA0
+#define EXFAT_PADDING		0xA1
+#define EXFAT_ACLTAB		0xA2
 #define EXFAT_STREAM		0xC0	/* stream entry */
 #define EXFAT_NAME		0xC1	/* file name entry */
 #define EXFAT_ACL		0xC2	/* stream entry */
