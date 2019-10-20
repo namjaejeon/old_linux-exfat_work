@@ -1097,8 +1097,7 @@ struct exfat_entry_set_cache *exfat_get_dentry_set(struct super_block *sb,
 
 	return es;
 err_out:
-	kfree(es);
-	es = NULL;
+	exfat_release_dentry_set(es);
 	return NULL;
 }
 
