@@ -236,15 +236,15 @@ static int exfat_revalidate_ci(struct dentry *dentry, unsigned int flags)
 }
 
 const struct dentry_operations exfat_dentry_ops = {
-	.d_revalidate   = exfat_revalidate,
-	.d_hash         = exfat_d_hash,
-	.d_compare      = exfat_cmp,
+	.d_revalidate	= exfat_revalidate,
+	.d_hash		= exfat_d_hash,
+	.d_compare	= exfat_cmp,
 };
 
 const struct dentry_operations exfat_ci_dentry_ops = {
-	.d_revalidate   = exfat_revalidate_ci,
-	.d_hash         = exfat_d_hashi,
-	.d_compare      = exfat_cmpi,
+	.d_revalidate	= exfat_revalidate_ci,
+	.d_hash		= exfat_d_hashi,
+	.d_compare	= exfat_cmpi,
 };
 
 /* used only in search empty_slot() */
@@ -612,7 +612,7 @@ static inline int exfat_resolve_path_for_lookup(struct inode *inode,
 static int __exfat_create(struct inode *inode, unsigned char *path,
 	unsigned char mode, struct exfat_file_id *fid)
 {
-	int ret/*, dentry*/;
+	int ret;
 	struct exfat_chain dir;
 	struct exfat_uni_name uni_name;
 	struct super_block *sb = inode->i_sb;
@@ -787,14 +787,14 @@ static int exfat_d_anon_disconn(struct dentry *dentry)
 
 /* read data from a opened file */
 static int exfat_read_link(struct inode *inode, struct exfat_file_id *fid,
-	void *buffer, unsigned long long count, unsigned long long *rcount)
+	void *buffer, unsigned long long count)
 {
 	int ret = 0;
 	int offset, sec_offset;
 	unsigned int clu_offset;
 	unsigned int clu;
 	unsigned long long logsector, oneblkread, read_bytes;
-	struct buffer_head *tmp_bh = NULL;
+	struct buffer_head *bh = NULL;
 	struct super_block *sb = inode->i_sb;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 
@@ -808,11 +808,8 @@ static int exfat_read_link(struct inode *inode, struct exfat_file_id *fid,
 	if (count > (fid->size - fid->rwoffset))
 		count = fid->size - fid->rwoffset;
 
-	if (count == 0) {
-		if (rcount)
-			*rcount = 0;
+	if (count == 0)
 		return 0;
-	}
 
 	read_bytes = 0;
 
@@ -856,18 +853,18 @@ static int exfat_read_link(struct inode *inode, struct exfat_file_id *fid,
 			oneblkread = count;
 
 		if ((offset == 0) && (oneblkread == sb->s_blocksize)) {
-			tmp_bh = sb_bread(sb, logsector);
-			if (!tmp_bh)
+			bh = sb_bread(sb, logsector);
+			if (!bh)
 				goto err_out;
-			memcpy(((char *) buffer)+read_bytes,
-				((char *) tmp_bh->b_data), (int) oneblkread);
+			memcpy(((char *)buffer)+read_bytes,
+				((char *)bh->b_data), (int)oneblkread);
 		} else {
-			tmp_bh = sb_bread(sb, logsector);
-			if (!tmp_bh)
+			bh = sb_bread(sb, logsector);
+			if (!bh)
 				goto err_out;
-			memcpy(((char *) buffer)+read_bytes,
-				((char *) tmp_bh->b_data)+offset,
-				(int) oneblkread);
+			memcpy(((char *)buffer)+read_bytes,
+				((char *)bh->b_data)+offset,
+				(int)oneblkread);
 		}
 		count -= oneblkread;
 		read_bytes += oneblkread;
@@ -875,12 +872,7 @@ static int exfat_read_link(struct inode *inode, struct exfat_file_id *fid,
 	}
 
 err_out:
-	brelse(tmp_bh);
-
-	/* set the size of read bytes */
-	if (rcount != NULL)
-		*rcount = read_bytes;
-
+	brelse(bh);
 	return ret;
 }
 
@@ -893,7 +885,6 @@ static struct dentry *exfat_lookup(struct inode *dir, struct dentry *dentry,
 	int err;
 	struct exfat_file_id fid;
 	loff_t i_pos;
-	unsigned long long ret;
 	mode_t i_mode;
 
 	mutex_lock(&EXFAT_SB(sb)->s_lock);
@@ -922,7 +913,7 @@ static struct dentry *exfat_lookup(struct inode *dir, struct dentry *dentry,
 			goto error;
 		}
 		exfat_read_link(dir, &fid, EXFAT_I(inode)->target,
-			i_size_read(inode), &ret);
+			i_size_read(inode));
 		*(EXFAT_I(inode)->target + i_size_read(inode)) = '\0';
 	}
 
@@ -1125,7 +1116,7 @@ out:
 
 /* write data into a opened file */
 static int exfat_write_link(struct inode *inode, struct exfat_file_id *fid,
-	void *buffer, unsigned long long count, unsigned long long *wcount)
+	void *buffer, unsigned long long count)
 {
 	int ret = 0;
 	int modified = false, offset, sec_offset;
@@ -1136,7 +1127,7 @@ static int exfat_write_link(struct inode *inode, struct exfat_file_id *fid,
 	struct exfat_timestamp tm;
 	struct exfat_dentry *ep, *ep2;
 	struct exfat_entry_set_cache *es = NULL;
-	struct buffer_head *tmp_bh = NULL;
+	struct buffer_head *bh = NULL;
 	struct super_block *sb = inode->i_sb;
 	unsigned int blksize = (unsigned int)sb->s_blocksize;
 	unsigned int blksize_mask = (unsigned int)(sb->s_blocksize-1);
@@ -1150,11 +1141,8 @@ static int exfat_write_link(struct inode *inode, struct exfat_file_id *fid,
 	if (fid->rwoffset > fid->size)
 		fid->rwoffset = fid->size;
 
-	if (count == 0) {
-		if (wcount)
-			*wcount = 0;
+	if (count == 0)
 		return 0;
-	}
 
 	exfat_set_vol_flags(sb, VOL_DIRTY);
 
@@ -1256,31 +1244,31 @@ static int exfat_write_link(struct inode *inode, struct exfat_file_id *fid,
 			oneblkwrite = count;
 
 		if ((offset == 0) && (oneblkwrite == blksize)) {
-			tmp_bh = sb_getblk(sb, logsector);
-			if (!tmp_bh)
+			bh = sb_getblk(sb, logsector);
+			if (!bh)
 				goto err_out;
 
-			memcpy(((char *)tmp_bh->b_data),
-					((char *)buffer)+write_bytes,
+			memcpy(((char *)bh->b_data),
+					((char *)buffer) + write_bytes,
 					(int)oneblkwrite);
 		} else {
 			if ((offset > 0) ||
 				((fid->rwoffset+oneblkwrite) < fid->size)) {
-				tmp_bh = sb_bread(sb, logsector);
-				if (tmp_bh)
+				bh = sb_bread(sb, logsector);
+				if (bh)
 					goto err_out;
 			} else {
-				tmp_bh = sb_getblk(sb, logsector);
-				if (!tmp_bh)
+				bh = sb_getblk(sb, logsector);
+				if (!bh)
 					goto err_out;
 			}
 
-			memcpy(((char *) tmp_bh->b_data)+offset,
-				((char *) buffer)+write_bytes,
-				(int) oneblkwrite);
+			memcpy(((char *)bh->b_data) + offset,
+				((char *)buffer) + write_bytes,
+				(int)oneblkwrite);
 		}
-		set_buffer_uptodate(tmp_bh);
-		mark_buffer_dirty(tmp_bh);
+		set_buffer_uptodate(bh);
+		mark_buffer_dirty(bh);
 
 		count -= oneblkwrite;
 		write_bytes += oneblkwrite;
@@ -1294,7 +1282,7 @@ static int exfat_write_link(struct inode *inode, struct exfat_file_id *fid,
 		}
 	}
 
-	brelse(tmp_bh);
+	brelse(bh);
 
 	/* (3) update the direcoty entry */
 	/* get_entry_(set_)in_dir shoulb be check DIR_DELETED flag. */
@@ -1329,10 +1317,6 @@ static int exfat_write_link(struct inode *inode, struct exfat_file_id *fid,
 	exfat_set_vol_flags(sb, VOL_CLEAN);
 
 err_out:
-	/* set the size of written bytes */
-	if (wcount)
-		*wcount = write_bytes;
-
 	return ret;
 }
 
@@ -1345,7 +1329,6 @@ static int exfat_symlink(struct inode *dir, struct dentry *dentry,
 	loff_t i_pos;
 	int err;
 	unsigned long long len = (unsigned long long) strlen(target);
-	unsigned long long ret;
 
 	/* symlink option check */
 	if (!EXFAT_SB(sb)->options.symlink)
@@ -1357,8 +1340,7 @@ static int exfat_symlink(struct inode *dir, struct dentry *dentry,
 	if (err)
 		goto out;
 
-	err = exfat_write_link(dir, &fid, (char *) target, len, &ret);
-
+	err = exfat_write_link(dir, &fid, (char *) target, len);
 	if (err) {
 		__exfat_remove(dir, &fid);
 		goto out;
@@ -2185,13 +2167,13 @@ int exfat_setattr(struct dentry *dentry, struct iattr *attr)
 }
 
 const struct inode_operations exfat_dir_inode_operations = {
-	.create        = exfat_create,
-	.lookup        = exfat_lookup,
-	.unlink        = exfat_unlink,
-	.symlink       = exfat_symlink,
-	.mkdir         = exfat_mkdir,
-	.rmdir         = exfat_rmdir,
-	.rename        = exfat_rename,
-	.setattr       = exfat_setattr,
-	.getattr       = exfat_getattr,
+	.create		= exfat_create,
+	.lookup		= exfat_lookup,
+	.unlink		= exfat_unlink,
+	.symlink	= exfat_symlink,
+	.mkdir		= exfat_mkdir,
+	.rmdir		= exfat_rmdir,
+	.rename		= exfat_rename,
+	.setattr	= exfat_setattr,
+	.getattr	= exfat_getattr,
 };

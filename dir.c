@@ -294,10 +294,10 @@ out_unlocked:
 }
 
 const struct file_operations exfat_dir_operations = {
-		.llseek     = generic_file_llseek,
-		.read       = generic_read_dir,
-		.iterate    = exfat_iterate,
-		.fsync      = exfat_file_fsync,
+	.llseek		= generic_file_llseek,
+	.read		= generic_read_dir,
+	.iterate	= exfat_iterate,
+	.fsync		= exfat_file_fsync,
 };
 
 int exfat_create_dir(struct inode *inode, struct exfat_chain *p_dir,
@@ -384,7 +384,7 @@ static int exfat_calc_num_entries(struct exfat_uni_name *p_uniname)
 		return 0;
 
 	/* 1 file entry + 1 stream entry + name entries */
-	return((len-1) / 15 + 3);
+	return((len - 1) / 15 + 3);
 }
 
 /* input  : dir, uni_name
@@ -407,25 +407,24 @@ int exfat_get_num_entries_and_dos_name(struct super_block *sb,
 	return 0;
 }
 
-
 unsigned int exfat_get_entry_type(struct exfat_dentry *p_entry)
 {
-	struct exfat_file_dentry *ep = (struct exfat_file_dentry *) p_entry;
+	struct exfat_file_dentry *ep = (struct exfat_file_dentry *)p_entry;
 
 	if (ep->type == EXFAT_UNUSED)
 		return TYPE_UNUSED;
-	if (ep->type < 0x80)
+	if (IS_EXFAT_DELETED(ep->type))
 		return TYPE_DELETED;
-	if (ep->type == 0x80)
+	if (ep->type == EXFAT_INVAL)
 		return TYPE_INVALID;
 	if (ep->type < 0xA0) {
-		if (ep->type == 0x81)
+		if (ep->type == EXFAT_BITMAP)
 			return TYPE_BITMAP;
-		if (ep->type == 0x82)
+		if (ep->type == EXFAT_UPCASE)
 			return TYPE_UPCASE;
-		if (ep->type == 0x83)
+		if (ep->type == EXFAT_VOLUME)
 			return TYPE_VOLUME;
-		if (ep->type == 0x85) {
+		if (ep->type == EXFAT_FILE) {
 			if (le16_to_cpu(ep->attr) & ATTR_SUBDIR)
 				return TYPE_DIR;
 			return TYPE_FILE;
@@ -433,20 +432,20 @@ unsigned int exfat_get_entry_type(struct exfat_dentry *p_entry)
 		return TYPE_CRITICAL_PRI;
 	}
 	if (ep->type < 0xC0) {
-		if (ep->type == 0xA0)
+		if (ep->type == EXFAT_GUID)
 			return TYPE_GUID;
-		if (ep->type == 0xA1)
+		if (ep->type == EXFAT_PADDING)
 			return TYPE_PADDING;
-		if (ep->type == 0xA2)
+		if (ep->type == EXFAT_ACLTAB)
 			return TYPE_ACLTAB;
 		return TYPE_BENIGN_PRI;
 	}
 	if (ep->type < 0xE0) {
-		if (ep->type == 0xC0)
+		if (ep->type == EXFAT_STREAM)
 			return TYPE_STREAM;
-		if (ep->type == 0xC1)
+		if (ep->type == EXFAT_NAME)
 			return TYPE_EXTEND;
-		if (ep->type == 0xC2)
+		if (ep->type == EXFAT_ACL)
 			return TYPE_ACL;
 		return TYPE_CRITICAL_SEC;
 	}
@@ -459,27 +458,27 @@ static void exfat_set_entry_type(struct exfat_dentry *p_entry,
 	struct exfat_file_dentry *ep = (struct exfat_file_dentry *) p_entry;
 
 	if (type == TYPE_UNUSED) {
-		ep->type = 0x0;
+		ep->type = EXFAT_UNUSED;
 	} else if (type == TYPE_DELETED) {
-		ep->type &= ~0x80;
+		ep->type &= EXFAT_DELETE;
 	} else if (type == TYPE_STREAM) {
-		ep->type = 0xC0;
+		ep->type = EXFAT_STREAM;
 	} else if (type == TYPE_EXTEND) {
-		ep->type = 0xC1;
+		ep->type = EXFAT_NAME;
 	} else if (type == TYPE_BITMAP) {
-		ep->type = 0x81;
+		ep->type = EXFAT_BITMAP;
 	} else if (type == TYPE_UPCASE) {
-		ep->type = 0x82;
+		ep->type = EXFAT_UPCASE;
 	} else if (type == TYPE_VOLUME) {
-		ep->type = 0x83;
+		ep->type = EXFAT_VOLUME;
 	} else if (type == TYPE_DIR) {
-		ep->type = 0x85;
+		ep->type = EXFAT_FILE;
 		ep->attr = cpu_to_le16(ATTR_SUBDIR);
 	} else if (type == TYPE_FILE) {
-		ep->type = 0x85;
+		ep->type = EXFAT_FILE;
 		ep->attr = cpu_to_le16(ATTR_ARCHIVE);
 	} else if (type == TYPE_SYMLINK) {
-		ep->type = 0x85;
+		ep->type = EXFAT_FILE;
 		ep->attr = cpu_to_le16(ATTR_ARCHIVE | ATTR_SYMLINK);
 	}
 }
@@ -600,12 +599,12 @@ static void exfat_init_file_entry(struct super_block *sb,
 {
 	struct exfat_timestamp tm, *tp;
 
-	exfat_set_entry_type((struct exfat_dentry *) ep, type);
+	exfat_set_entry_type((struct exfat_dentry *)ep, type);
 
 	tp = tm_now(EXFAT_SB(sb), &tm);
-	exfat_set_entry_time((struct exfat_dentry *) ep, tp, TM_CREATE);
-	exfat_set_entry_time((struct exfat_dentry *) ep, tp, TM_MODIFY);
-	exfat_set_entry_time((struct exfat_dentry *) ep, tp, TM_ACCESS);
+	exfat_set_entry_time((struct exfat_dentry *)ep, tp, TM_CREATE);
+	exfat_set_entry_time((struct exfat_dentry *)ep, tp, TM_MODIFY);
+	exfat_set_entry_time((struct exfat_dentry *)ep, tp, TM_ACCESS);
 	ep->create_time_ms = 0;
 	ep->modify_time_ms = 0;
 	ep->access_time_ms = 0;
@@ -614,7 +613,7 @@ static void exfat_init_file_entry(struct super_block *sb,
 static void exfat_init_strm_entry(struct exfat_strm_dentry *ep,
 	unsigned char flags, unsigned int start_clu, unsigned long long size)
 {
-	exfat_set_entry_type((struct exfat_dentry *) ep, TYPE_STREAM);
+	exfat_set_entry_type((struct exfat_dentry *)ep, TYPE_STREAM);
 	ep->flags = flags;
 	ep->start_clu = cpu_to_le32(start_clu);
 	ep->valid_size = cpu_to_le64(size);
@@ -626,7 +625,7 @@ static void exfat_init_name_entry(struct exfat_name_dentry *ep,
 {
 	int i;
 
-	exfat_set_entry_type((struct exfat_dentry *) ep, TYPE_EXTEND);
+	exfat_set_entry_type((struct exfat_dentry *)ep, TYPE_EXTEND);
 	ep->flags = 0x0;
 
 	for (i = 0; i < 15; i++) {
@@ -695,7 +694,7 @@ int update_dir_chksum(struct super_block *sb, struct exfat_chain *p_dir,
 			CS_DIR_ENTRY);
 
 	for (i = 1; i < num_entries; i++) {
-		ep = exfat_get_dentry(sb, p_dir, entry+i, NULL);
+		ep = exfat_get_dentry(sb, p_dir, entry + i, NULL);
 		if (!ep)
 			goto out_unlock;
 
@@ -761,7 +760,7 @@ int exfat_delete_dir_entry(struct super_block *sb, struct exfat_chain *p_dir,
 	struct exfat_dentry *ep;
 
 	for (i = order; i < num_entries; i++) {
-		ep = exfat_get_dentry(sb, p_dir, entry+i, &sector);
+		ep = exfat_get_dentry(sb, p_dir, entry + i, &sector);
 		if (!ep)
 			return -EIO;
 
@@ -871,8 +870,7 @@ static int exfat_walk_fat_chain(struct super_block *sb,
 		}
 	}
 
-	if (clu)
-		*clu = cur_clu;
+	*clu = cur_clu;
 	return 0;
 }
 
@@ -1099,15 +1097,13 @@ struct exfat_entry_set_cache *exfat_get_dentry_set(struct super_block *sb,
 
 	return es;
 err_out:
-	kfree(es);
-	es = NULL;
+	exfat_release_dentry_set(es);
 	return NULL;
 }
 
 void exfat_release_dentry_set(struct exfat_entry_set_cache *es)
 {
 	kfree(es);
-	es = NULL;
 }
 
 static int exfat_extract_uni_name_from_name_entry(struct exfat_name_dentry *ep,

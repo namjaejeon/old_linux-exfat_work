@@ -780,14 +780,14 @@ static sector_t exfat_aop_bmap(struct address_space *mapping, sector_t block)
 }
 
 static const struct address_space_operations exfat_aops = {
-	.readpage    = exfat_readpage,
-	.readpages   = exfat_readpages,
-	.writepage   = exfat_writepage,
-	.writepages  = exfat_writepages,
-	.write_begin = exfat_write_begin,
-	.write_end   = exfat_write_end,
-	.direct_IO   = exfat_direct_IO,
-	.bmap        = exfat_aop_bmap
+	.readpage	= exfat_readpage,
+	.readpages	= exfat_readpages,
+	.writepage	= exfat_writepage,
+	.writepages	= exfat_writepages,
+	.write_begin	= exfat_write_begin,
+	.write_end	= exfat_write_end,
+	.direct_IO	= exfat_direct_IO,
+	.bmap		= exfat_aop_bmap
 };
 
 static inline unsigned long exfat_hash(loff_t i_pos)

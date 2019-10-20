@@ -597,7 +597,7 @@ static int exfat_load_upcase_table(struct super_block *sb,
 	unsigned int utbl_checksum)
 {
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
-	struct buffer_head *tmp_bh = NULL;
+	struct buffer_head *bh = NULL;
 	unsigned int sect_size = (unsigned int)sb->s_blocksize;
 	int ret = -EIO;
 	unsigned int i, j;
@@ -616,8 +616,8 @@ static int exfat_load_upcase_table(struct super_block *sb,
 	num_sectors += sector;
 
 	while (sector < num_sectors) {
-		tmp_bh = sb_bread(sb, sector);
-		if (!tmp_bh) {
+		bh = sb_bread(sb, sector);
+		if (!bh) {
 			exfat_msg(sb, KERN_ERR,
 				"failed to read sector(0x%llx)\n", sector);
 			goto error;
@@ -626,14 +626,14 @@ static int exfat_load_upcase_table(struct super_block *sb,
 
 		for (i = 0; i < sect_size && index <= 0xFFFF; i += 2) {
 			unsigned short uni = get_unaligned_le16(
-				(unsigned char *)tmp_bh->b_data + i);
+				(unsigned char *)bh->b_data + i);
 
 			checksum = ((checksum & 1) ? 0x80000000 : 0) +
 				(checksum >> 1) +
-				*(((unsigned char *)tmp_bh->b_data) + i);
+				*(((unsigned char *)bh->b_data) + i);
 			checksum = ((checksum & 1) ? 0x80000000 : 0) +
 				(checksum >> 1) +
-				*(((unsigned char *)tmp_bh->b_data) + (i + 1));
+				*(((unsigned char *)bh->b_data) + (i + 1));
 
 			if (skip) {
 				index += uni;
@@ -671,8 +671,8 @@ static int exfat_load_upcase_table(struct super_block *sb,
 	}
 
 	if (index >= 0xFFFF && utbl_checksum == checksum) {
-		if (tmp_bh)
-			brelse(tmp_bh);
+		if (bh)
+			brelse(bh);
 		return 0;
 	}
 
@@ -682,8 +682,8 @@ static int exfat_load_upcase_table(struct super_block *sb,
 
 	ret = -EINVAL;
 error:
-	if (tmp_bh)
-		brelse(tmp_bh);
+	if (bh)
+		brelse(bh);
 	free_upcase_table(sb);
 	return ret;
 }
@@ -861,7 +861,7 @@ static int __exfat_fill_super(struct super_block *sb)
 	int ret;
 	struct pbr *p_pbr;
 	struct pbr64 *p_bpb;
-	struct buffer_head *tmp_bh = NULL;
+	struct buffer_head *bh;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 
 	ret = exfat_meta_cache_init(sb);
@@ -872,28 +872,28 @@ static int __exfat_fill_super(struct super_block *sb)
 	sb_min_blocksize(sb, 512);
 
 	/* read boot sector */
-	tmp_bh = sb_bread(sb, 0);
-	if (!tmp_bh) {
+	bh = sb_bread(sb, 0);
+	if (!bh) {
 		exfat_msg(sb, KERN_ERR, "unable to read boot sector");
 		ret = -EIO;
 		goto out;
 	}
 
 	/* PRB is read */
-	p_pbr = (struct pbr *) tmp_bh->b_data;
+	p_pbr = (struct pbr *)bh->b_data;
 
 	/* check the validity of PBR */
 	if (le16_to_cpu((p_pbr->signature)) != PBR_SIGNATURE) {
 		exfat_msg(sb, KERN_ERR, "invalid boot record signature");
-		brelse(tmp_bh);
+		brelse(bh);
 		ret = -EINVAL;
 		goto out;
 	}
 
 	/* check logical sector size */
-	p_pbr = exfat_read_pbr_with_logical_sector(sb, &tmp_bh);
+	p_pbr = exfat_read_pbr_with_logical_sector(sb, &bh);
 	if (!p_pbr) {
-		brelse(tmp_bh);
+		brelse(bh);
 		ret = -EIO;
 		goto out;
 	}
@@ -954,7 +954,7 @@ static int __exfat_fill_super(struct super_block *sb)
 	}
 
 free_bh:
-	brelse(tmp_bh);
+	brelse(bh);
 	if (ret) {
 		exfat_msg(sb, KERN_ERR, "failed to mount fs-core");
 		goto out;
