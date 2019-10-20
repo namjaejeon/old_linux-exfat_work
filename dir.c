@@ -1105,7 +1105,6 @@ err_out:
 void exfat_release_dentry_set(struct exfat_entry_set_cache *es)
 {
 	kfree(es);
-	es = NULL;
 }
 
 static int exfat_extract_uni_name_from_name_entry(struct exfat_name_dentry *ep,
