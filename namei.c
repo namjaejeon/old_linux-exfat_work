@@ -1125,7 +1125,7 @@ out:
 
 /* write data into a opened file */
 static int exfat_write_link(struct inode *inode, struct exfat_file_id *fid,
-	void *buffer, unsigned long long count, unsigned long long *wcount)
+	void *buffer, unsigned long long count)
 {
 	int ret = 0;
 	int modified = false, offset, sec_offset;
@@ -1150,11 +1150,8 @@ static int exfat_write_link(struct inode *inode, struct exfat_file_id *fid,
 	if (fid->rwoffset > fid->size)
 		fid->rwoffset = fid->size;
 
-	if (count == 0) {
-		if (wcount)
-			*wcount = 0;
+	if (count == 0)
 		return 0;
-	}
 
 	exfat_set_vol_flags(sb, VOL_DIRTY);
 
@@ -1329,10 +1326,6 @@ static int exfat_write_link(struct inode *inode, struct exfat_file_id *fid,
 	exfat_set_vol_flags(sb, VOL_CLEAN);
 
 err_out:
-	/* set the size of written bytes */
-	if (wcount)
-		*wcount = write_bytes;
-
 	return ret;
 }
 
@@ -1345,7 +1338,6 @@ static int exfat_symlink(struct inode *dir, struct dentry *dentry,
 	loff_t i_pos;
 	int err;
 	unsigned long long len = (unsigned long long) strlen(target);
-	unsigned long long ret;
 
 	/* symlink option check */
 	if (!EXFAT_SB(sb)->options.symlink)
@@ -1357,8 +1349,7 @@ static int exfat_symlink(struct inode *dir, struct dentry *dentry,
 	if (err)
 		goto out;
 
-	err = exfat_write_link(dir, &fid, (char *) target, len, &ret);
-
+	err = exfat_write_link(dir, &fid, (char *) target, len);
 	if (err) {
 		__exfat_remove(dir, &fid);
 		goto out;
