@@ -236,15 +236,15 @@ static int exfat_revalidate_ci(struct dentry *dentry, unsigned int flags)
 }
 
 const struct dentry_operations exfat_dentry_ops = {
-	.d_revalidate   = exfat_revalidate,
-	.d_hash         = exfat_d_hash,
-	.d_compare      = exfat_cmp,
+	.d_revalidate	= exfat_revalidate,
+	.d_hash		= exfat_d_hash,
+	.d_compare	= exfat_cmp,
 };
 
 const struct dentry_operations exfat_ci_dentry_ops = {
-	.d_revalidate   = exfat_revalidate_ci,
-	.d_hash         = exfat_d_hashi,
-	.d_compare      = exfat_cmpi,
+	.d_revalidate	= exfat_revalidate_ci,
+	.d_hash		= exfat_d_hashi,
+	.d_compare	= exfat_cmpi,
 };
 
 /* used only in search empty_slot() */
@@ -2176,13 +2176,13 @@ int exfat_setattr(struct dentry *dentry, struct iattr *attr)
 }
 
 const struct inode_operations exfat_dir_inode_operations = {
-	.create        = exfat_create,
-	.lookup        = exfat_lookup,
-	.unlink        = exfat_unlink,
-	.symlink       = exfat_symlink,
-	.mkdir         = exfat_mkdir,
-	.rmdir         = exfat_rmdir,
-	.rename        = exfat_rename,
-	.setattr       = exfat_setattr,
-	.getattr       = exfat_getattr,
+	.create		= exfat_create,
+	.lookup		= exfat_lookup,
+	.unlink		= exfat_unlink,
+	.symlink	= exfat_symlink,
+	.mkdir		= exfat_mkdir,
+	.rmdir		= exfat_rmdir,
+	.rename		= exfat_rename,
+	.setattr	= exfat_setattr,
+	.getattr	= exfat_getattr,
 };

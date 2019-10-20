@@ -294,10 +294,10 @@ out_unlocked:
 }
 
 const struct file_operations exfat_dir_operations = {
-		.llseek     = generic_file_llseek,
-		.read       = generic_read_dir,
-		.iterate    = exfat_iterate,
-		.fsync      = exfat_file_fsync,
+	.llseek		= generic_file_llseek,
+	.read		= generic_read_dir,
+	.iterate	= exfat_iterate,
+	.fsync		= exfat_file_fsync,
 };
 
 int exfat_create_dir(struct inode *inode, struct exfat_chain *p_dir,
@@ -384,7 +384,7 @@ static int exfat_calc_num_entries(struct exfat_uni_name *p_uniname)
 		return 0;
 
 	/* 1 file entry + 1 stream entry + name entries */
-	return((len-1) / 15 + 3);
+	return((len - 1) / 15 + 3);
 }
 
 /* input  : dir, uni_name
@@ -599,12 +599,12 @@ static void exfat_init_file_entry(struct super_block *sb,
 {
 	struct exfat_timestamp tm, *tp;
 
-	exfat_set_entry_type((struct exfat_dentry *) ep, type);
+	exfat_set_entry_type((struct exfat_dentry *)ep, type);
 
 	tp = tm_now(EXFAT_SB(sb), &tm);
-	exfat_set_entry_time((struct exfat_dentry *) ep, tp, TM_CREATE);
-	exfat_set_entry_time((struct exfat_dentry *) ep, tp, TM_MODIFY);
-	exfat_set_entry_time((struct exfat_dentry *) ep, tp, TM_ACCESS);
+	exfat_set_entry_time((struct exfat_dentry *)ep, tp, TM_CREATE);
+	exfat_set_entry_time((struct exfat_dentry *)ep, tp, TM_MODIFY);
+	exfat_set_entry_time((struct exfat_dentry *)ep, tp, TM_ACCESS);
 	ep->create_time_ms = 0;
 	ep->modify_time_ms = 0;
 	ep->access_time_ms = 0;
@@ -613,7 +613,7 @@ static void exfat_init_file_entry(struct super_block *sb,
 static void exfat_init_strm_entry(struct exfat_strm_dentry *ep,
 	unsigned char flags, unsigned int start_clu, unsigned long long size)
 {
-	exfat_set_entry_type((struct exfat_dentry *) ep, TYPE_STREAM);
+	exfat_set_entry_type((struct exfat_dentry *)ep, TYPE_STREAM);
 	ep->flags = flags;
 	ep->start_clu = cpu_to_le32(start_clu);
 	ep->valid_size = cpu_to_le64(size);
@@ -625,7 +625,7 @@ static void exfat_init_name_entry(struct exfat_name_dentry *ep,
 {
 	int i;
 
-	exfat_set_entry_type((struct exfat_dentry *) ep, TYPE_EXTEND);
+	exfat_set_entry_type((struct exfat_dentry *)ep, TYPE_EXTEND);
 	ep->flags = 0x0;
 
 	for (i = 0; i < 15; i++) {
@@ -694,7 +694,7 @@ int update_dir_chksum(struct super_block *sb, struct exfat_chain *p_dir,
 			CS_DIR_ENTRY);
 
 	for (i = 1; i < num_entries; i++) {
-		ep = exfat_get_dentry(sb, p_dir, entry+i, NULL);
+		ep = exfat_get_dentry(sb, p_dir, entry + i, NULL);
 		if (!ep)
 			goto out_unlock;
 
@@ -760,7 +760,7 @@ int exfat_delete_dir_entry(struct super_block *sb, struct exfat_chain *p_dir,
 	struct exfat_dentry *ep;
 
 	for (i = order; i < num_entries; i++) {
-		ep = exfat_get_dentry(sb, p_dir, entry+i, &sector);
+		ep = exfat_get_dentry(sb, p_dir, entry + i, &sector);
 		if (!ep)
 			return -EIO;
 
