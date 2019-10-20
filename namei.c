@@ -787,7 +787,7 @@ static int exfat_d_anon_disconn(struct dentry *dentry)
 
 /* read data from a opened file */
 static int exfat_read_link(struct inode *inode, struct exfat_file_id *fid,
-	void *buffer, unsigned long long count, unsigned long long *rcount)
+	void *buffer, unsigned long long count)
 {
 	int ret = 0;
 	int offset, sec_offset;
@@ -808,11 +808,8 @@ static int exfat_read_link(struct inode *inode, struct exfat_file_id *fid,
 	if (count > (fid->size - fid->rwoffset))
 		count = fid->size - fid->rwoffset;
 
-	if (count == 0) {
-		if (rcount)
-			*rcount = 0;
+	if (count == 0)
 		return 0;
-	}
 
 	read_bytes = 0;
 
@@ -876,11 +873,6 @@ static int exfat_read_link(struct inode *inode, struct exfat_file_id *fid,
 
 err_out:
 	brelse(bh);
-
-	/* set the size of read bytes */
-	if (rcount != NULL)
-		*rcount = read_bytes;
-
 	return ret;
 }
 
@@ -893,7 +885,6 @@ static struct dentry *exfat_lookup(struct inode *dir, struct dentry *dentry,
 	int err;
 	struct exfat_file_id fid;
 	loff_t i_pos;
-	unsigned long long ret;
 	mode_t i_mode;
 
 	mutex_lock(&EXFAT_SB(sb)->s_lock);
@@ -922,7 +913,7 @@ static struct dentry *exfat_lookup(struct inode *dir, struct dentry *dentry,
 			goto error;
 		}
 		exfat_read_link(dir, &fid, EXFAT_I(inode)->target,
-			i_size_read(inode), &ret);
+			i_size_read(inode));
 		*(EXFAT_I(inode)->target + i_size_read(inode)) = '\0';
 	}
 
