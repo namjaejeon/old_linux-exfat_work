@@ -870,8 +870,7 @@ static int exfat_walk_fat_chain(struct super_block *sb,
 		}
 	}
 
-	if (clu)
-		*clu = cur_clu;
+	*clu = cur_clu;
 	return 0;
 }
 
