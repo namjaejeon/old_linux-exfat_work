@@ -794,7 +794,7 @@ static int exfat_read_link(struct inode *inode, struct exfat_file_id *fid,
 	unsigned int clu_offset;
 	unsigned int clu;
 	unsigned long long logsector, oneblkread, read_bytes;
-	struct buffer_head *tmp_bh = NULL;
+	struct buffer_head *bh = NULL;
 	struct super_block *sb = inode->i_sb;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 
@@ -856,18 +856,18 @@ static int exfat_read_link(struct inode *inode, struct exfat_file_id *fid,
 			oneblkread = count;
 
 		if ((offset == 0) && (oneblkread == sb->s_blocksize)) {
-			tmp_bh = sb_bread(sb, logsector);
-			if (!tmp_bh)
+			bh = sb_bread(sb, logsector);
+			if (!bh)
 				goto err_out;
-			memcpy(((char *) buffer)+read_bytes,
-				((char *) tmp_bh->b_data), (int) oneblkread);
+			memcpy(((char *)buffer)+read_bytes,
+				((char *)bh->b_data), (int)oneblkread);
 		} else {
-			tmp_bh = sb_bread(sb, logsector);
-			if (!tmp_bh)
+			bh = sb_bread(sb, logsector);
+			if (!bh)
 				goto err_out;
-			memcpy(((char *) buffer)+read_bytes,
-				((char *) tmp_bh->b_data)+offset,
-				(int) oneblkread);
+			memcpy(((char *)buffer)+read_bytes,
+				((char *)bh->b_data)+offset,
+				(int)oneblkread);
 		}
 		count -= oneblkread;
 		read_bytes += oneblkread;
@@ -875,7 +875,7 @@ static int exfat_read_link(struct inode *inode, struct exfat_file_id *fid,
 	}
 
 err_out:
-	brelse(tmp_bh);
+	brelse(bh);
 
 	/* set the size of read bytes */
 	if (rcount != NULL)
@@ -1136,7 +1136,7 @@ static int exfat_write_link(struct inode *inode, struct exfat_file_id *fid,
 	struct exfat_timestamp tm;
 	struct exfat_dentry *ep, *ep2;
 	struct exfat_entry_set_cache *es = NULL;
-	struct buffer_head *tmp_bh = NULL;
+	struct buffer_head *bh = NULL;
 	struct super_block *sb = inode->i_sb;
 	unsigned int blksize = (unsigned int)sb->s_blocksize;
 	unsigned int blksize_mask = (unsigned int)(sb->s_blocksize-1);
@@ -1253,31 +1253,31 @@ static int exfat_write_link(struct inode *inode, struct exfat_file_id *fid,
 			oneblkwrite = count;
 
 		if ((offset == 0) && (oneblkwrite == blksize)) {
-			tmp_bh = sb_getblk(sb, logsector);
-			if (!tmp_bh)
+			bh = sb_getblk(sb, logsector);
+			if (!bh)
 				goto err_out;
 
-			memcpy(((char *)tmp_bh->b_data),
-					((char *)buffer)+write_bytes,
+			memcpy(((char *)bh->b_data),
+					((char *)buffer) + write_bytes,
 					(int)oneblkwrite);
 		} else {
 			if ((offset > 0) ||
 				((fid->rwoffset+oneblkwrite) < fid->size)) {
-				tmp_bh = sb_bread(sb, logsector);
-				if (tmp_bh)
+				bh = sb_bread(sb, logsector);
+				if (bh)
 					goto err_out;
 			} else {
-				tmp_bh = sb_getblk(sb, logsector);
-				if (!tmp_bh)
+				bh = sb_getblk(sb, logsector);
+				if (!bh)
 					goto err_out;
 			}
 
-			memcpy(((char *) tmp_bh->b_data)+offset,
-				((char *) buffer)+write_bytes,
-				(int) oneblkwrite);
+			memcpy(((char *)bh->b_data) + offset,
+				((char *)buffer) + write_bytes,
+				(int)oneblkwrite);
 		}
-		set_buffer_uptodate(tmp_bh);
-		mark_buffer_dirty(tmp_bh);
+		set_buffer_uptodate(bh);
+		mark_buffer_dirty(bh);
 
 		count -= oneblkwrite;
 		write_bytes += oneblkwrite;
@@ -1291,7 +1291,7 @@ static int exfat_write_link(struct inode *inode, struct exfat_file_id *fid,
 		}
 	}
 
-	brelse(tmp_bh);
+	brelse(bh);
 
 	/* (3) update the direcoty entry */
 	/* get_entry_(set_)in_dir shoulb be check DIR_DELETED flag. */

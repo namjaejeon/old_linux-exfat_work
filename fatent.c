@@ -248,7 +248,7 @@ int exfat_clear_cluster(struct inode *inode, unsigned int clu)
 	struct super_block *sb = inode->i_sb;
 	unsigned int sect_size = (unsigned int)sb->s_blocksize;
 	int ret = 0;
-	struct buffer_head *tmp_bh = NULL;
+	struct buffer_head *bh = NULL;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 
 	s = CLUS_TO_SECT(sbi, clu);
@@ -265,16 +265,16 @@ int exfat_clear_cluster(struct inode *inode, unsigned int clu)
 	 * if it doesn't have DIRSYNC or exfat_zeroed_cluster() returned -EAGAIN
 	 */
 	for ( ; s < n; s++) {
-		tmp_bh = sb_getblk(sb, s);
-		if (!tmp_bh)
+		bh = sb_getblk(sb, s);
+		if (!bh)
 			goto out;
 
-		memset((unsigned char *)tmp_bh->b_data, 0x0, sect_size);
-		set_buffer_uptodate(tmp_bh);
-		mark_buffer_dirty(tmp_bh);
+		memset((unsigned char *)bh->b_data, 0x0, sect_size);
+		set_buffer_uptodate(bh);
+		mark_buffer_dirty(bh);
 	}
 out:
-	brelse(tmp_bh);
+	brelse(bh);
 	return ret;
 }
 
