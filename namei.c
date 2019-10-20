@@ -612,7 +612,7 @@ static inline int exfat_resolve_path_for_lookup(struct inode *inode,
 static int __exfat_create(struct inode *inode, unsigned char *path,
 	unsigned char mode, struct exfat_file_id *fid)
 {
-	int ret/*, dentry*/;
+	int ret;
 	struct exfat_chain dir;
 	struct exfat_uni_name uni_name;
 	struct super_block *sb = inode->i_sb;
