@@ -455,7 +455,7 @@ unsigned int exfat_get_entry_type(struct exfat_dentry *p_entry)
 static void exfat_set_entry_type(struct exfat_dentry *p_entry,
 		unsigned int type)
 {
-	struct exfat_file_dentry *ep = (struct exfat_file_dentry *) p_entry;
+	struct exfat_file_dentry *ep = (struct exfat_file_dentry *)p_entry;
 
 	if (type == TYPE_UNUSED) {
 		ep->type = EXFAT_UNUSED;
@@ -1224,7 +1224,7 @@ rewind:
 				if ((type == TYPE_ALL) ||
 					(type == entry_type)) {
 					file_ep =
-						(struct exfat_file_dentry *) ep;
+						(struct exfat_file_dentry *)ep;
 					num_ext = file_ep->num_ext;
 					step = DIRENT_STEP_STRM;
 				}
@@ -1237,7 +1237,7 @@ rewind:
 					continue;
 				}
 				step = DIRENT_STEP_FILE;
-				strm_ep = (struct exfat_strm_dentry *) ep;
+				strm_ep = (struct exfat_strm_dentry *)ep;
 				if ((p_uniname->name_hash ==
 					le16_to_cpu(strm_ep->name_hash)) &&
 					(p_uniname->name_len ==
@@ -1254,7 +1254,7 @@ rewind:
 					step = DIRENT_STEP_FILE;
 					continue;
 				}
-				name_ep = (struct exfat_name_dentry *) ep;
+				name_ep = (struct exfat_name_dentry *)ep;
 
 				if ((++order) == 2)
 					uniname = p_uniname->name;
