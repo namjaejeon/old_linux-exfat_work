@@ -1566,7 +1566,7 @@ static int exfat_rename_file(struct inode *inode, struct exfat_chain *p_dir,
 	int oldentry, struct exfat_uni_name *p_uniname,
 	struct exfat_file_id *fid)
 {
-	int ret, newentry = -1, num_old_entries, num_new_entries;
+	int ret, num_old_entries, num_new_entries;
 	unsigned long long sector_old, sector_new;
 	struct exfat_dos_name dos_name;
 	struct exfat_dentry *epold, *epnew;
@@ -1594,6 +1594,8 @@ static int exfat_rename_file(struct inode *inode, struct exfat_chain *p_dir,
 	}
 
 	if (num_old_entries < num_new_entries) {
+		int newentry;
+
 		newentry =
 			exfat_find_empty_entry(inode, p_dir, num_new_entries);
 		if (newentry < 0) {
