@@ -38,7 +38,7 @@ static int exfat_readdir(struct inode *inode, struct exfat_dir_entry *dir_entry)
 	struct exfat_dentry *ep;
 	struct super_block *sb = inode->i_sb;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
-	struct exfat_file_id *fid = &(EXFAT_I(inode)->fid);
+	struct exfat_file_id *fid = EXFAT_I(inode)->fid;
 	unsigned int dentry = (unsigned int)(fid->rwoffset & 0xFFFFFFFF);
 
 	/* check if the given file ID is opened */
@@ -199,6 +199,7 @@ static int exfat_iterate(struct file *filp, struct dir_context *ctx)
 	struct super_block *sb = inode->i_sb;
 	struct exfat_dir_entry de;
 	struct exfat_dentry_namebuf *nb = &(de.namebuf);
+	struct exfat_file_id *fid = EXFAT_I(inode)->fid;
 	unsigned long inum;
 	loff_t cpos;
 	int err = 0, fake_offset = 0;
@@ -225,10 +226,10 @@ static int exfat_iterate(struct file *filp, struct dir_context *ctx)
 	if (err)
 		goto out;
 get_new:
-	EXFAT_I(inode)->fid.size = i_size_read(inode);
-	EXFAT_I(inode)->fid.rwoffset = cpos >> DENTRY_SIZE_BITS;
+	fid->size = i_size_read(inode);
+	fid->rwoffset = cpos >> DENTRY_SIZE_BITS;
 
-	if (cpos >= EXFAT_I(inode)->fid.size)
+	if (cpos >= fid->size)
 		goto end_of_dir;
 
 	err = exfat_readdir(inode, &de);
@@ -244,7 +245,7 @@ get_new:
 		goto end_of_dir;
 	}
 
-	cpos = EXFAT_I(inode)->fid.rwoffset << DENTRY_SIZE_BITS;
+	cpos = fid->rwoffset << DENTRY_SIZE_BITS;
 
 	if (!nb->lfn[0])
 		goto end_of_dir;
@@ -254,8 +255,8 @@ get_new:
 	} else if (!memcmp(nb->sfn, DOS_PAR_DIR_NAME, DOS_NAME_LENGTH)) {
 		inum = parent_ino(filp->f_path.dentry);
 	} else {
-		loff_t i_pos = ((loff_t) EXFAT_I(inode)->fid.start_clu << 32) |
-			((EXFAT_I(inode)->fid.rwoffset - 1) & 0xffffffff);
+		loff_t i_pos = ((loff_t)fid->start_clu << 32) |
+			((fid->rwoffset - 1) & 0xffffffff);
 		struct inode *tmp = exfat_iget(sb, i_pos);
 
 		if (tmp) {
@@ -1188,27 +1189,27 @@ rewind:
 				step = DIRENT_STEP_FILE;
 
 				num_empty++;
-				if (candi_empty.eidx == EXFAT_HINT_NONE) {
-					if (num_empty == 1) {
-						candi_empty.cur.dir = clu.dir;
-						candi_empty.cur.size = clu.size;
-						candi_empty.cur.flags =
-							clu.flags;
-					}
+				if (candi_empty.eidx == EXFAT_HINT_NONE &&
+						num_empty == 1) {
+					candi_empty.cur.dir = clu.dir;
+					candi_empty.cur.size = clu.size;
+					candi_empty.cur.flags = clu.flags;
+				}
 
-					if (num_empty >= num_entries) {
-						candi_empty.eidx = dentry -
-							(num_empty - 1);
-						WARN_ON(candi_empty.eidx < 0);
-						candi_empty.count = num_empty;
+				if (candi_empty.eidx == EXFAT_HINT_NONE &&
+						num_empty >= num_entries) {
+					candi_empty.eidx =
+						dentry - (num_empty - 1);
+					WARN_ON(candi_empty.eidx < 0);
+					candi_empty.count = num_empty;
 
-						if (fid->hint_femp.eidx == EXFAT_HINT_NONE ||
-							(candi_empty.eidx <=
+					if (fid->hint_femp.eidx ==
+							EXFAT_HINT_NONE ||
+						(candi_empty.eidx <=
 							 fid->hint_femp.eidx)) {
-								memcpy(&fid->hint_femp,
-									&candi_empty,
-									sizeof(struct exfat_hint_femp));
-						}
+						memcpy(&fid->hint_femp,
+							&candi_empty,
+							sizeof(struct exfat_hint_femp));
 					}
 				}
 

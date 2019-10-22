@@ -326,7 +326,7 @@ struct exfat_file_id {
  * EXFAT file system inode in-memory data
  */
 struct exfat_inode_info {
-	struct exfat_file_id fid;
+	struct exfat_file_id *fid;
 
 	char  *target;
 	/* NOTE: i_size_ondisk is 64bits, so must hold ->inode_lock to access */
@@ -392,7 +392,7 @@ static inline mode_t exfat_make_mode(struct exfat_sb_info *sbi,
 /* Return the FAT attribute byte for this inode */
 static inline unsigned int exfat_make_attr(struct inode *inode)
 {
-	unsigned int attrs = EXFAT_I(inode)->fid.attr;
+	unsigned int attrs = EXFAT_I(inode)->fid->attr;
 
 	if (S_ISDIR(inode->i_mode))
 		attrs |= ATTR_SUBDIR;
@@ -404,9 +404,9 @@ static inline unsigned int exfat_make_attr(struct inode *inode)
 static inline void exfat_save_attr(struct inode *inode, unsigned int attr)
 {
 	if (exfat_mode_can_hold_ro(inode))
-		EXFAT_I(inode)->fid.attr = attr & ATTR_RWMASK;
+		EXFAT_I(inode)->fid->attr = attr & ATTR_RWMASK;
 	else
-		EXFAT_I(inode)->fid.attr = attr & (ATTR_RWMASK | ATTR_READONLY);
+		EXFAT_I(inode)->fid->attr = attr & (ATTR_RWMASK | ATTR_READONLY);
 }
 
 /* super.c */
@@ -546,7 +546,7 @@ extern const struct inode_operations exfat_symlink_inode_operations;
 extern const struct inode_operations exfat_file_inode_operations;
 extern int exfat_sync_inode(struct inode *inode);
 extern struct inode *exfat_build_inode(struct super_block *sb,
-	const struct exfat_file_id *fid, loff_t i_pos);
+	struct exfat_file_id *fid, loff_t i_pos);
 extern void exfat_attach(struct inode *inode, loff_t i_pos);
 extern void exfat_detach(struct inode *inode);
 extern void exfat_truncate(struct inode *inode, loff_t old_size);

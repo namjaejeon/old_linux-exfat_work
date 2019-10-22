@@ -10,7 +10,7 @@ static int exfat_file_release(struct inode *inode, struct file *filp)
 {
 	struct super_block *sb = inode->i_sb;
 
-	EXFAT_I(inode)->fid.size = i_size_read(inode);
+	EXFAT_I(inode)->fid->size = i_size_read(inode);
 	if (exfat_set_vol_flags(sb, VOL_CLEAN))
 		return -EIO;
 	return 0;

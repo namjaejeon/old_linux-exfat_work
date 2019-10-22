@@ -33,7 +33,7 @@ int __exfat_truncate(struct inode *inode, unsigned long long old_size,
 	struct exfat_dentry *ep, *ep2;
 	struct super_block *sb = inode->i_sb;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
-	struct exfat_file_id *fid = &(EXFAT_I(inode)->fid);
+	struct exfat_file_id *fid = EXFAT_I(inode)->fid;
 	struct exfat_entry_set_cache *es = NULL;
 	int evict = (fid->dir.dir == DIR_DELETED) ? 1 : 0;
 
@@ -194,7 +194,7 @@ static int __exfat_write_inode(struct inode *inode, int sync)
 	struct exfat_entry_set_cache *es = NULL;
 	struct super_block *sb = inode->i_sb;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
-	struct exfat_file_id *fid = &(EXFAT_I(inode)->fid);
+	struct exfat_file_id *fid = EXFAT_I(inode)->fid;
 	unsigned char is_dir = (fid->type == TYPE_DIR) ? 1 : 0;
 	struct exfat_dir_entry info;
 
@@ -284,7 +284,7 @@ void exfat_truncate(struct inode *inode, loff_t old_size)
 	int err;
 
 	mutex_lock(&sbi->s_lock);
-	if (EXFAT_I(inode)->fid.start_clu == 0) {
+	if (EXFAT_I(inode)->fid->start_clu == 0) {
 		/*
 		 * Empty start_clu != ~0 (not allocated)
 		 */
@@ -334,7 +334,7 @@ static int __exfat_map_clus(struct inode *inode, unsigned int clu_offset,
 	struct exfat_entry_set_cache *es = NULL;
 	struct super_block *sb = inode->i_sb;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
-	struct exfat_file_id *fid = &(EXFAT_I(inode)->fid);
+	struct exfat_file_id *fid = EXFAT_I(inode)->fid;
 	unsigned int local_clu_offset = clu_offset;
 	int reserved_clusters = sbi->reserved_clusters;
 	unsigned int num_to_be_allocated = 0, num_clusters = 0;
@@ -526,7 +526,7 @@ static int exfat_bmap(struct inode *inode, sector_t sector, sector_t *phys,
 	/* Is this block already allocated? */
 	clu_offset = sector >> sbi->sect_per_clus_bits;  /* cluster offset */
 
-	EXFAT_I(inode)->fid.size = i_size_read(inode);
+	EXFAT_I(inode)->fid->size = i_size_read(inode);
 
 	err = __exfat_map_clus(inode, clu_offset, &cluster,
 		*create & BMAP_ADD_CLUSTER);
@@ -686,7 +686,7 @@ static int exfat_write_end(struct file *file, struct address_space *mapping,
 		struct page *pagep, void *fsdata)
 {
 	struct inode *inode = mapping->host;
-	struct exfat_file_id *fid = &(EXFAT_I(inode)->fid);
+	struct exfat_file_id *fid = EXFAT_I(inode)->fid;
 	int err;
 
 	err = generic_write_end(file, mapping, pos, len, copied, pagep, fsdata);
@@ -935,7 +935,7 @@ int exfat_read_inode(struct inode *inode, struct exfat_dir_entry *info)
 	struct exfat_dentry *ep, *ep2;
 	struct super_block *sb = inode->i_sb;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
-	struct exfat_file_id *fid = &(EXFAT_I(inode)->fid);
+	struct exfat_file_id *fid = EXFAT_I(inode)->fid;
 	struct exfat_entry_set_cache *es = NULL;
 	unsigned char is_dir = (fid->type == TYPE_DIR) ? 1 : 0;
 
@@ -1024,15 +1024,13 @@ int exfat_read_inode(struct inode *inode, struct exfat_dir_entry *info)
 }
 
 /* doesn't deal with root inode */
-static int exfat_fill_inode(struct inode *inode,
-		const struct exfat_file_id *fid)
+static int exfat_fill_inode(struct inode *inode, struct exfat_file_id *fid)
 {
 	struct exfat_sb_info *sbi = EXFAT_SB(inode->i_sb);
 	struct exfat_dir_entry info;
 	unsigned long long size = fid->size;
 
-	memcpy(&(EXFAT_I(inode)->fid), fid, sizeof(struct exfat_file_id));
-
+	EXFAT_I(inode)->fid = fid;
 	EXFAT_I(inode)->i_pos = 0;
 	EXFAT_I(inode)->target = NULL;
 	inode->i_uid = sbi->options.fs_uid;
@@ -1093,7 +1091,7 @@ static int exfat_fill_inode(struct inode *inode,
 }
 
 struct inode *exfat_build_inode(struct super_block *sb,
-		const struct exfat_file_id *fid, loff_t i_pos)
+		struct exfat_file_id *fid, loff_t i_pos)
 {
 	struct inode *inode;
 	int err;
@@ -1128,7 +1126,7 @@ void exfat_evict_inode(struct inode *inode)
 		loff_t old_size = i_size_read(inode);
 
 		i_size_write(inode, 0);
-		EXFAT_I(inode)->fid.size = old_size;
+		EXFAT_I(inode)->fid->size = old_size;
 		mutex_lock(&EXFAT_SB(inode->i_sb)->s_lock);
 		__exfat_truncate(inode, old_size, 0);
 		mutex_unlock(&EXFAT_SB(inode->i_sb)->s_lock);
