@@ -888,9 +888,9 @@ static struct dentry *exfat_lookup(struct inode *dir, struct dentry *dentry,
 	mode_t i_mode;
 
 	fid = kmalloc(sizeof(struct exfat_file_id), GFP_KERNEL);
-	if (!fid)
-		return -ENOMEM;
-
+	if (!fid) {
+		return ERR_PTR(-ENOMEM);
+	}
 	mutex_lock(&EXFAT_SB(sb)->s_lock);
 	err = exfat_find(dir, &dentry->d_name, fid);
 	if (err) {

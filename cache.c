@@ -789,20 +789,15 @@ int exfat_release_dcache(struct super_block *sb, unsigned long long sec)
 	return 0;
 }
 
-int exfat_release_dcache_cluster(struct super_block *sb, unsigned int clu)
+void exfat_release_dcache_cluster(struct super_block *sb, unsigned int clu)
 {
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 	unsigned long long sector;
-	int i, ret = 0;
+	int i;
 
 	sector = CLUS_TO_SECT(sbi, clu);
-	for (i = 0; i < sbi->sect_per_clus; i++) {
-		ret = exfat_release_dcache(sb, sector + i);
-		if (ret)
-			break;
-	}
-
-	return ret;
+	for (i = 0; i < sbi->sect_per_clus; i++)
+		exfat_release_dcache(sb, sector + i);
 }
 
 void exfat_release_caches(struct exfat_meta_cache *lru_list)
