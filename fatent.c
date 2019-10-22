@@ -137,7 +137,7 @@ int exfat_chain_cont_cluster(struct super_block *sb, unsigned int chain,
 		return 0;
 
 	while (len > 1) {
-		if (exfat_ent_set(sb, chain, chain+1))
+		if (exfat_ent_set(sb, chain, chain + 1))
 			return -EIO;
 		chain++;
 		len--;

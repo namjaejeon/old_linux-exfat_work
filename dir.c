@@ -84,7 +84,7 @@ static int exfat_readdir(struct inode *inode, struct exfat_dir_entry *dir_entry)
 	}
 
 	while (!IS_CLUS_EOF(clu.dir)) {
-		i = dentry & (dentries_per_clu-1);
+		i = dentry & (dentries_per_clu - 1);
 
 		for ( ; i < dentries_per_clu; i++, dentry++) {
 			ep = exfat_get_dentry(sb, &clu, i, &sector);
@@ -135,7 +135,7 @@ static int exfat_readdir(struct inode *inode, struct exfat_dir_entry *dir_entry)
 				dir_entry->namebuf.lfnbuf_len);
 			exfat_unlock_dcache(sb, sector);
 
-			ep = exfat_get_dentry(sb, &clu, i+1, NULL);
+			ep = exfat_get_dentry(sb, &clu, i + 1, NULL);
 			if (!ep)
 				return -EIO;
 			dir_entry->size = exfat_get_entry_size(ep);
@@ -237,7 +237,7 @@ get_new:
 		// move cpos to next sector position (should be aligned)
 		if (err == -EIO) {
 			cpos += 1 << (sb->s_blocksize_bits);
-			cpos &= ~((unsigned int)sb->s_blocksize-1);
+			cpos &= ~((unsigned int)sb->s_blocksize - 1);
 		}
 
 		err = -EIO;
@@ -255,7 +255,7 @@ get_new:
 		inum = parent_ino(filp->f_path.dentry);
 	} else {
 		loff_t i_pos = ((loff_t) EXFAT_I(inode)->fid.start_clu << 32) |
-			((EXFAT_I(inode)->fid.rwoffset-1) & 0xffffffff);
+			((EXFAT_I(inode)->fid.rwoffset - 1) & 0xffffffff);
 		struct inode *tmp = exfat_iget(sb, i_pos);
 
 		if (tmp) {
@@ -1326,7 +1326,7 @@ not_found:
 
 found:
 	/* next dentry we'll find is out of this cluster */
-	if (!((dentry + 1) & (dentries_per_clu-1))) {
+	if (!((dentry + 1) & (dentries_per_clu - 1))) {
 		int ret = 0;
 
 		if (clu.flags == 0x03) {

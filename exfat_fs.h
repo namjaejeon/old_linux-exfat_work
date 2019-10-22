@@ -166,7 +166,7 @@ struct exfat_dos_name {
 
 /* unicode name structure */
 struct exfat_uni_name {
-	unsigned short name[MAX_NAME_LENGTH+3];	/* +3 for null and for converting */
+	unsigned short name[MAX_NAME_LENGTH + 3];	/* +3 for null and for converting */
 	unsigned short name_hash;
 	unsigned char name_len;
 };

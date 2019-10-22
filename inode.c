@@ -126,7 +126,7 @@ int __exfat_truncate(struct inode *inode, unsigned long long old_size,
 			ES_ALL_ENTRIES, &ep);
 		if (!es)
 			return -EIO;
-		ep2 = ep+1;
+		ep2 = ep + 1;
 
 		exfat_set_entry_time(ep, tm_now(EXFAT_SB(sb), &tm), TM_MODIFY);
 		exfat_set_entry_attr(ep, fid->attr);
@@ -343,7 +343,7 @@ static int __exfat_map_clus(struct inode *inode, unsigned int clu_offset,
 
 	if (EXFAT_I(inode)->i_size_ondisk > 0)
 		num_clusters = (unsigned int)
-			((EXFAT_I(inode)->i_size_ondisk-1) >>
+			((EXFAT_I(inode)->i_size_ondisk - 1) >>
 				sbi->cluster_size_bits) + 1;
 
 	if (clu_offset >= num_clusters)

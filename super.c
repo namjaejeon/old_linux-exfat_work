@@ -586,7 +586,7 @@ static bool is_exfat(struct pbr *pbr)
 	int i = 53;
 
 	do {
-		if (pbr->bpb.f64.res_zero[i-1])
+		if (pbr->bpb.f64.res_zero[i - 1])
 			break;
 	} while (--i);
 	return i ? false : true;
