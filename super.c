@@ -493,7 +493,7 @@ static int exfat_read_root(struct inode *inode)
 	EXFAT_I(inode)->fid.hint_bmap.off = CLUS_EOF;
 	EXFAT_I(inode)->fid.hint_stat.eidx = 0;
 	EXFAT_I(inode)->fid.hint_stat.clu = sbi->root_dir;
-	EXFAT_I(inode)->fid.hint_femp.eidx = -1;
+	EXFAT_I(inode)->fid.hint_femp.eidx = EXFAT_HINT_NONE;
 
 	EXFAT_I(inode)->target = NULL;
 

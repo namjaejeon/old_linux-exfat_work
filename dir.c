@@ -370,7 +370,7 @@ int exfat_create_dir(struct inode *inode, struct exfat_chain *p_dir,
 	fid->version = 0;
 	fid->hint_stat.eidx = 0;
 	fid->hint_stat.clu = fid->start_clu;
-	fid->hint_femp.eidx = -1;
+	fid->hint_femp.eidx = EXFAT_HINT_NONE;
 
 	return 0;
 }
@@ -1167,7 +1167,7 @@ int exfat_find_dir_entry(struct super_block *sb, struct exfat_file_id *fid,
 		end_eidx = dentry;
 	}
 
-	candi_empty.eidx = -1;
+	candi_empty.eidx = EXFAT_HINT_NONE;
 rewind:
 	order = 0;
 	step = DIRENT_STEP_FILE;
@@ -1188,7 +1188,7 @@ rewind:
 				step = DIRENT_STEP_FILE;
 
 				num_empty++;
-				if (candi_empty.eidx == -1) {
+				if (candi_empty.eidx == EXFAT_HINT_NONE) {
 					if (num_empty == 1) {
 						candi_empty.cur.dir = clu.dir;
 						candi_empty.cur.size = clu.size;
@@ -1202,7 +1202,7 @@ rewind:
 						WARN_ON(candi_empty.eidx < 0);
 						candi_empty.count = num_empty;
 
-						if (fid->hint_femp.eidx == -1 ||
+						if (fid->hint_femp.eidx == EXFAT_HINT_NONE ||
 							(candi_empty.eidx <=
 							 fid->hint_femp.eidx)) {
 								memcpy(&fid->hint_femp,
@@ -1218,7 +1218,7 @@ rewind:
 			}
 
 			num_empty = 0;
-			candi_empty.eidx = -1;
+			candi_empty.eidx = EXFAT_HINT_NONE;
 
 			if ((entry_type == TYPE_FILE) ||
 				(entry_type == TYPE_DIR)) {
@@ -1315,7 +1315,7 @@ not_found:
 		clu.dir = p_dir->dir;
 		/* reset empty hint */
 		num_empty = 0;
-		candi_empty.eidx = -1;
+		candi_empty.eidx = EXFAT_HINT_NONE;
 		goto rewind;
 	}
 

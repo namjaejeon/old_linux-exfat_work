@@ -108,6 +108,8 @@
 #define BUF_CACHE_SIZE		256
 #define BUF_CACHE_HASH_SIZE	64
 
+#define EXFAT_HINT_NONE		-1
+
 struct exfat_dos_dentry {
 	__u8 name[DOS_NAME_LENGTH];  /* 11 chars */
 	__u8 attr;

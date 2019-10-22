@@ -171,7 +171,7 @@ int __exfat_truncate(struct inode *inode, unsigned long long old_size,
 	/* hint_stat will be used if this is directory. */
 	fid->hint_stat.eidx = 0;
 	fid->hint_stat.clu = fid->start_clu;
-	fid->hint_femp.eidx = -1;
+	fid->hint_femp.eidx = EXFAT_HINT_NONE;
 
 	/* free the clusters */
 	if (exfat_free_cluster(sb, &clu, evict))

@@ -264,9 +264,7 @@ static int exfat_search_empty_slot(struct super_block *sb,
 
 	dentries_per_clu = sbi->dentries_per_clu;
 
-	WARN_ON(-1 > hint_femp->eidx);
-
-	if (hint_femp->eidx != -1) {
+	if (hint_femp->eidx != EXFAT_HINT_NONE) {
 		clu.dir = hint_femp->cur.dir;
 		clu.size = hint_femp->cur.size;
 		clu.flags = hint_femp->cur.flags;
@@ -274,7 +272,7 @@ static int exfat_search_empty_slot(struct super_block *sb,
 		dentry = hint_femp->eidx;
 
 		if (num_entries <= hint_femp->count) {
-			hint_femp->eidx = -1;
+			hint_femp->eidx = EXFAT_HINT_NONE;
 			return dentry;
 		}
 	} else {
@@ -297,7 +295,7 @@ static int exfat_search_empty_slot(struct super_block *sb,
 
 			if ((type == TYPE_UNUSED) || (type == TYPE_DELETED)) {
 				num_empty++;
-				if (hint_femp->eidx == -1) {
+				if (hint_femp->eidx == EXFAT_HINT_NONE) {
 					hint_femp->eidx = dentry;
 					hint_femp->count = CNT_UNUSED_NOHIT;
 
@@ -311,7 +309,7 @@ static int exfat_search_empty_slot(struct super_block *sb,
 					hint_femp->count = CNT_UNUSED_HIT;
 				}
 			} else {
-				if ((hint_femp->eidx != -1) &&
+				if ((hint_femp->eidx != EXFAT_HINT_NONE) &&
 					(hint_femp->count == CNT_UNUSED_HIT)) {
 					/* unused empty group means
 					 * an empty group which includes
@@ -325,12 +323,12 @@ static int exfat_search_empty_slot(struct super_block *sb,
 				}
 
 				num_empty = 0;
-				hint_femp->eidx = -1;
+				hint_femp->eidx = EXFAT_HINT_NONE;
 			}
 
 			if (num_empty >= num_entries) {
 				/* found and invalidate hint_femp */
-				hint_femp->eidx = -1;
+				hint_femp->eidx = EXFAT_HINT_NONE;
 				return (dentry - (num_entries - 1));
 			}
 		}
@@ -378,14 +376,12 @@ int exfat_find_empty_entry(struct inode *inode, struct exfat_chain *p_dir,
 	struct exfat_file_id *fid = &(EXFAT_I(inode)->fid);
 	struct exfat_hint_femp hint_femp;
 
-	hint_femp.eidx = -1;
+	hint_femp.eidx = EXFAT_HINT_NONE;
 
-	WARN_ON(-1 > fid->hint_femp.eidx);
-
-	if (fid->hint_femp.eidx != -1) {
+	if (fid->hint_femp.eidx != EXFAT_HINT_NONE) {
 		memcpy(&hint_femp, &fid->hint_femp,
 				sizeof(struct exfat_hint_femp));
-		fid->hint_femp.eidx = -1;
+		fid->hint_femp.eidx = EXFAT_HINT_NONE;
 	}
 
 	while ((dentry = exfat_search_empty_slot(sb, &hint_femp, p_dir,
@@ -437,7 +433,7 @@ int exfat_find_empty_entry(struct inode *inode, struct exfat_chain *p_dir,
 			if (exfat_ent_set(sb, last_clu, clu.dir))
 				return -EIO;
 
-		if (hint_femp.eidx == -1) {
+		if (hint_femp.eidx == EXFAT_HINT_NONE) {
 			/* the special case that new dentry
 			 * should be allocated from the start of new cluster
 			 */
@@ -531,7 +527,7 @@ static int exfat_create_file(struct inode *inode, struct exfat_chain *p_dir,
 	fid->version = 0;
 	fid->hint_stat.eidx = 0;
 	fid->hint_stat.clu = fid->start_clu;
-	fid->hint_femp.eidx = -1;
+	fid->hint_femp.eidx = EXFAT_HINT_NONE;
 
 	return 0;
 }
@@ -717,7 +713,7 @@ static int exfat_find(struct inode *dir, struct qstr *qname,
 		dir_fid->version =
 			(unsigned int) (inode_peek_iversion_raw(dir) &
 				0xffffffff);
-		dir_fid->hint_femp.eidx = -1;
+		dir_fid->hint_femp.eidx = EXFAT_HINT_NONE;
 	}
 
 	/* search the file name for directories */
@@ -776,7 +772,7 @@ static int exfat_find(struct inode *dir, struct qstr *qname,
 	fid->version = 0;
 	fid->hint_stat.eidx = 0;
 	fid->hint_stat.clu = fid->start_clu;
-	fid->hint_femp.eidx = -1;
+	fid->hint_femp.eidx = EXFAT_HINT_NONE;
 	return 0;
 }
 
