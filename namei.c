@@ -1433,7 +1433,6 @@ static int exfat_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 	}
 
 	inode_inc_iversion(inode);
-	dir->i_ctime = dir->i_mtime = dir->i_atime = current_time(dir);
 	inode->i_mtime = inode->i_atime = inode->i_ctime = current_time(inode);
 	/* timestamp is already written, so mark_inode_dirty() is unneeded. */
 
