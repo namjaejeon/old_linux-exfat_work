@@ -716,9 +716,11 @@ unsigned char *exfat_dcache_getblk(struct super_block *sb,
 	return bp->bh->b_data;
 }
 
-int exfat_update_dcache(struct super_block *sb, unsigned long long sec)
+int exfat_update_dcache(struct super_block *sb, unsigned long long sec,
+		int sync)
 {
 	struct exfat_meta_cache *bp;
+	int ret = 0;
 
 	set_sb_dirty(sb);
 
@@ -731,7 +733,9 @@ int exfat_update_dcache(struct super_block *sb, unsigned long long sec)
 	set_buffer_uptodate(bp->bh);
 	mark_buffer_dirty(bp->bh);
 
-	return 0;
+	if (sync)
+		ret = sync_dirty_buffer(bp->bh);
+	return ret;
 }
 
 int exfat_lock_dcache(struct super_block *sb, unsigned long long sec)

@@ -662,11 +662,11 @@ int exfat_init_dir_entry(struct super_block *sb, struct exfat_chain *p_dir,
 		return -EIO;
 
 	exfat_init_file_entry(sb, file_ep, type);
-	if (exfat_update_dcache(sb, sector))
+	if (exfat_update_dcache(sb, sector, 0))
 		return -EIO;
 
 	exfat_init_strm_entry(strm_ep, flags, start_clu, size);
-	if (exfat_update_dcache(sb, sector))
+	if (exfat_update_dcache(sb, sector, 0))
 		return -EIO;
 
 	return 0;
@@ -703,7 +703,7 @@ int update_dir_chksum(struct super_block *sb, struct exfat_chain *p_dir,
 	}
 
 	file_ep->checksum = cpu_to_le16(chksum);
-	ret = exfat_update_dcache(sb, sector);
+	ret = exfat_update_dcache(sb, sector, 0);
 out_unlock:
 	exfat_unlock_dcache(sb, sector);
 	return ret;
@@ -726,7 +726,7 @@ int exfat_init_ext_entry(struct super_block *sb, struct exfat_chain *p_dir,
 		return -EIO;
 
 	file_ep->num_ext = (unsigned char)(num_entries - 1);
-	exfat_update_dcache(sb, sector);
+	exfat_update_dcache(sb, sector, 0);
 
 	strm_ep = (struct exfat_strm_dentry *)exfat_get_dentry(sb, p_dir,
 			entry + 1, &sector);
@@ -735,7 +735,7 @@ int exfat_init_ext_entry(struct super_block *sb, struct exfat_chain *p_dir,
 
 	strm_ep->name_len = p_uniname->name_len;
 	strm_ep->name_hash = cpu_to_le16(p_uniname->name_hash);
-	exfat_update_dcache(sb, sector);
+	exfat_update_dcache(sb, sector, 0);
 
 	for (i = 2; i < num_entries; i++) {
 		name_ep = (struct exfat_name_dentry *)exfat_get_dentry(sb,
@@ -744,7 +744,7 @@ int exfat_init_ext_entry(struct super_block *sb, struct exfat_chain *p_dir,
 			return -EIO;
 
 		exfat_init_name_entry(name_ep, uniname);
-		exfat_update_dcache(sb, sector);
+		exfat_update_dcache(sb, sector, 0);
 		uniname += 15;
 	}
 
@@ -765,7 +765,7 @@ int exfat_delete_dir_entry(struct super_block *sb, struct exfat_chain *p_dir,
 			return -EIO;
 
 		exfat_set_entry_type(ep, TYPE_DELETED);
-		if (exfat_update_dcache(sb, sector))
+		if (exfat_update_dcache(sb, sector, 0))
 			return -EIO;
 	}
 
@@ -783,6 +783,7 @@ static int exfat_write_partial_entries_in_entry_set(struct super_block *sb,
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 	unsigned int clu;
 	unsigned char *buf, *esbuf = (unsigned char *)&(es->__buf);
+	int sync = es->sync;
 
 	num_entries = count;
 
@@ -796,7 +797,7 @@ static int exfat_write_partial_entries_in_entry_set(struct super_block *sb,
 			goto err_out;
 		memcpy(buf + off, esbuf + buf_off,
 				copy_entries << DENTRY_SIZE_BITS);
-		exfat_update_dcache(sb, sec);
+		exfat_update_dcache(sb, sec, sync);
 		num_entries -= copy_entries;
 
 		if (num_entries) {
@@ -1009,6 +1010,7 @@ struct exfat_entry_set_cache *exfat_get_dentry_set(struct super_block *sb,
 	es->sector = sec;
 	es->offset = off;
 	es->alloc_flag = p_dir->flags;
+	es->sync = 0;
 
 	pos = (struct exfat_dentry *)&(es->__buf);
 

@@ -253,12 +253,9 @@ static int __exfat_write_inode(struct inode *inode, int sync)
 		on_disk_size = 0;
 
 	exfat_set_entry_size(ep2, on_disk_size);
-
+	es->sync = sync;
 	ret = exfat_update_dir_chksum_with_entry_set(sb, es);
 	exfat_release_dentry_set(es);
-
-	if (sync)
-		sync_blockdev(sb->s_bdev);
 	return ret;
 }
 

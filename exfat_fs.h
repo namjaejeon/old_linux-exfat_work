@@ -200,6 +200,7 @@ struct exfat_entry_set_cache {
 	int alloc_flag;			/* flag in stream entry. 01 for cluster chain, 03 for contig. clusters. */
 	unsigned int num_entries;
 	void *__buf;			/* __buf should be the last member */
+	int sync;
 };
 
 struct exfat_clu_cache_lru {
@@ -474,7 +475,8 @@ extern int exfat_get_clus(struct inode *inode, unsigned int cluster,
 	int allow_eof);
 extern int exfat_lock_dcache(struct super_block *sb, unsigned long long sec);
 extern int exfat_unlock_dcache(struct super_block *sb, unsigned long long sec);
-extern int exfat_update_dcache(struct super_block *sb, unsigned long long sec);
+extern int exfat_update_dcache(struct super_block *sb, unsigned long long sec,
+	int sync);
 extern int exfat_meta_cache_init(struct super_block *sb);
 extern int exfat_release_dcache(struct super_block *sb, unsigned long long sec);
 extern int exfat_release_dcache_cluster(struct super_block *sb,

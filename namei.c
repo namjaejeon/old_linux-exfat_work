@@ -461,7 +461,7 @@ int exfat_find_empty_entry(struct inode *inode, struct exfat_chain *p_dir,
 				return -EIO;
 			exfat_set_entry_size(ep, size);
 			exfat_set_entry_flag(ep, p_dir->flags);
-			if (exfat_update_dcache(sb, sector))
+			if (exfat_update_dcache(sb, sector, 0))
 				return -EIO;
 
 			if (update_dir_chksum(sb, &(fid->dir), fid->entry))
@@ -1617,7 +1617,7 @@ static int exfat_rename_file(struct inode *inode, struct exfat_chain *p_dir,
 				exfat_get_entry_attr(epnew) | ATTR_ARCHIVE);
 			fid->attr |= ATTR_ARCHIVE;
 		}
-		exfat_update_dcache(sb, sector_new);
+		exfat_update_dcache(sb, sector_new, 0);
 		exfat_unlock_dcache(sb, sector_old);
 
 		epold = exfat_get_dentry(sb, p_dir, oldentry + 1, &sector_old);
@@ -1630,7 +1630,7 @@ static int exfat_rename_file(struct inode *inode, struct exfat_chain *p_dir,
 		}
 
 		memcpy((void *) epnew, (void *) epold, DENTRY_SIZE);
-		exfat_update_dcache(sb, sector_new);
+		exfat_update_dcache(sb, sector_new, 0);
 		exfat_unlock_dcache(sb, sector_old);
 
 		ret = exfat_init_ext_entry(sb, p_dir, newentry, num_new_entries,
@@ -1646,7 +1646,7 @@ static int exfat_rename_file(struct inode *inode, struct exfat_chain *p_dir,
 				exfat_get_entry_attr(epold) | ATTR_ARCHIVE);
 			fid->attr |= ATTR_ARCHIVE;
 		}
-		exfat_update_dcache(sb, sector_old);
+		exfat_update_dcache(sb, sector_old, 0);
 		exfat_unlock_dcache(sb, sector_old);
 
 		ret = exfat_init_ext_entry(sb, p_dir, oldentry, num_new_entries,
@@ -1716,7 +1716,7 @@ static int exfat_move_file(struct inode *inode, struct exfat_chain *p_olddir,
 			exfat_get_entry_attr(epnew) | ATTR_ARCHIVE);
 		fid->attr |= ATTR_ARCHIVE;
 	}
-	exfat_update_dcache(sb, sector_new);
+	exfat_update_dcache(sb, sector_new, 0);
 	exfat_unlock_dcache(sb, sector_mov);
 
 	epmov = exfat_get_dentry(sb, p_olddir, oldentry+1, &sector_mov);
@@ -1728,7 +1728,7 @@ static int exfat_move_file(struct inode *inode, struct exfat_chain *p_olddir,
 	}
 
 	memcpy((void *) epnew, (void *) epmov, DENTRY_SIZE);
-	exfat_update_dcache(sb, sector_new);
+	exfat_update_dcache(sb, sector_new, 0);
 	exfat_unlock_dcache(sb, sector_mov);
 
 	ret = exfat_init_ext_entry(sb, p_newdir, newentry, num_new_entries,
