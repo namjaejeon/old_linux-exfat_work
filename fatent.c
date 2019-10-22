@@ -151,7 +151,6 @@ int exfat_chain_cont_cluster(struct super_block *sb, unsigned int chain,
 int exfat_free_cluster(struct super_block *sb, struct exfat_chain *p_chain,
 		int do_relse)
 {
-	int ret = -EIO;
 	unsigned int num_clusters = 0;
 	unsigned int clu;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
@@ -176,11 +175,8 @@ int exfat_free_cluster(struct super_block *sb, struct exfat_chain *p_chain,
 
 	if (p_chain->flags == 0x03) {
 		do {
-			if (do_relse) {
-				ret = exfat_release_dcache_cluster(sb, clu);
-				if (ret)
-					goto out;
-			}
+			if (do_relse)
+				exfat_release_dcache_cluster(sb, clu);
 
 			exfat_clr_alloc_bitmap(sb, clu-2);
 			clu++;
@@ -189,11 +185,8 @@ int exfat_free_cluster(struct super_block *sb, struct exfat_chain *p_chain,
 		} while (num_clusters < p_chain->size);
 	} else {
 		do {
-			if (do_relse) {
-				ret = exfat_release_dcache_cluster(sb, clu);
-				if (ret)
-					goto out;
-			}
+			if (do_relse)
+				exfat_release_dcache_cluster(sb, clu);
 
 			exfat_clr_alloc_bitmap(sb, (clu - CLUS_BASE));
 
@@ -204,12 +197,10 @@ int exfat_free_cluster(struct super_block *sb, struct exfat_chain *p_chain,
 		} while (!IS_CLUS_EOF(clu));
 	}
 
-	/* success */
-	ret = 0;
 out:
 
 	sbi->used_clusters -= num_clusters;
-	return ret;
+	return 0;
 }
 
 int exfat_find_last_cluster(struct super_block *sb, struct exfat_chain *p_chain,
