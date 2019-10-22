@@ -883,12 +883,16 @@ static struct dentry *exfat_lookup(struct inode *dir, struct dentry *dentry,
 	struct inode *inode;
 	struct dentry *alias;
 	int err;
-	struct exfat_file_id fid;
+	struct exfat_file_id *fid;
 	loff_t i_pos;
 	mode_t i_mode;
 
+	fid = kmalloc(sizeof(struct exfat_file_id), GFP_KERNEL);
+	if (!fid)
+		return -ENOMEM;
+
 	mutex_lock(&EXFAT_SB(sb)->s_lock);
-	err = exfat_find(dir, &dentry->d_name, &fid);
+	err = exfat_find(dir, &dentry->d_name, fid);
 	if (err) {
 		if (err == -ENOENT) {
 			inode = NULL;
@@ -897,8 +901,8 @@ static struct dentry *exfat_lookup(struct inode *dir, struct dentry *dentry,
 		goto error;
 	}
 
-	i_pos = exfat_make_i_pos(&fid);
-	inode = exfat_build_inode(sb, &fid, i_pos);
+	i_pos = exfat_make_i_pos(fid);
+	inode = exfat_build_inode(sb, fid, i_pos);
 	if (IS_ERR(inode)) {
 		err = PTR_ERR(inode);
 		goto error;
@@ -912,7 +916,7 @@ static struct dentry *exfat_lookup(struct inode *dir, struct dentry *dentry,
 			err = -ENOMEM;
 			goto error;
 		}
-		exfat_read_link(dir, &fid, EXFAT_I(inode)->target,
+		exfat_read_link(dir, fid, EXFAT_I(inode)->target,
 			i_size_read(inode));
 		*(EXFAT_I(inode)->target + i_size_read(inode)) = '\0';
 	}
