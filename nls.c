@@ -306,7 +306,7 @@ static int __nls_vfsname_to_utf16s(struct super_block *sb,
 		struct exfat_uni_name *p_uniname, int *p_lossy)
 {
 	int i, unilen, lossy = NLS_NAME_NO_LOSSY;
-	unsigned short upname[MAX_NAME_LENGTH+1];
+	unsigned short upname[MAX_NAME_LENGTH + 1];
 	unsigned short *uniname = p_uniname->name;
 
 	WARN_ON(!len);
@@ -357,7 +357,7 @@ static int __nls_uni16s_to_vfsname(struct super_block *sb,
 	struct nls_table *nls = EXFAT_SB(sb)->nls_io;
 
 	i = 0;
-	while ((i < MAX_NAME_LENGTH) && (out_len < (buflen-1))) {
+	while ((i < MAX_NAME_LENGTH) && (out_len < (buflen - 1))) {
 		if (*uniname == (unsigned short)'\0')
 			break;
 
@@ -388,7 +388,7 @@ static int __nls_vfsname_to_uni16s(struct super_block *sb,
 		struct exfat_uni_name *p_uniname, int *p_lossy)
 {
 	int i, unilen, lossy = NLS_NAME_NO_LOSSY;
-	unsigned short upname[MAX_NAME_LENGTH+1];
+	unsigned short upname[MAX_NAME_LENGTH + 1];
 	unsigned short *uniname = p_uniname->name;
 	struct nls_table *nls = EXFAT_SB(sb)->nls_io;
 

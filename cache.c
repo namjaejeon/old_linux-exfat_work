@@ -64,7 +64,7 @@ void exfat_clu_cache_shutdown(void)
 void exfat_clu_cache_init_inode(struct inode *inode)
 {
 	struct exfat_clu_cache_lru *exfat_lru =
-		&(EXFAT_I(inode)->fid.exfat_lru);
+		&(EXFAT_I(inode)->fid->exfat_lru);
 
 	spin_lock_init(&exfat_lru->cache_lru_lock);
 	exfat_lru->nr_caches = 0;
@@ -87,7 +87,7 @@ static inline void exfat_clu_cache_update_lru(struct inode *inode,
 					struct exfat_clu_cache *cache)
 {
 	struct exfat_clu_cache_lru *exfat_lru =
-		&(EXFAT_I(inode)->fid.exfat_lru);
+		&(EXFAT_I(inode)->fid->exfat_lru);
 
 	if (exfat_lru->cache_lru.next != &cache->cache_list)
 		list_move(&cache->cache_list, &exfat_lru->cache_lru);
@@ -98,7 +98,7 @@ static unsigned int exfat_clu_cache_lookup(struct inode *inode,
 	unsigned int *cached_fclus, unsigned int *cached_dclus)
 {
 	struct exfat_clu_cache_lru *exfat_lru =
-			&(EXFAT_I(inode)->fid.exfat_lru);
+			&(EXFAT_I(inode)->fid->exfat_lru);
 
 	static struct exfat_clu_cache nohit = { .fcluster = 0, };
 
@@ -137,7 +137,7 @@ static struct exfat_clu_cache *exfat_clu_cache_merge(struct inode *inode,
 					 struct exfat_clu_cache_id *new)
 {
 	struct exfat_clu_cache_lru *exfat_lru =
-			&(EXFAT_I(inode)->fid.exfat_lru);
+			&(EXFAT_I(inode)->fid->exfat_lru);
 	struct exfat_clu_cache *p;
 
 	list_for_each_entry(p, &exfat_lru->cache_lru, cache_list) {
@@ -155,7 +155,7 @@ static void exfat_clu_cache_add(struct inode *inode,
 			struct exfat_clu_cache_id *new)
 {
 	struct exfat_clu_cache_lru *exfat_lru =
-			&(EXFAT_I(inode)->fid.exfat_lru);
+			&(EXFAT_I(inode)->fid->exfat_lru);
 	struct exfat_clu_cache *cache, *tmp;
 
 	if (new->fcluster == -1) /* dummy cache */
@@ -211,7 +211,7 @@ out:
 static void __exfat_clu_cache_inval_inode(struct inode *inode)
 {
 	struct exfat_clu_cache_lru *exfat_lru =
-			&(EXFAT_I(inode)->fid.exfat_lru);
+			&(EXFAT_I(inode)->fid->exfat_lru);
 	struct exfat_clu_cache *cache;
 
 	while (!list_empty(&exfat_lru->cache_lru)) {
@@ -230,7 +230,7 @@ static void __exfat_clu_cache_inval_inode(struct inode *inode)
 void exfat_clu_cache_inval_inode(struct inode *inode)
 {
 	struct exfat_clu_cache_lru *exfat_lru =
-			&(EXFAT_I(inode)->fid.exfat_lru);
+			&(EXFAT_I(inode)->fid->exfat_lru);
 
 	spin_lock(&exfat_lru->cache_lru_lock);
 	__exfat_clu_cache_inval_inode(inode);
@@ -260,7 +260,7 @@ int exfat_get_clus(struct inode *inode, unsigned int cluster,
 	struct super_block *sb = inode->i_sb;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 	unsigned int limit = sbi->num_clusters;
-	struct exfat_file_id *fid = &(EXFAT_I(inode)->fid);
+	struct exfat_file_id *fid = EXFAT_I(inode)->fid;
 	struct exfat_clu_cache_id cid;
 	unsigned int content;
 
@@ -716,9 +716,11 @@ unsigned char *exfat_dcache_getblk(struct super_block *sb,
 	return bp->bh->b_data;
 }
 
-int exfat_update_dcache(struct super_block *sb, unsigned long long sec)
+int exfat_update_dcache(struct super_block *sb, unsigned long long sec,
+		int sync)
 {
 	struct exfat_meta_cache *bp;
+	int ret = 0;
 
 	set_sb_dirty(sb);
 
@@ -731,7 +733,9 @@ int exfat_update_dcache(struct super_block *sb, unsigned long long sec)
 	set_buffer_uptodate(bp->bh);
 	mark_buffer_dirty(bp->bh);
 
-	return 0;
+	if (sync)
+		ret = sync_dirty_buffer(bp->bh);
+	return ret;
 }
 
 int exfat_lock_dcache(struct super_block *sb, unsigned long long sec)

@@ -69,9 +69,6 @@
 
 #define DIR_DELETED	0xFFFF0321
 
-#define VOL_CLEAN	0x0000
-#define VOL_DIRTY	0x0001
-
 /* type values */
 #define TYPE_UNUSED		0x0000
 #define TYPE_DELETED		0x0001
@@ -110,6 +107,8 @@
 #define FAT_CACHE_HASH_SIZE	64
 #define BUF_CACHE_SIZE		256
 #define BUF_CACHE_HASH_SIZE	64
+
+#define EXFAT_HINT_NONE		-1
 
 struct exfat_dos_dentry {
 	__u8 name[DOS_NAME_LENGTH];  /* 11 chars */
@@ -169,7 +168,7 @@ struct exfat_dos_name {
 
 /* unicode name structure */
 struct exfat_uni_name {
-	unsigned short name[MAX_NAME_LENGTH+3];	/* +3 for null and for converting */
+	unsigned short name[MAX_NAME_LENGTH + 3];	/* +3 for null and for converting */
 	unsigned short name_hash;
 	unsigned char name_len;
 };
@@ -203,6 +202,7 @@ struct exfat_entry_set_cache {
 	int alloc_flag;			/* flag in stream entry. 01 for cluster chain, 03 for contig. clusters. */
 	unsigned int num_entries;
 	void *__buf;			/* __buf should be the last member */
+	int sync;
 };
 
 struct exfat_clu_cache_lru {
@@ -326,7 +326,7 @@ struct exfat_file_id {
  * EXFAT file system inode in-memory data
  */
 struct exfat_inode_info {
-	struct exfat_file_id fid;
+	struct exfat_file_id *fid;
 
 	char  *target;
 	/* NOTE: i_size_ondisk is 64bits, so must hold ->inode_lock to access */
@@ -392,7 +392,7 @@ static inline mode_t exfat_make_mode(struct exfat_sb_info *sbi,
 /* Return the FAT attribute byte for this inode */
 static inline unsigned int exfat_make_attr(struct inode *inode)
 {
-	unsigned int attrs = EXFAT_I(inode)->fid.attr;
+	unsigned int attrs = EXFAT_I(inode)->fid->attr;
 
 	if (S_ISDIR(inode->i_mode))
 		attrs |= ATTR_SUBDIR;
@@ -404,9 +404,9 @@ static inline unsigned int exfat_make_attr(struct inode *inode)
 static inline void exfat_save_attr(struct inode *inode, unsigned int attr)
 {
 	if (exfat_mode_can_hold_ro(inode))
-		EXFAT_I(inode)->fid.attr = attr & ATTR_RWMASK;
+		EXFAT_I(inode)->fid->attr = attr & ATTR_RWMASK;
 	else
-		EXFAT_I(inode)->fid.attr = attr & (ATTR_RWMASK | ATTR_READONLY);
+		EXFAT_I(inode)->fid->attr = attr & (ATTR_RWMASK | ATTR_READONLY);
 }
 
 /* super.c */
@@ -477,7 +477,8 @@ extern int exfat_get_clus(struct inode *inode, unsigned int cluster,
 	int allow_eof);
 extern int exfat_lock_dcache(struct super_block *sb, unsigned long long sec);
 extern int exfat_unlock_dcache(struct super_block *sb, unsigned long long sec);
-extern int exfat_update_dcache(struct super_block *sb, unsigned long long sec);
+extern int exfat_update_dcache(struct super_block *sb, unsigned long long sec,
+	int sync);
 extern int exfat_meta_cache_init(struct super_block *sb);
 extern int exfat_release_dcache(struct super_block *sb, unsigned long long sec);
 extern int exfat_release_dcache_cluster(struct super_block *sb,
@@ -545,7 +546,7 @@ extern const struct inode_operations exfat_symlink_inode_operations;
 extern const struct inode_operations exfat_file_inode_operations;
 extern int exfat_sync_inode(struct inode *inode);
 extern struct inode *exfat_build_inode(struct super_block *sb,
-	const struct exfat_file_id *fid, loff_t i_pos);
+	struct exfat_file_id *fid, loff_t i_pos);
 extern void exfat_attach(struct inode *inode, loff_t i_pos);
 extern void exfat_detach(struct inode *inode);
 extern void exfat_truncate(struct inode *inode, loff_t old_size);

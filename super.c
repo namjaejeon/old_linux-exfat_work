@@ -480,20 +480,26 @@ static int exfat_read_root(struct inode *inode)
 {
 	struct super_block *sb = inode->i_sb;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
+	struct exfat_file_id *fid;
 	struct exfat_dir_entry info;
 
-	EXFAT_I(inode)->fid.dir.dir = sbi->root_dir;
-	EXFAT_I(inode)->fid.dir.flags = 0x01;
-	EXFAT_I(inode)->fid.entry = -1;
-	EXFAT_I(inode)->fid.start_clu = sbi->root_dir;
-	EXFAT_I(inode)->fid.flags = 0x01;
-	EXFAT_I(inode)->fid.type = TYPE_DIR;
-	EXFAT_I(inode)->fid.version = 0;
-	EXFAT_I(inode)->fid.rwoffset = 0;
-	EXFAT_I(inode)->fid.hint_bmap.off = CLUS_EOF;
-	EXFAT_I(inode)->fid.hint_stat.eidx = 0;
-	EXFAT_I(inode)->fid.hint_stat.clu = sbi->root_dir;
-	EXFAT_I(inode)->fid.hint_femp.eidx = -1;
+	fid = kmalloc(sizeof(struct exfat_file_id), GFP_KERNEL);
+	if (!fid)
+		return -ENOMEM;	
+
+	fid->dir.dir = sbi->root_dir;
+	fid->dir.flags = 0x01;
+	fid->entry = -1;
+	fid->start_clu = sbi->root_dir;
+	fid->flags = 0x01;
+	fid->type = TYPE_DIR;
+	fid->version = 0;
+	fid->rwoffset = 0;
+	fid->hint_bmap.off = CLUS_EOF;
+	fid->hint_stat.eidx = 0;
+	fid->hint_stat.clu = sbi->root_dir;
+	fid->hint_femp.eidx = EXFAT_HINT_NONE;
+	EXFAT_I(inode)->fid = fid;
 
 	EXFAT_I(inode)->target = NULL;
 
@@ -509,7 +515,7 @@ static int exfat_read_root(struct inode *inode)
 	inode->i_fop = &exfat_dir_operations;
 
 	i_size_write(inode, info.size);
-	EXFAT_I(inode)->fid.size = info.size;
+	fid->size = info.size;
 	inode->i_blocks = ((i_size_read(inode) + (sbi->cluster_size - 1))
 			& ~((loff_t)sbi->cluster_size - 1)) >> inode->i_blkbits;
 	EXFAT_I(inode)->i_pos = ((loff_t) sbi->root_dir << 32) | 0xffffffff;
@@ -586,7 +592,7 @@ static bool is_exfat(struct pbr *pbr)
 	int i = 53;
 
 	do {
-		if (pbr->bpb.f64.res_zero[i-1])
+		if (pbr->bpb.f64.res_zero[i - 1])
 			break;
 	} while (--i);
 	return i ? false : true;
@@ -1121,6 +1127,7 @@ struct inode *exfat_alloc_inode(struct super_block *sb)
 	ei = kmem_cache_alloc(exfat_inode_cachep, GFP_NOFS);
 	if (!ei)
 		return NULL;
+
 	init_rwsem(&ei->truncate_lock);
 	return &ei->vfs_inode;
 }
@@ -1132,6 +1139,7 @@ void exfat_destroy_inode(struct inode *inode)
 		EXFAT_I(inode)->target = NULL;
 	}
 
+	kfree(EXFAT_I(inode)->fid);
 	kmem_cache_free(exfat_inode_cachep, EXFAT_I(inode));
 }
 

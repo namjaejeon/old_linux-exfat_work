@@ -193,7 +193,7 @@ void exfat_clr_alloc_bitmap(struct super_block *sb, unsigned int clu)
 	if (opts->discard) {
 		int ret_discard;
 
-		ret_discard = sb_issue_discard(sb, CLUS_TO_SECT(sbi, clu+2),
+		ret_discard = sb_issue_discard(sb, CLUS_TO_SECT(sbi, clu + 2),
 				(1 << sbi->sect_per_clus_bits), GFP_NOFS, 0);
 
 		if (ret_discard == -EOPNOTSUPP) {
