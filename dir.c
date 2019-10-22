@@ -1109,7 +1109,7 @@ void exfat_release_dentry_set(struct exfat_entry_set_cache *es)
 }
 
 static int exfat_extract_uni_name_from_name_entry(struct exfat_name_dentry *ep,
-		unsigned short *uniname, int order)
+		unsigned short *uniname)
 {
 	int i, len = 0;
 
@@ -1264,7 +1264,7 @@ rewind:
 					uniname += 15;
 
 				len = exfat_extract_uni_name_from_name_entry(
-						name_ep, entry_uniname, order);
+						name_ep, entry_uniname);
 				name_len += len;
 
 				unichar = *(uniname+len);
@@ -1407,7 +1407,7 @@ void exfat_get_uniname_from_ext_entry(struct super_block *sb,
 			goto out;
 
 		exfat_extract_uni_name_from_name_entry(
-			(struct exfat_name_dentry *)ep, uniname, i);
+			(struct exfat_name_dentry *)ep, uniname);
 		uniname += 15;
 	}
 
