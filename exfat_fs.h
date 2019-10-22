@@ -69,9 +69,6 @@
 
 #define DIR_DELETED	0xFFFF0321
 
-#define VOL_CLEAN	0x0000
-#define VOL_DIRTY	0x0001
-
 /* type values */
 #define TYPE_UNUSED		0x0000
 #define TYPE_DELETED		0x0001
