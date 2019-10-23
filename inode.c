@@ -120,7 +120,7 @@ int __exfat_truncate(struct inode *inode, unsigned long long old_size,
 	 * clu.flags: fid->flags (exFAT only)
 	 */
 
-	/* (1) update the directory entry */
+	/* update the directory entry */
 	if (!evict) {
 		es = exfat_get_dentry_set(sb, &(fid->dir), fid->entry,
 			ES_ALL_ENTRIES, &ep);
@@ -149,16 +149,16 @@ int __exfat_truncate(struct inode *inode, unsigned long long old_size,
 			return -EIO;
 		exfat_release_dentry_set(es);
 
-	} /* end of if(fid->dir.dir != DIR_DELETED) */
+	}
 
-	/* (2) cut off from the FAT chain */
+	/* cut off from the FAT chain */
 	if ((fid->flags == 0x01) &&
 			(!IS_CLUS_FREE(last_clu)) && (!IS_CLUS_EOF(last_clu))) {
 		if (exfat_ent_set(sb, last_clu, CLUS_EOF))
 			return -EIO;
 	}
 
-	/* (3) invalidate cache and free the clusters */
+	/* invalidate cache and free the clusters */
 	/* clear exfat cache */
 	exfat_clu_cache_inval_inode(inode);
 
@@ -404,7 +404,7 @@ static int __exfat_map_clus(struct inode *inode, unsigned int clu_offset,
 		new_clu.size = 0;
 		new_clu.flags = fid->flags;
 
-		/* (1) allocate a cluster */
+		/* allocate a cluster */
 		if (num_to_be_allocated < 1) {
 			/* Broken FAT (i_sze > allocated FAT) */
 			exfat_fs_error(sb, "broken FAT chain.");
@@ -422,7 +422,7 @@ static int __exfat_map_clus(struct inode *inode, unsigned int clu_offset,
 			return -EIO;
 		}
 
-		/* (2) append to the FAT chain */
+		/* append to the FAT chain */
 		if (IS_CLUS_EOF(last_clu)) {
 			if (new_clu.flags == 0x01)
 				fid->flags = 0x01;
@@ -454,7 +454,7 @@ static int __exfat_map_clus(struct inode *inode, unsigned int clu_offset,
 			/* get stream entry */
 			ep++;
 
-			/* (3) update directory entry */
+			/* update directory entry */
 			if (modified) {
 				if (exfat_get_entry_flag(ep) != fid->flags)
 					exfat_set_entry_flag(ep, fid->flags);
@@ -476,7 +476,7 @@ static int __exfat_map_clus(struct inode *inode, unsigned int clu_offset,
 		inode->i_blocks += num_to_be_allocated <<
 			(sbi->cluster_size_bits - sb->s_blocksize_bits);
 
-		/* (4) Move *clu pointer along FAT chains (hole care)
+		/* Move *clu pointer along FAT chains (hole care)
 		 * because the caller of this function expect *clu to be
 		 * the last cluster.
 		 * This only works when num_to_be_allocated >= 2,

@@ -1010,7 +1010,7 @@ static int exfat_remove_file(struct inode *inode, struct exfat_chain *p_dir,
 
 	exfat_unlock_dcache(sb, sector);
 
-	/* (1) update the directory entry */
+	/* update the directory entry */
 	return exfat_delete_dir_entry(sb, p_dir, entry, 0, num_entries);
 }
 
@@ -1048,7 +1048,7 @@ static int exfat_unlink(struct inode *dir, struct dentry *dentry)
 
 	exfat_set_vol_flags(sb, VOL_DIRTY);
 
-	/* (1) update the directory entry */
+	/* update the directory entry */
 	if (exfat_remove_file(dir, &cdir, fdentry)) {
 		err = -EIO;
 		goto out;
@@ -1107,7 +1107,7 @@ static int __exfat_remove(struct inode *inode, struct exfat_file_id *fid)
 
 	exfat_set_vol_flags(sb, VOL_DIRTY);
 
-	/* (1) update the directory entry */
+	/* update the directory entry */
 	ret = exfat_remove_file(inode, &dir, dentry);
 	if (ret)
 		goto out;
@@ -1116,14 +1116,14 @@ static int __exfat_remove(struct inode *inode, struct exfat_file_id *fid)
 	clu_to_free.size = ((fid->size - 1) >> sbi->cluster_size_bits) + 1;
 	clu_to_free.flags = fid->flags;
 
-	/* (2) invalidate exfat cache and free the clusters
+	/* invalidate exfat cache and free the clusters
 	 */
 	/* clear exfat cache */
 	exfat_clu_cache_inval_inode(inode);
 	ret = exfat_free_cluster(sb, &clu_to_free, 0);
 	/* WARN : DO NOT RETURN ERROR IN HERE */
 
-	/* (3) update struct exfat_file_id  */
+	/* update struct exfat_file_id  */
 	fid->size = 0;
 	fid->start_clu = CLUS_EOF;
 	fid->flags = 0x03;
@@ -1213,12 +1213,12 @@ static int exfat_write_link(struct inode *inode, struct exfat_file_id *fid,
 			new_clu.size = 0;
 			new_clu.flags = fid->flags;
 
-			/* (1) allocate a chain of clusters */
+			/* allocate a chain of clusters */
 			ret = exfat_alloc_cluster(sb, num_alloc, &new_clu);
 			if (ret)
 				goto err_out;
 
-			/* (2) append to the FAT chain */
+			/* append to the FAT chain */
 			if (IS_CLUS_EOF(last_clu)) {
 				if (new_clu.flags == 0x01)
 					fid->flags = 0x01;
@@ -1304,7 +1304,7 @@ static int exfat_write_link(struct inode *inode, struct exfat_file_id *fid,
 
 	brelse(bh);
 
-	/* (3) update the direcoty entry */
+	/* update the direcoty entry */
 	/* get_entry_(set_)in_dir shoulb be check DIR_DELETED flag. */
 	es = exfat_get_dentry_set(sb, &(fid->dir), fid->entry, ES_ALL_ENTRIES,
 			&ep);
@@ -1551,7 +1551,7 @@ static int __exfat_rmdir(struct inode *inode, struct exfat_file_id *fid)
 
 	exfat_set_vol_flags(sb, VOL_DIRTY);
 
-	/* (1) update the directory entry */
+	/* update the directory entry */
 	ret = exfat_remove_file(inode, &dir, dentry);
 	if (ret) {
 		exfat_msg(sb, KERN_ERR, "failed to exfat_remove_file : err(%d)",
