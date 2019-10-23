@@ -898,7 +898,7 @@ static struct dentry *exfat_lookup(struct inode *dir, struct dentry *dentry,
 	struct inode *inode;
 	struct dentry *alias;
 	int err;
-	struct exfat_file_id *fid;
+	struct exfat_file_id *fid = NULL;
 	loff_t i_pos;
 	mode_t i_mode;
 
@@ -909,6 +909,7 @@ static struct dentry *exfat_lookup(struct inode *dir, struct dentry *dentry,
 	mutex_lock(&EXFAT_SB(sb)->s_lock);
 	err = exfat_find(dir, &dentry->d_name, fid);
 	if (err) {
+		kfree(fid);
 		if (err == -ENOENT) {
 			inode = NULL;
 			goto out;
