@@ -500,7 +500,6 @@ static int exfat_read_root(struct inode *inode)
 	fid->hint_stat.clu = sbi->root_dir;
 	fid->hint_femp.eidx = EXFAT_HINT_NONE;
 	EXFAT_I(inode)->fid = fid;
-
 	EXFAT_I(inode)->target = NULL;
 
 	if (exfat_read_inode(inode, &info) < 0)

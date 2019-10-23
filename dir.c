@@ -301,79 +301,20 @@ const struct file_operations exfat_dir_operations = {
 	.fsync		= exfat_file_fsync,
 };
 
-int exfat_create_dir(struct inode *inode, struct exfat_chain *p_dir,
-		struct exfat_uni_name *p_uniname, struct exfat_file_id *fid)
+int exfat_alloc_new_dir(struct inode *inode, struct exfat_chain *clu)
 {
-	int dentry, num_entries;
-	unsigned long long ret;
-	unsigned long long size;
-	struct exfat_chain clu;
-	struct exfat_dos_name dos_name;
+	int ret;
 	struct super_block *sb = inode->i_sb;
-	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 
-	ret = exfat_get_num_entries_and_dos_name(sb, p_dir, p_uniname,
-			&num_entries, &dos_name, 0);
+	clu->dir = CLUS_EOF;
+	clu->size = 0;
+	clu->flags = 0x03;
+
+	ret = exfat_alloc_cluster(sb, 1, clu);
 	if (ret)
 		return ret;
 
-	/* exfat_find_empty_entry must be called before alloc_cluster */
-	dentry = exfat_find_empty_entry(inode, p_dir, num_entries);
-	if (dentry < 0)
-		return dentry; /* -EIO or -ENOSPC */
-
-	clu.dir = CLUS_EOF;
-	clu.size = 0;
-	clu.flags = 0x03;
-
-	/* (0) Check if there are reserved clusters up to max. */
-	if ((sbi->used_clusters + sbi->reserved_clusters) >=
-			(sbi->num_clusters - CLUS_BASE))
-		return -ENOSPC;
-
-	/* (1) allocate a cluster */
-	ret = exfat_alloc_cluster(sb, 1, &clu);
-	if (ret)
-		return ret;
-
-	ret = exfat_clear_cluster(inode, clu.dir);
-	if (ret)
-		return ret;
-
-	size = sbi->cluster_size;
-
-	/* (2) update the directory entry */
-	/* make sub-dir entry in parent directory */
-	ret = exfat_init_dir_entry(sb, p_dir, dentry, TYPE_DIR, clu.dir, size);
-	if (ret)
-		return ret;
-
-	ret = exfat_init_ext_entry(sb, p_dir, dentry, num_entries, p_uniname,
-			&dos_name);
-	if (ret)
-		return ret;
-
-	fid->dir.dir = p_dir->dir;
-	fid->dir.size = p_dir->size;
-	fid->dir.flags = p_dir->flags;
-	fid->entry = dentry;
-
-	fid->attr = ATTR_SUBDIR;
-	fid->flags = 0x03;
-	fid->size = size;
-	fid->start_clu = clu.dir;
-
-	fid->type = TYPE_DIR;
-	fid->rwoffset = 0;
-	fid->hint_bmap.off = CLUS_EOF;
-
-	/* hint_stat will be used if this is directory. */
-	fid->version = 0;
-	fid->hint_stat.eidx = 0;
-	fid->hint_stat.clu = fid->start_clu;
-	fid->hint_femp.eidx = EXFAT_HINT_NONE;
-
-	return 0;
+	return exfat_clear_cluster(inode, clu->dir);
 }
 
 static int exfat_calc_num_entries(struct exfat_uni_name *p_uniname)

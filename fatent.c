@@ -277,6 +277,11 @@ int exfat_alloc_cluster(struct super_block *sb, unsigned int num_alloc,
 	unsigned int hint_clu, new_clu, last_clu = CLUS_EOF;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 
+	/* Check if there are reserved clusters up to max. */
+	if ((sbi->used_clusters + sbi->reserved_clusters) >=
+			(sbi->num_clusters - CLUS_BASE))
+		return -ENOSPC;
+
 	total_cnt = sbi->num_clusters - CLUS_BASE;
 
 	if (unlikely(total_cnt < sbi->used_clusters)) {

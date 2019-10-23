@@ -540,6 +540,7 @@ extern int exfat_find_dir_entry(struct super_block *sb,
 	struct exfat_dos_name *unused, unsigned int type);
 extern int exfat_zeroed_cluster(struct super_block *sb,
 	unsigned long long blknr, unsigned long long num_secs);
+extern int exfat_alloc_new_dir(struct inode *inode, struct exfat_chain *clu);
 
 /* inode.c */
 extern const struct inode_operations exfat_symlink_inode_operations;

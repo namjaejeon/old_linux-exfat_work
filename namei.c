@@ -403,15 +403,7 @@ int exfat_find_empty_entry(struct inode *inode, struct exfat_chain *p_dir,
 		clu.size = 0; /* UNUSED */
 		clu.flags = p_dir->flags;
 
-		/* (0) check if there are reserved clusters.
-		 * (reference comments of create_dir.
-		 */
-		if (!IS_CLUS_EOF(sbi->used_clusters) &&
-			((sbi->used_clusters + sbi->reserved_clusters) >=
-				 (sbi->num_clusters - 2)))
-			return -ENOSPC;
-
-		/* (1) allocate a cluster */
+		/* allocate a cluster */
 		ret = exfat_alloc_cluster(sb, 1, &clu);
 		if (ret)
 			return ret;
@@ -419,7 +411,7 @@ int exfat_find_empty_entry(struct inode *inode, struct exfat_chain *p_dir,
 		if (exfat_clear_cluster(inode, clu.dir))
 			return -EIO;
 
-		/* (2) append to the FAT chain */
+		/* append to the FAT chain */
 		if (clu.flags != p_dir->flags) {
 			/* no-fat-chain bit is disabled,
 			 * so fat-chain should be synced with alloc-bmp
@@ -449,7 +441,7 @@ int exfat_find_empty_entry(struct inode *inode, struct exfat_chain *p_dir,
 		p_dir->size++;
 		size = (p_dir->size << sbi->cluster_size_bits);
 
-		/* (3) update the directory entry */
+		/* update the directory entry */
 		if (p_dir->dir != sbi->root_dir) {
 			ep = exfat_get_dentry(sb,
 				&(fid->dir), fid->entry + 1, &sector);
@@ -477,49 +469,32 @@ int exfat_find_empty_entry(struct inode *inode, struct exfat_chain *p_dir,
 	return dentry;
 }
 
-static int exfat_create_file(struct inode *inode, struct exfat_chain *p_dir,
-	struct exfat_uni_name *p_uniname, unsigned char mode,
-	struct exfat_file_id *fid)
+static struct exfat_file_id *exfat_alloc_fid(struct exfat_chain *p_dir,
+	int dentry, unsigned int start_clu, int clu_size, unsigned int type,
+	unsigned char mode)
 {
-	int ret, dentry, num_entries;
-	struct exfat_dos_name dos_name;
-	struct super_block *sb = inode->i_sb;
+	struct exfat_file_id *fid;
 
-	ret = exfat_get_num_entries_and_dos_name(sb, p_dir, p_uniname,
-			&num_entries, &dos_name, 0);
-	if (ret)
-		return ret;
-
-	/* exfat_find_empty_entry must be called before alloc_cluster() */
-	dentry = exfat_find_empty_entry(inode, p_dir, num_entries);
-	if (dentry < 0)
-		return dentry; /* -EIO or -ENOSPC */
-
-	/* (1) update the directory entry */
-	/* fill the dos name directory entry information of the created file.
-	 * the first cluster is not determined yet. (0)
-	 */
-	ret = exfat_init_dir_entry(sb, p_dir, dentry, TYPE_FILE | mode,
-		CLUS_FREE, 0);
-	if (ret)
-		return ret;
-
-	ret = exfat_init_ext_entry(sb, p_dir, dentry, num_entries, p_uniname,
-		&dos_name);
-	if (ret)
-		return ret;
+	fid = kmalloc(sizeof(struct exfat_file_id), GFP_KERNEL);
+	if (!fid)
+		return NULL;
 
 	fid->dir.dir = p_dir->dir;
 	fid->dir.size = p_dir->size;
 	fid->dir.flags = p_dir->flags;
 	fid->entry = dentry;
 
-	fid->attr = ATTR_ARCHIVE | mode;
+	if (type == TYPE_FILE) {
+		fid->attr = ATTR_ARCHIVE | mode;
+		fid->start_clu = CLUS_EOF;
+		fid->size = 0;
+	} else {
+		fid->attr = ATTR_SUBDIR | mode;
+		fid->start_clu = start_clu;
+		fid->size = clu_size;
+	}
 	fid->flags = 0x03;
-	fid->size = 0;
-	fid->start_clu = CLUS_EOF;
-
-	fid->type = TYPE_FILE;
+	fid->type = type;
 	fid->rwoffset = 0;
 	fid->hint_bmap.off = CLUS_EOF;
 
@@ -529,7 +504,65 @@ static int exfat_create_file(struct inode *inode, struct exfat_chain *p_dir,
 	fid->hint_stat.clu = fid->start_clu;
 	fid->hint_femp.eidx = EXFAT_HINT_NONE;
 
-	return 0;
+	return fid;
+}
+
+static struct exfat_file_id *exfat_add_entry(struct inode *inode,
+	struct exfat_chain *p_dir, struct exfat_uni_name *p_uniname,
+	unsigned int type, unsigned char mode)
+{
+	int ret, dentry, num_entries;
+	struct exfat_dos_name dos_name;
+	struct super_block *sb = inode->i_sb;
+	struct exfat_sb_info *sbi = EXFAT_SB(sb);
+	struct exfat_file_id *fid;
+	struct exfat_chain clu;
+	int clu_size = 0;
+	unsigned int start_clu = CLUS_FREE;
+
+	ret = exfat_get_num_entries_and_dos_name(sb, p_dir, p_uniname,
+			&num_entries, &dos_name, 0);
+	if (ret)
+		goto out;
+
+	/* exfat_find_empty_entry must be called before alloc_cluster() */
+	dentry = exfat_find_empty_entry(inode, p_dir, num_entries);
+	if (dentry < 0) {
+		ret = dentry; /* -EIO or -ENOSPC */
+		goto out;
+	}
+
+	if (type == TYPE_DIR) {
+		ret = exfat_alloc_new_dir(inode, &clu);
+		if (ret)
+			goto out;
+		clu_size = sbi->cluster_size;
+		start_clu = clu.dir;
+	}
+
+	/* update the directory entry */
+	/* fill the dos name directory entry information of the created file.
+	 * the first cluster is not determined yet. (0)
+	 */
+	ret = exfat_init_dir_entry(sb, p_dir, dentry, type | mode,
+		start_clu, clu_size);
+	if (ret)
+		goto out;
+
+	ret = exfat_init_ext_entry(sb, p_dir, dentry, num_entries, p_uniname,
+		&dos_name);
+	if (ret)
+		goto out;
+
+	fid = exfat_alloc_fid(p_dir, dentry, start_clu, clu_size, type, mode);
+	if (!fid) {
+		ret = -ENOMEM;
+		goto out;
+	}
+
+	return fid;
+out:
+	return ERR_PTR(ret);
 }
 
 /* returns the length of a struct qstr, ignoring trailing dots */
@@ -604,30 +637,6 @@ static inline int exfat_resolve_path_for_lookup(struct inode *inode,
 	return __exfat_resolve_path(inode, path, dir, uni, 1);
 }
 
-/* create a file */
-static int __exfat_create(struct inode *inode, unsigned char *path,
-	unsigned char mode, struct exfat_file_id *fid)
-{
-	int ret;
-	struct exfat_chain dir;
-	struct exfat_uni_name uni_name;
-	struct super_block *sb = inode->i_sb;
-
-	/* check the validity of directory name in the given pathname */
-	ret = exfat_resolve_path(inode, path, &dir, &uni_name);
-	if (ret)
-		return ret;
-
-	exfat_set_vol_flags(sb, VOL_DIRTY);
-
-	/* create a new file */
-	ret = exfat_create_file(inode, &dir, &uni_name, mode, fid);
-
-	exfat_set_vol_flags(sb, VOL_CLEAN);
-
-	return ret;
-}
-
 static inline loff_t exfat_make_i_pos(struct exfat_file_id *fid)
 {
 	return ((loff_t) fid->dir.dir << 32) | (fid->entry & 0xffffffff);
@@ -638,22 +647,28 @@ static int exfat_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 {
 	struct super_block *sb = dir->i_sb;
 	struct inode *inode;
+	struct exfat_chain cdir;
+	struct exfat_uni_name uni_name;
 	struct exfat_file_id *fid;
 	loff_t i_pos;
 	int err;
 
-	fid = kmalloc(sizeof(struct exfat_file_id), GFP_KERNEL);
-	if (!fid)
-		return -ENOMEM;
-
 	mutex_lock(&EXFAT_SB(sb)->s_lock);
 
-	err = __exfat_create(dir, (unsigned char *) dentry->d_name.name,
-		FM_REGULAR, fid);
+	/* check the validity of directory name in the given pathname */
+	err = exfat_resolve_path(dir, (unsigned char *)dentry->d_name.name,
+		&cdir, &uni_name);
 	if (err)
 		goto out;
-	__lock_d_revalidate(dentry);
+	exfat_set_vol_flags(sb, VOL_DIRTY);
+	fid = exfat_add_entry(dir, &cdir, &uni_name, TYPE_FILE, FM_REGULAR);
+	exfat_set_vol_flags(sb, VOL_CLEAN);
+	if (IS_ERR(fid)) {
+		err = PTR_ERR(fid);
+		goto out;
+	}
 
+	__lock_d_revalidate(dentry);
 	inode_inc_iversion(dir);
 	dir->i_ctime = dir->i_mtime = dir->i_atime = current_time(dir);
 	if (IS_DIRSYNC(dir))
@@ -1330,6 +1345,8 @@ static int exfat_symlink(struct inode *dir, struct dentry *dentry,
 	struct super_block *sb = dir->i_sb;
 	struct inode *inode;
 	struct exfat_file_id *fid;
+	struct exfat_chain cdir;
+	struct exfat_uni_name uni_name;
 	loff_t i_pos;
 	int err;
 	unsigned long long len = (unsigned long long) strlen(target);
@@ -1338,15 +1355,19 @@ static int exfat_symlink(struct inode *dir, struct dentry *dentry,
 	if (!EXFAT_SB(sb)->options.symlink)
 		return -ENOTSUPP;
 
-	fid = kmalloc(sizeof(struct exfat_file_id), GFP_KERNEL);
-	if (!fid)
-		return -ENOMEM;
-
 	mutex_lock(&EXFAT_SB(sb)->s_lock);
-	err = __exfat_create(dir, (unsigned char *) dentry->d_name.name,
-		FM_SYMLINK, fid);
+	err = exfat_resolve_path(dir, (unsigned char *)dentry->d_name.name,
+		&cdir, &uni_name);
 	if (err)
 		goto out;
+
+	exfat_set_vol_flags(sb, VOL_DIRTY);
+	fid = exfat_add_entry(dir, &cdir, &uni_name, TYPE_FILE, FM_SYMLINK);
+	exfat_set_vol_flags(sb, VOL_CLEAN);
+	if (IS_ERR(fid)) {
+		err = PTR_ERR(fid);
+		goto out;
+	}
 
 	err = exfat_write_link(dir, fid, (char *) target, len);
 	if (err) {
@@ -1367,6 +1388,7 @@ static int exfat_symlink(struct inode *dir, struct dentry *dentry,
 	inode = exfat_build_inode(sb, fid, i_pos);
 	if (IS_ERR(inode)) {
 		err = PTR_ERR(inode);
+		__unlock_d_revalidate(dentry);
 		goto out;
 	}
 
@@ -1377,13 +1399,14 @@ static int exfat_symlink(struct inode *dir, struct dentry *dentry,
 	EXFAT_I(inode)->target = kmalloc((len + 1), GFP_KERNEL);
 	if (!EXFAT_I(inode)->target) {
 		err = -ENOMEM;
+		__unlock_d_revalidate(dentry);
 		goto out;
 	}
 	memcpy(EXFAT_I(inode)->target, target, len + 1);
 
 	d_instantiate(dentry, inode);
-out:
 	__unlock_d_revalidate(dentry);
+out:
 	mutex_unlock(&EXFAT_SB(sb)->s_lock);
 	return err;
 }
@@ -1398,25 +1421,22 @@ static int exfat_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 	loff_t i_pos;
 	int err;
 
-	fid = kmalloc(sizeof(struct exfat_file_id), GFP_KERNEL);
-	if (!fid)
-		return -ENOMEM;
-
 	mutex_lock(&EXFAT_SB(sb)->s_lock);
 	/* check the validity of directory name in the given old pathname */
-	err = exfat_resolve_path(dir, (unsigned char *) dentry->d_name.name,
+	err = exfat_resolve_path(dir, (unsigned char *)dentry->d_name.name,
 		&cdir, &uni_name);
 	if (err)
 		goto out;
 
 	exfat_set_vol_flags(sb, VOL_DIRTY);
-	err = exfat_create_dir(dir, &cdir, &uni_name, fid);
+	fid = exfat_add_entry(dir, &cdir, &uni_name, TYPE_DIR, FM_REGULAR);
 	exfat_set_vol_flags(sb, VOL_CLEAN);
-	if (err)
+	if (IS_ERR(fid)) {
+		err = PTR_ERR(fid);
 		goto out;
+	}
 
 	__lock_d_revalidate(dentry);
-
 	inode_inc_iversion(dir);
 	dir->i_ctime = dir->i_mtime = dir->i_atime = current_time(dir);
 	if (IS_DIRSYNC(dir))
