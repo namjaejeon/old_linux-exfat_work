@@ -160,7 +160,7 @@ static int __exfat_truncate(struct inode *inode, unsigned long long old_size,
 
 	/* invalidate cache and free the clusters */
 	/* clear exfat cache */
-	exfat_clu_cache_inval_inode(inode);
+	exfat_cache_inval_inode(inode);
 
 	/* hint information */
 	fid->hint_bmap.off = CLUS_EOF;
@@ -935,7 +935,7 @@ int exfat_read_inode(struct inode *inode, struct exfat_dir_entry *info)
 	struct exfat_entry_set_cache *es = NULL;
 	unsigned char is_dir = (fid->type == TYPE_DIR) ? 1 : 0;
 
-	exfat_clu_cache_init_inode(inode);
+	exfat_cache_init_inode(inode);
 
 	/* if root directory */
 	if (is_dir && (fid->dir.dir == sbi->root_dir) && (fid->entry == -1)) {
@@ -1135,6 +1135,6 @@ void exfat_evict_inode(struct inode *inode)
 	 * If any other function can call it,
 	 * you should check whether volume lock is needed or not.
 	 */
-	exfat_clu_cache_inval_inode(inode);
+	exfat_cache_inval_inode(inode);
 	exfat_detach(inode);
 }

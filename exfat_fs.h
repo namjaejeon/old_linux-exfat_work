@@ -205,13 +205,6 @@ struct exfat_entry_set_cache {
 	int sync;
 };
 
-struct exfat_clu_cache_lru {
-	spinlock_t cache_lru_lock;
-	struct list_head cache_lru;
-	int nr_caches;
-	unsigned int cache_valid_id;	/* for avoiding the race between alloc and free */
-};
-
 /*
  * exfat mount in-memory data
  */
@@ -289,10 +282,15 @@ struct exfat_file_id {
 	unsigned char reserved[3];	/* padding */
 	unsigned int version;		/* the copy of low 32bit of i_version to check the validation of hint_stat */
 	s64 rwoffset;			/* file offset or dentry index for readdir */
-	struct exfat_clu_cache_lru exfat_lru; /* exfat cache for a file */
+
 	struct exfat_hint hint_bmap;	/* hint for cluster last accessed */
 	struct exfat_hint hint_stat;	/* hint for entry index we try to lookup next time */
 	struct exfat_hint_femp hint_femp; /* hint for first empty entry */
+
+	spinlock_t cache_lru_lock;
+	struct list_head cache_lru;
+	int nr_caches;
+	unsigned int cache_valid_id;	/* for avoiding the race between alloc and free */
 };
 
 /*
@@ -443,10 +441,10 @@ extern int exfat_find_empty_entry(struct inode *inode,
 		struct exfat_chain *p_dir, int num_entries);
 
 /* cache.c */
-extern int exfat_clu_cache_init(void);
-extern void exfat_clu_cache_shutdown(void);
-extern void exfat_clu_cache_init_inode(struct inode *inode);
-extern void exfat_clu_cache_inval_inode(struct inode *inode);
+extern int exfat_cache_init(void);
+extern void exfat_cache_shutdown(void);
+extern void exfat_cache_init_inode(struct inode *inode);
+extern void exfat_cache_inval_inode(struct inode *inode);
 extern int exfat_get_clus(struct inode *inode, unsigned int cluster,
 		unsigned int *fclus, unsigned int *dclus,
 		unsigned int *last_dclus, int allow_eof);
