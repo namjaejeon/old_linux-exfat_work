@@ -252,8 +252,8 @@ const struct dentry_operations exfat_ci_dentry_ops = {
 #define CNT_UNUSED_HIT          (-2)
 /* search EMPTY CONTINUOUS "num_entries" entries */
 static int exfat_search_empty_slot(struct super_block *sb,
-	struct exfat_hint_femp *hint_femp, struct exfat_chain *p_dir,
-	int num_entries)
+		struct exfat_hint_femp *hint_femp, struct exfat_chain *p_dir,
+		int num_entries)
 {
 	int i, dentry, num_empty = 0;
 	int dentries_per_clu;
@@ -473,8 +473,8 @@ int exfat_find_empty_entry(struct inode *inode, struct exfat_chain *p_dir,
 }
 
 static struct exfat_file_id *exfat_alloc_fid(struct exfat_chain *p_dir,
-	int dentry, unsigned int start_clu, int clu_size, unsigned int type,
-	unsigned char mode)
+		int dentry, unsigned int start_clu, int clu_size,
+		unsigned int type, unsigned char mode)
 {
 	struct exfat_file_id *fid;
 
@@ -511,8 +511,8 @@ static struct exfat_file_id *exfat_alloc_fid(struct exfat_chain *p_dir,
 }
 
 static struct exfat_file_id *exfat_add_entry(struct inode *inode,
-	struct exfat_chain *p_dir, struct exfat_uni_name *p_uniname,
-	unsigned int type, unsigned char mode)
+		struct exfat_chain *p_dir, struct exfat_uni_name *p_uniname,
+		unsigned int type, unsigned char mode)
 {
 	int ret, dentry, num_entries;
 	struct exfat_dos_name dos_name;
@@ -581,7 +581,8 @@ static inline unsigned int __striptail_len(unsigned int len, const char *name)
  * Zero if it was successful; otherwise nonzero.
  */
 static int __exfat_resolve_path(struct inode *inode, const unsigned char *path,
-	struct exfat_chain *p_dir, struct exfat_uni_name *p_uniname, int lookup)
+		struct exfat_chain *p_dir, struct exfat_uni_name *p_uniname,
+		int lookup)
 {
 	int namelen;
 	int lossy = NLS_NAME_NO_LOSSY;
@@ -627,15 +628,15 @@ static int __exfat_resolve_path(struct inode *inode, const unsigned char *path,
 }
 
 static inline int exfat_resolve_path(struct inode *inode,
-	const unsigned char *path, struct exfat_chain *dir,
-	struct exfat_uni_name *uni)
+		const unsigned char *path, struct exfat_chain *dir,
+		struct exfat_uni_name *uni)
 {
 	return __exfat_resolve_path(inode, path, dir, uni, 0);
 }
 
 static inline int exfat_resolve_path_for_lookup(struct inode *inode,
-	const unsigned char *path, struct exfat_chain *dir,
-	struct exfat_uni_name *uni)
+		const unsigned char *path, struct exfat_chain *dir,
+		struct exfat_uni_name *uni)
 {
 	return __exfat_resolve_path(inode, path, dir, uni, 1);
 }
@@ -804,7 +805,7 @@ static int exfat_d_anon_disconn(struct dentry *dentry)
 
 /* read data from a opened file */
 static int exfat_read_link(struct inode *inode, struct exfat_file_id *fid,
-	void *buffer, unsigned long long count)
+		void *buffer, unsigned long long count)
 {
 	int ret = 0;
 	int offset, sec_offset;
@@ -1135,7 +1136,7 @@ out:
 
 /* write data into a opened file */
 static int exfat_write_link(struct inode *inode, struct exfat_file_id *fid,
-	void *buffer, unsigned long long count)
+		void *buffer, unsigned long long count)
 {
 	int ret = 0;
 	int modified = false, offset, sec_offset;
@@ -1597,8 +1598,8 @@ out:
 }
 
 static int exfat_rename_file(struct inode *inode, struct exfat_chain *p_dir,
-	int oldentry, struct exfat_uni_name *p_uniname,
-	struct exfat_file_id *fid)
+		int oldentry, struct exfat_uni_name *p_uniname,
+		struct exfat_file_id *fid)
 {
 	int ret, num_old_entries, num_new_entries;
 	unsigned long long sector_old, sector_new;
@@ -1699,8 +1700,8 @@ static int exfat_rename_file(struct inode *inode, struct exfat_chain *p_dir,
 }
 
 static int exfat_move_file(struct inode *inode, struct exfat_chain *p_olddir,
-	int oldentry, struct exfat_chain *p_newdir,
-	struct exfat_uni_name *p_uniname, struct exfat_file_id *fid)
+		int oldentry, struct exfat_chain *p_newdir,
+		struct exfat_uni_name *p_uniname, struct exfat_file_id *fid)
 {
 	int ret, newentry, num_new_entries, num_old_entries;
 	unsigned long long sector_mov, sector_new;
@@ -1814,8 +1815,8 @@ static void exfat_update_parent_info(struct exfat_file_id *fid,
 
 /* rename or move a old file into a new file */
 static int __exfat_rename(struct inode *old_parent_inode,
-	struct exfat_file_id *fid, struct inode *new_parent_inode,
-	struct dentry *new_dentry)
+		struct exfat_file_id *fid, struct inode *new_parent_inode,
+		struct dentry *new_dentry)
 {
 	int ret;
 	int dentry;

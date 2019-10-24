@@ -7,12 +7,12 @@
 #define _UPCASE_H
 
 /* Upcase tabel macro */
-#define EXFAT_NUM_UPCASE              2918
-#define HIGH_INDEX_BIT (8)
-#define HIGH_INDEX_MASK (0xFF00)
-#define LOW_INDEX_BIT (16-HIGH_INDEX_BIT)
-#define UTBL_ROW_COUNT (1<<LOW_INDEX_BIT)
-#define UTBL_COL_COUNT (1<<HIGH_INDEX_BIT)
+#define EXFAT_NUM_UPCASE	2918
+#define HIGH_INDEX_BIT		(8)
+#define HIGH_INDEX_MASK		(0xFF00)
+#define LOW_INDEX_BIT		(16 - HIGH_INDEX_BIT)
+#define UTBL_ROW_COUNT		(1 << LOW_INDEX_BIT)
+#define UTBL_COL_COUNT		(1 << HIGH_INDEX_BIT)
 
 static inline unsigned short get_col_index(unsigned short i)
 {

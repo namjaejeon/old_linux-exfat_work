@@ -84,7 +84,7 @@ static inline void exfat_clu_cache_free(struct exfat_clu_cache *cache)
 }
 
 static inline void exfat_clu_cache_update_lru(struct inode *inode,
-					struct exfat_clu_cache *cache)
+		struct exfat_clu_cache *cache)
 {
 	struct exfat_clu_cache_lru *exfat_lru =
 		&(EXFAT_I(inode)->fid->exfat_lru);
@@ -94,8 +94,8 @@ static inline void exfat_clu_cache_update_lru(struct inode *inode,
 }
 
 static unsigned int exfat_clu_cache_lookup(struct inode *inode,
-	unsigned int fclus, struct exfat_clu_cache_id *cid,
-	unsigned int *cached_fclus, unsigned int *cached_dclus)
+		unsigned int fclus, struct exfat_clu_cache_id *cid,
+		unsigned int *cached_fclus, unsigned int *cached_dclus)
 {
 	struct exfat_clu_cache_lru *exfat_lru =
 			&(EXFAT_I(inode)->fid->exfat_lru);
@@ -134,7 +134,7 @@ static unsigned int exfat_clu_cache_lookup(struct inode *inode,
 }
 
 static struct exfat_clu_cache *exfat_clu_cache_merge(struct inode *inode,
-					 struct exfat_clu_cache_id *new)
+		struct exfat_clu_cache_id *new)
 {
 	struct exfat_clu_cache_lru *exfat_lru =
 			&(EXFAT_I(inode)->fid->exfat_lru);
@@ -152,7 +152,7 @@ static struct exfat_clu_cache *exfat_clu_cache_merge(struct inode *inode,
 }
 
 static void exfat_clu_cache_add(struct inode *inode,
-			struct exfat_clu_cache_id *new)
+		struct exfat_clu_cache_id *new)
 {
 	struct exfat_clu_cache_lru *exfat_lru =
 			&(EXFAT_I(inode)->fid->exfat_lru);
@@ -238,7 +238,7 @@ void exfat_clu_cache_inval_inode(struct inode *inode)
 }
 
 static inline int cache_contiguous(struct exfat_clu_cache_id *cid,
-	unsigned int dclus)
+		unsigned int dclus)
 {
 	cid->nr_contig++;
 	return ((cid->dcluster + cid->nr_contig) == dclus);
@@ -254,8 +254,8 @@ static inline void cache_init(struct exfat_clu_cache_id *cid,
 }
 
 int exfat_get_clus(struct inode *inode, unsigned int cluster,
-	unsigned int *fclus, unsigned int *dclus, unsigned int *last_dclus,
-	int allow_eof)
+		unsigned int *fclus, unsigned int *dclus,
+		unsigned int *last_dclus, int allow_eof)
 {
 	struct super_block *sb = inode->i_sb;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);

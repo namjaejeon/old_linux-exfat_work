@@ -595,8 +595,8 @@ static bool is_exfat(struct pbr *pbr)
 }
 
 static int exfat_load_upcase_table(struct super_block *sb,
-	unsigned long long sector, unsigned long long num_sectors,
-	unsigned int utbl_checksum)
+		unsigned long long sector, unsigned long long num_sectors,
+		unsigned int utbl_checksum)
 {
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 	struct buffer_head *bh = NULL;
@@ -812,7 +812,7 @@ load_default:
 	return exfat_load_default_upcase_table(sb);
 } /* end of load_upcase_table */
 
-inline struct pbr *exfat_read_pbr_with_logical_sector(struct super_block *sb,
+static struct pbr *exfat_read_pbr_with_logical_sector(struct super_block *sb,
 		struct buffer_head **prev_bh)
 {
 	struct pbr *p_pbr = (struct pbr *) (*prev_bh)->b_data;

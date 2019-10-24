@@ -21,8 +21,8 @@ void exfat_update_bh(struct super_block *sb, struct buffer_head *bh, int sync)
 }
 
 static void exfat_get_uniname_from_dos_entry(struct super_block *sb,
-	struct exfat_dos_dentry *ep, struct exfat_uni_name *p_uniname,
-	unsigned char mode)
+		struct exfat_dos_dentry *ep, struct exfat_uni_name *p_uniname,
+		unsigned char mode)
 {
 	struct exfat_dos_name dos_name;
 
@@ -348,8 +348,8 @@ static int exfat_calc_num_entries(struct exfat_uni_name *p_uniname)
  * output : num_of_entry, dos_name(format : aaaaaa~1.bbb)
  */
 int exfat_get_num_entries_and_dos_name(struct super_block *sb,
-	struct exfat_chain *p_dir, struct exfat_uni_name *p_uniname,
-	int *entries, struct exfat_dos_name *p_dosname, int lookup)
+		struct exfat_chain *p_dir, struct exfat_uni_name *p_uniname,
+		int *entries, struct exfat_dos_name *p_dosname, int lookup)
 {
 	int num_entries;
 
@@ -527,7 +527,7 @@ void exfat_get_entry_time(struct exfat_dentry *p_entry,
 }
 
 void exfat_set_entry_time(struct exfat_dentry *p_entry,
-	struct exfat_timestamp *tp, unsigned char mode)
+		struct exfat_timestamp *tp, unsigned char mode)
 {
 	unsigned short t, d;
 	struct exfat_file_dentry *ep = (struct exfat_file_dentry *)p_entry;
@@ -552,7 +552,7 @@ void exfat_set_entry_time(struct exfat_dentry *p_entry,
 }
 
 static void exfat_init_file_entry(struct super_block *sb,
-	struct exfat_file_dentry *ep, unsigned int type)
+		struct exfat_file_dentry *ep, unsigned int type)
 {
 	struct exfat_timestamp tm, *tp;
 
@@ -568,7 +568,8 @@ static void exfat_init_file_entry(struct super_block *sb,
 }
 
 static void exfat_init_strm_entry(struct exfat_strm_dentry *ep,
-	unsigned char flags, unsigned int start_clu, unsigned long long size)
+		unsigned char flags, unsigned int start_clu,
+		unsigned long long size)
 {
 	exfat_set_entry_type((struct exfat_dentry *)ep, TYPE_STREAM);
 	ep->flags = flags;
@@ -578,7 +579,7 @@ static void exfat_init_strm_entry(struct exfat_strm_dentry *ep,
 }
 
 static void exfat_init_name_entry(struct exfat_name_dentry *ep,
-	unsigned short *uniname)
+		unsigned short *uniname)
 {
 	int i;
 
@@ -594,8 +595,8 @@ static void exfat_init_name_entry(struct exfat_name_dentry *ep,
 }
 
 int exfat_init_dir_entry(struct super_block *sb, struct exfat_chain *p_dir,
-	int entry, unsigned int type, unsigned int start_clu,
-	unsigned long long size)
+		int entry, unsigned int type, unsigned int start_clu,
+		unsigned long long size)
 {
 	unsigned long long sector;
 	unsigned char flags;
@@ -671,8 +672,8 @@ out_unlock:
 }
 
 int exfat_init_ext_entry(struct super_block *sb, struct exfat_chain *p_dir,
-	int entry, int num_entries, struct exfat_uni_name *p_uniname,
-	struct exfat_dos_name *p_dosname)
+		int entry, int num_entries, struct exfat_uni_name *p_uniname,
+		struct exfat_dos_name *p_dosname)
 {
 	int i;
 	unsigned long long sector;
@@ -812,8 +813,8 @@ int exfat_update_dir_chksum_with_entry_set(struct super_block *sb,
 }
 
 static int exfat_walk_fat_chain(struct super_block *sb,
-	struct exfat_chain *p_dir, unsigned int byte_offset,
-	unsigned int *clu)
+		struct exfat_chain *p_dir, unsigned int byte_offset,
+		unsigned int *clu)
 {
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 	unsigned int clu_offset;
@@ -906,8 +907,8 @@ static int exfat_dir_readahead(struct super_block *sb, unsigned long long sec)
 }
 
 struct exfat_dentry *exfat_get_dentry(struct super_block *sb,
-	struct exfat_chain *p_dir, int entry, struct buffer_head **bh,
-	unsigned long long *sector)
+		struct exfat_chain *p_dir, int entry, struct buffer_head **bh,
+		unsigned long long *sector)
 {
 	unsigned int dentries_per_page = PAGE_SIZE >> DENTRY_SIZE_BITS;
 	int off;
@@ -953,8 +954,8 @@ struct exfat_dentry *exfat_get_dentry(struct super_block *sb,
 #define ES_MODE_GET_NAME_ENTRY			3
 #define ES_MODE_GET_CRITICAL_SEC_ENTRY		4
 struct exfat_entry_set_cache *exfat_get_dentry_set(struct super_block *sb,
-	struct exfat_chain *p_dir, int entry, unsigned int type,
-	struct exfat_dentry **file_ep)
+		struct exfat_chain *p_dir, int entry, unsigned int type,
+		struct exfat_dentry **file_ep)
 {
 	int ret;
 	unsigned int off, byte_offset, clu = 0;
@@ -1145,8 +1146,9 @@ static int exfat_extract_uni_name(struct exfat_name_dentry *ep,
  * -EIO    : I/O error
  */
 int exfat_find_dir_entry(struct super_block *sb, struct exfat_file_id *fid,
-	struct exfat_chain *p_dir, struct exfat_uni_name *p_uniname,
-	int num_entries, struct exfat_dos_name *unused, unsigned int type)
+		struct exfat_chain *p_dir, struct exfat_uni_name *p_uniname,
+		int num_entries, struct exfat_dos_name *unused,
+		unsigned int type)
 {
 	int i, rewind = 0, dentry = 0, end_eidx = 0, num_ext = 0, len;
 	int order, step, name_len;

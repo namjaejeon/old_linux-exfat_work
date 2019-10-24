@@ -655,9 +655,8 @@ static void exfat_write_failed(struct address_space *mapping, loff_t to)
 }
 
 static int __exfat_write_begin(struct file *file, struct address_space *mapping,
-		loff_t pos, unsigned int len,
-		unsigned int flags, struct page **pagep,
-		void **fsdata, get_block_t *get_block,
+		loff_t pos, unsigned int len, unsigned int flags,
+		struct page **pagep, void **fsdata, get_block_t *get_block,
 		loff_t *bytes)
 {
 	int ret;
@@ -835,7 +834,7 @@ struct inode *exfat_iget(struct super_block *sb, loff_t i_pos)
 }
 
 static int __count_num_clusters(struct super_block *sb,
-	struct exfat_chain *p_chain, unsigned int *ret_count)
+		struct exfat_chain *p_chain, unsigned int *ret_count)
 {
 	unsigned int i, count;
 	unsigned int clu;
@@ -867,7 +866,8 @@ static int __count_num_clusters(struct super_block *sb,
 
 #define EXFAT_MIN_SUBDIR    (2)
 static int exfat_count_dos_name_entries(struct super_block *sb,
-	struct exfat_chain *p_dir, unsigned int type, unsigned int *dotcnt)
+		struct exfat_chain *p_dir, unsigned int type,
+		unsigned int *dotcnt)
 {
 	int i, count = 0;
 	int dentries_per_clu;

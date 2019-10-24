@@ -78,7 +78,7 @@ static inline bool is_valid_clus(struct exfat_sb_info *sbi, unsigned int clus)
 }
 
 int exfat_ent_get(struct super_block *sb, unsigned int loc,
-	unsigned int *content)
+		unsigned int *content)
 {
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 	int err;
@@ -194,7 +194,6 @@ int exfat_free_cluster(struct super_block *sb, struct exfat_chain *p_chain,
 	}
 
 out:
-
 	sbi->used_clusters -= num_clusters;
 	return 0;
 }

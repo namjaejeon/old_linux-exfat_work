@@ -37,7 +37,7 @@ const struct file_operations exfat_file_operations = {
 };
 
 static const char *exfat_follow_link(struct dentry *dentry, struct inode *inode,
-	struct delayed_call *done)
+		struct delayed_call *done)
 {
 	struct exfat_inode_info *ei = EXFAT_I(inode);
 
