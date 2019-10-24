@@ -741,7 +741,7 @@ static inline ssize_t __exfat_direct_IO(int rw, struct kiocb *iocb,
 	}
 
 	/*
-	 * sdFAT need to use the DIO_LOCKING for avoiding the race
+	 * Need to use the DIO_LOCKING for avoiding the race
 	 * condition of exfat_get_block() and ->truncate().
 	 */
 	ret = __exfat_blkdev_direct_IO(rw, iocb, inode, iov_u, offset, nr_segs);
