@@ -472,7 +472,7 @@ unsigned int exfat_get_entry_clu0(struct exfat_dentry *p_entry)
 {
 	struct exfat_strm_dentry *ep = (struct exfat_strm_dentry *)p_entry;
 
-	return (unsigned int)le32_to_cpu(ep->start_clu);
+	return le32_to_cpu(ep->start_clu);
 }
 
 void exfat_set_entry_clu0(struct exfat_dentry *p_entry, unsigned int start_clu)
