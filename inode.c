@@ -23,7 +23,7 @@
 #define BLOCK_ADDED(bmap_ops)	(bmap_ops)
 
 /* resize the file length */
-int __exfat_truncate(struct inode *inode, unsigned long long old_size,
+static int __exfat_truncate(struct inode *inode, unsigned long long old_size,
 		unsigned long long new_size)
 {
 	unsigned int num_clusters_new, num_clusters_da, num_clusters_phys;
