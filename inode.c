@@ -618,19 +618,13 @@ unlock_ret:
 
 static int exfat_readpage(struct file *file, struct page *page)
 {
-	int ret;
-
-	ret = mpage_readpage(page, exfat_get_block);
-	return ret;
+	return mpage_readpage(page, exfat_get_block);
 }
 
 static int exfat_readpages(struct file *file, struct address_space *mapping,
 		struct list_head *pages, unsigned int nr_pages)
 {
-	int ret;
-
-	ret = mpage_readpages(mapping, pages, nr_pages, exfat_get_block);
-	return ret;
+	return mpage_readpages(mapping, pages, nr_pages, exfat_get_block);
 }
 
 static int exfat_writepage(struct page *page, struct writeback_control *wbc)
