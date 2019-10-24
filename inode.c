@@ -174,7 +174,7 @@ int __exfat_truncate(struct inode *inode, unsigned long long old_size,
 	fid->hint_femp.eidx = EXFAT_HINT_NONE;
 
 	/* free the clusters */
-	if (exfat_free_cluster(sb, &clu, evict))
+	if (exfat_free_cluster(sb, &clu))
 		return -EIO;
 
 	exfat_set_vol_flags(sb, VOL_CLEAN);

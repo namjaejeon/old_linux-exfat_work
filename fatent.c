@@ -150,8 +150,7 @@ int exfat_chain_cont_cluster(struct super_block *sb, unsigned int chain,
 	return 0;
 }
 
-int exfat_free_cluster(struct super_block *sb, struct exfat_chain *p_chain,
-		int do_relse)
+int exfat_free_cluster(struct super_block *sb, struct exfat_chain *p_chain)
 {
 	unsigned int num_clusters = 0;
 	unsigned int clu;
@@ -383,7 +382,7 @@ int exfat_alloc_cluster(struct super_block *sb, unsigned int num_alloc,
 	}
 error:
 	if (num_clusters)
-		exfat_free_cluster(sb, p_chain, 0);
+		exfat_free_cluster(sb, p_chain);
 	return ret;
 }
 

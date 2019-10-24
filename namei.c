@@ -1121,7 +1121,7 @@ static int __exfat_remove(struct inode *inode, struct exfat_file_id *fid)
 	 */
 	/* clear exfat cache */
 	exfat_clu_cache_inval_inode(inode);
-	ret = exfat_free_cluster(sb, &clu_to_free, 0);
+	ret = exfat_free_cluster(sb, &clu_to_free);
 	/* WARN : DO NOT RETURN ERROR IN HERE */
 
 	/* update struct exfat_file_id  */
@@ -1941,7 +1941,7 @@ static int __exfat_rename(struct inode *old_parent_inode,
 					sbi->cluster_size_bits) + 1;
 			new_clu_to_free.flags = new_fid->flags;
 
-			if (exfat_free_cluster(sb, &new_clu_to_free, 1)) {
+			if (exfat_free_cluster(sb, &new_clu_to_free)) {
 				/* just set I/O error only */
 				ret = -EIO;
 			}

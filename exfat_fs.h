@@ -393,7 +393,7 @@ extern inline void set_sb_dirty(struct super_block *sb);
 extern int exfat_alloc_cluster(struct super_block *sb, unsigned int num_alloc,
 		struct exfat_chain *p_chain);
 extern int exfat_free_cluster(struct super_block *sb,
-		struct exfat_chain *p_chain, int do_relse);
+		struct exfat_chain *p_chain);
 extern int exfat_ent_get(struct super_block *sb, unsigned int loc,
 		unsigned int *content);
 extern int exfat_ent_set(struct super_block *sb, unsigned int loc,
