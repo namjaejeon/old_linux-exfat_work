@@ -301,7 +301,7 @@ struct exfat_file_id {
 struct exfat_inode_info {
 	struct exfat_file_id *fid;
 
-	char  *target;
+	char *target;
 	/* NOTE: i_size_ondisk is 64bits, so must hold ->inode_lock to access */
 	loff_t i_size_ondisk;		/* physically allocated size */
 	loff_t i_size_aligned;		/* block-aligned i_size (used in cont_write_begin) */

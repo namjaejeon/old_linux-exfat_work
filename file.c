@@ -41,7 +41,7 @@ static const char *exfat_follow_link(struct dentry *dentry, struct inode *inode,
 {
 	struct exfat_inode_info *ei = EXFAT_I(inode);
 
-	return (char *)(ei->target);
+	return ei->target;
 }
 
 const struct inode_operations exfat_symlink_inode_operations = {
