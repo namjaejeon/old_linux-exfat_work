@@ -151,7 +151,7 @@ struct exfat_dentry_namebuf {
 };
 
 struct exfat_dir_entry {
-	unsigned int attr;
+	unsigned short attr;
 	unsigned long long size;
 	unsigned int num_subdirs;
 	struct exfat_date_time create_timestamp;
@@ -275,7 +275,7 @@ struct exfat_file_id {
 	struct exfat_chain dir;
 	int entry;
 	unsigned int type;
-	unsigned int attr;
+	unsigned short attr;
 	unsigned int start_clu;
 	unsigned long long size;
 	unsigned char flags;
@@ -347,7 +347,7 @@ static inline int exfat_mode_can_hold_ro(struct inode *inode)
  */
 /* Convert attribute bits and a mask to the UNIX mode. */
 static inline mode_t exfat_make_mode(struct exfat_sb_info *sbi,
-		unsigned int attr, mode_t mode)
+		unsigned short attr, mode_t mode)
 {
 	if ((attr & ATTR_READONLY) && !(attr & ATTR_SUBDIR))
 		mode &= ~0222;
@@ -361,18 +361,18 @@ static inline mode_t exfat_make_mode(struct exfat_sb_info *sbi,
 }
 
 /* Return the FAT attribute byte for this inode */
-static inline unsigned int exfat_make_attr(struct inode *inode)
+static inline unsigned short exfat_make_attr(struct inode *inode)
 {
-	unsigned int attrs = EXFAT_I(inode)->fid->attr;
+	unsigned short attr = EXFAT_I(inode)->fid->attr;
 
 	if (S_ISDIR(inode->i_mode))
-		attrs |= ATTR_SUBDIR;
+		attr |= ATTR_SUBDIR;
 	if (exfat_mode_can_hold_ro(inode) && !(inode->i_mode & 0222))
-		attrs |= ATTR_READONLY;
-	return attrs;
+		attr |= ATTR_READONLY;
+	return attr;
 }
 
-static inline void exfat_save_attr(struct inode *inode, unsigned int attr)
+static inline void exfat_save_attr(struct inode *inode, unsigned short attr)
 {
 	if (exfat_mode_can_hold_ro(inode))
 		EXFAT_I(inode)->fid->attr = attr & ATTR_RWMASK;
@@ -461,9 +461,9 @@ extern void exfat_get_uniname_from_ext_entry(struct super_block *sb,
 extern int exfat_count_used_clusters(struct super_block *sb,
 		unsigned int *ret_count);
 extern unsigned int exfat_get_entry_type(struct exfat_dentry *p_entry);
-extern unsigned int exfat_get_entry_attr(struct exfat_dentry *p_entry);
+extern unsigned short exfat_get_entry_attr(struct exfat_dentry *p_entry);
 extern void exfat_set_entry_attr(struct exfat_dentry *p_entry,
-		unsigned int attr);
+		unsigned short attr);
 extern unsigned char exfat_get_entry_flag(struct exfat_dentry *p_entry);
 extern void exfat_set_entry_flag(struct exfat_dentry *p_entry,
 		unsigned char flags);

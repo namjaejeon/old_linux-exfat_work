@@ -440,18 +440,18 @@ static void exfat_set_entry_type(struct exfat_dentry *p_entry,
 	}
 }
 
-unsigned int exfat_get_entry_attr(struct exfat_dentry *p_entry)
+unsigned short exfat_get_entry_attr(struct exfat_dentry *p_entry)
 {
 	struct exfat_file_dentry *ep = (struct exfat_file_dentry *)p_entry;
 
-	return (unsigned int)le16_to_cpu(ep->attr);
+	return le16_to_cpu(ep->attr);
 }
 
-void exfat_set_entry_attr(struct exfat_dentry *p_entry, unsigned int attr)
+void exfat_set_entry_attr(struct exfat_dentry *p_entry, unsigned short attr)
 {
 	struct exfat_file_dentry *ep = (struct exfat_file_dentry *)p_entry;
 
-	ep->attr = cpu_to_le16((unsigned short) attr);
+	ep->attr = cpu_to_le16(attr);
 }
 
 unsigned char exfat_get_entry_flag(struct exfat_dentry *p_entry)
