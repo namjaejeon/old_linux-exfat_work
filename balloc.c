@@ -52,6 +52,7 @@ int exfat_load_alloc_bmp(struct super_block *sb)
 	struct exfat_chain clu;
 	struct exfat_bmap_dentry *ep = NULL;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
+	struct buffer_head *bh;
 
 	clu.dir = sbi->root_dir;
 	clu.flags = 0x01;
@@ -59,11 +60,12 @@ int exfat_load_alloc_bmp(struct super_block *sb)
 	while (!IS_CLUS_EOF(clu.dir)) {
 		for (i = 0; i < sbi->dentries_per_clu; i++) {
 			ep = (struct exfat_bmap_dentry *)exfat_get_dentry(
-					sb, &clu, i, NULL);
+					sb, &clu, i, &bh, NULL);
 			if (!ep)
 				return -EIO;
 
 			type = exfat_get_entry_type((struct exfat_dentry *)ep);
+			brelse(bh);
 			if (type == TYPE_UNUSED)
 				break;
 			if (type != TYPE_BITMAP)

@@ -875,6 +875,7 @@ static int exfat_count_dos_name_entries(struct super_block *sb,
 	struct exfat_chain clu;
 	struct exfat_dentry *ep;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
+	struct buffer_head *bh;
 
 	dentries_per_clu = sbi->dentries_per_clu;
 
@@ -887,11 +888,12 @@ static int exfat_count_dos_name_entries(struct super_block *sb,
 
 	while (!IS_CLUS_EOF(clu.dir)) {
 		for (i = 0; i < dentries_per_clu; i++) {
-			ep = exfat_get_dentry(sb, &clu, i, NULL);
+			ep = exfat_get_dentry(sb, &clu, i, &bh, NULL);
 			if (!ep)
 				return -EIO;
 
 			entry_type = exfat_get_entry_type(ep);
+			brelse(bh);
 
 			if (entry_type == TYPE_UNUSED)
 				return count;

@@ -78,13 +78,10 @@ static void free_upcase_table(struct super_block *sb)
 int __exfat_umount(struct super_block *sb)
 {
 	int ret = 0;
-	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 
 	ret = exfat_set_vol_flags(sb, VOL_CLEAN);
 	free_upcase_table(sb);
 	exfat_free_alloc_bmp(sb);
-	exfat_release_caches(&sbi->fcache.lru_list);
-	exfat_release_caches(&sbi->dcache.lru_list);
 
 	return ret;
 }
@@ -766,6 +763,7 @@ static int load_upcase_table(struct super_block *sb)
 	struct exfat_chain clu;
 	struct exfat_case_dentry *ep;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
+	struct buffer_head *bh;
 
 	clu.dir = sbi->root_dir;
 	clu.flags = 0x01;
@@ -773,16 +771,21 @@ static int load_upcase_table(struct super_block *sb)
 	while (!IS_CLUS_EOF(clu.dir)) {
 		for (i = 0; i < sbi->dentries_per_clu; i++) {
 			ep = (struct exfat_case_dentry *)exfat_get_dentry(sb,
-					&clu, i, NULL);
+					&clu, i, &bh, NULL);
 			if (!ep)
 				return -EIO;
 
 			type = exfat_get_entry_type((struct exfat_dentry *) ep);
 
-			if (type == TYPE_UNUSED)
+			if (type == TYPE_UNUSED) {
+				brelse(bh);
 				break;
-			if (type != TYPE_UPCASE)
+			}
+
+			if (type != TYPE_UPCASE) {
+				brelse(bh);
 				continue;
+			}
 
 			tbl_clu  = le32_to_cpu(ep->start_clu);
 			tbl_size = le64_to_cpu(ep->size);
@@ -792,6 +795,7 @@ static int load_upcase_table(struct super_block *sb)
 			ret = exfat_load_upcase_table(sb, sector, num_sectors,
 					le32_to_cpu(ep->checksum));
 
+			brelse(bh);
 			if (ret && (ret != -EIO))
 				goto load_default;
 
@@ -868,10 +872,6 @@ static int __exfat_fill_super(struct super_block *sb)
 	struct pbr64 *p_bpb;
 	struct buffer_head *bh;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
-
-	ret = exfat_meta_cache_init(sb);
-	if (ret)
-		return ret;
 
 	/* set block size to read super block */
 	sb_min_blocksize(sb, 512);

@@ -15,23 +15,24 @@ static int __exfat_ent_get(struct super_block *sb, unsigned int loc,
 {
 	unsigned int off, _content;
 	unsigned long long sec;
-	unsigned char *fat_sector;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
+	struct buffer_head *bh;
 
 	sec = sbi->FAT1_start_sector + (loc >> (sb->s_blocksize_bits-2));
 	off = (loc << 2) & (unsigned int)(sb->s_blocksize - 1);
 
-	fat_sector = exfat_fcache_getblk(sb, sec);
-	if (!fat_sector)
+	bh = sb_bread(sb, sec);
+	if (!bh)
 		return -EIO;
 
-	_content = le32_to_cpu(*(__le32 *)(&fat_sector[off]));
+	_content = le32_to_cpu(*(__le32 *)(&bh->b_data[off]));
 
 	/* remap reserved clusters to simplify code */
 	if (_content >= CLUSTER_32(0xFFFFFFF8))
 		_content = CLUS_EOF;
 
 	*content = CLUSTER_32(_content);
+	brelse(bh);
 	return 0;
 }
 
@@ -40,21 +41,22 @@ int exfat_ent_set(struct super_block *sb, unsigned int loc,
 {
 	unsigned int off;
 	unsigned long long sec;
-	unsigned char *fat_sector;
 	__le32 *fat_entry;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
+	struct buffer_head *bh;
 
 	sec = sbi->FAT1_start_sector + (loc >> (sb->s_blocksize_bits-2));
 	off = (loc << 2) & (unsigned int)(sb->s_blocksize - 1);
 
-	fat_sector = exfat_fcache_getblk(sb, sec);
-	if (!fat_sector)
+	bh = sb_bread(sb, sec);
+	if (!bh)
 		return -EIO;
 
-	fat_entry = (__le32 *)&(fat_sector[off]);
+	fat_entry = (__le32 *)&(bh->b_data[off]);
 	*fat_entry = cpu_to_le32(content);
-
-	return exfat_update_fcache(sb, sec);
+	exfat_update_bh(sb, bh, 0);
+	brelse(bh);
+	return 0;
 }
 
 static inline bool is_reserved_clus(unsigned int clus)
@@ -175,9 +177,6 @@ int exfat_free_cluster(struct super_block *sb, struct exfat_chain *p_chain,
 
 	if (p_chain->flags == 0x03) {
 		do {
-			if (do_relse)
-				exfat_release_dcache_cluster(sb, clu);
-
 			exfat_clr_alloc_bitmap(sb, clu-2);
 			clu++;
 
@@ -185,9 +184,6 @@ int exfat_free_cluster(struct super_block *sb, struct exfat_chain *p_chain,
 		} while (num_clusters < p_chain->size);
 	} else {
 		do {
-			if (do_relse)
-				exfat_release_dcache_cluster(sb, clu);
-
 			exfat_clr_alloc_bitmap(sb, (clu - CLUS_BASE));
 
 			if (get_next_clus_safe(sb, &clu))
