@@ -633,7 +633,7 @@ int exfat_init_dir_entry(struct super_block *sb, struct exfat_chain *p_dir,
 int update_dir_chksum(struct super_block *sb, struct exfat_chain *p_dir,
 		int entry)
 {
-	int ret = -EIO;
+	int ret = 0;
 	int i, num_entries;
 	unsigned long long sector;
 	unsigned short chksum;
@@ -646,15 +646,17 @@ int update_dir_chksum(struct super_block *sb, struct exfat_chain *p_dir,
 	if (!file_ep)
 		return -EIO;
 
+	lock_buffer(fbh);
 	num_entries = (int) file_ep->num_ext + 1;
 	chksum = calc_chksum_2byte((void *) file_ep, DENTRY_SIZE, 0,
 			CS_DIR_ENTRY);
 
 	for (i = 1; i < num_entries; i++) {
 		ep = exfat_get_dentry(sb, p_dir, entry + i, &bh, NULL);
-		if (!ep)
+		if (!ep) {
+			ret = -EIO;
 			goto out_unlock;
-
+		}
 		chksum = calc_chksum_2byte((void *)ep, DENTRY_SIZE, chksum,
 				CS_DEFAULT);
 		brelse(bh);
@@ -662,8 +664,9 @@ int update_dir_chksum(struct super_block *sb, struct exfat_chain *p_dir,
 
 	file_ep->checksum = cpu_to_le16(chksum);
 	exfat_update_bh(sb, fbh, 0);
-	brelse(fbh);
 out_unlock:
+	unlock_buffer(fbh);
+	brelse(fbh);
 	return ret;
 }
 
