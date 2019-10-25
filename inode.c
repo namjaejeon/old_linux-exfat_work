@@ -23,7 +23,7 @@
 #define BLOCK_ADDED(bmap_ops)	(bmap_ops)
 
 /* resize the file length */
-int __exfat_truncate(struct inode *inode, unsigned long long old_size,
+static int __exfat_truncate(struct inode *inode, unsigned long long old_size,
 		unsigned long long new_size)
 {
 	unsigned int num_clusters_new, num_clusters_da, num_clusters_phys;
@@ -52,7 +52,7 @@ int __exfat_truncate(struct inode *inode, unsigned long long old_size,
 
 	/* Reserved count update */
 #define num_clusters(v) ((v) ?	\
-	(unsigned int)(((v) - 1) >> sbi->cluster_size_bits) + 1 : 0)
+	(((v) - 1) >> sbi->cluster_size_bits) + 1 : 0)
 	num_clusters_da = num_clusters(EXFAT_I(inode)->i_size_aligned);
 	num_clusters_new = num_clusters(i_size_read(inode));
 	num_clusters_phys = num_clusters(EXFAT_I(inode)->i_size_ondisk);
@@ -120,7 +120,7 @@ int __exfat_truncate(struct inode *inode, unsigned long long old_size,
 	 * clu.flags: fid->flags (exFAT only)
 	 */
 
-	/* (1) update the directory entry */
+	/* update the directory entry */
 	if (!evict) {
 		es = exfat_get_dentry_set(sb, &(fid->dir), fid->entry,
 			ES_ALL_ENTRIES, &ep);
@@ -149,18 +149,18 @@ int __exfat_truncate(struct inode *inode, unsigned long long old_size,
 			return -EIO;
 		exfat_release_dentry_set(es);
 
-	} /* end of if(fid->dir.dir != DIR_DELETED) */
+	}
 
-	/* (2) cut off from the FAT chain */
+	/* cut off from the FAT chain */
 	if ((fid->flags == 0x01) &&
 			(!IS_CLUS_FREE(last_clu)) && (!IS_CLUS_EOF(last_clu))) {
 		if (exfat_ent_set(sb, last_clu, CLUS_EOF))
 			return -EIO;
 	}
 
-	/* (3) invalidate cache and free the clusters */
+	/* invalidate cache and free the clusters */
 	/* clear exfat cache */
-	exfat_clu_cache_inval_inode(inode);
+	exfat_cache_inval_inode(inode);
 
 	/* hint information */
 	fid->hint_bmap.off = CLUS_EOF;
@@ -174,7 +174,7 @@ int __exfat_truncate(struct inode *inode, unsigned long long old_size,
 	fid->hint_femp.eidx = EXFAT_HINT_NONE;
 
 	/* free the clusters */
-	if (exfat_free_cluster(sb, &clu, evict))
+	if (exfat_free_cluster(sb, &clu))
 		return -EIO;
 
 	exfat_set_vol_flags(sb, VOL_CLEAN);
@@ -342,8 +342,7 @@ static int __exfat_map_clus(struct inode *inode, unsigned int clu_offset,
 	fid->rwoffset = (s64)(clu_offset) << sbi->cluster_size_bits;
 
 	if (EXFAT_I(inode)->i_size_ondisk > 0)
-		num_clusters = (unsigned int)
-			((EXFAT_I(inode)->i_size_ondisk - 1) >>
+		num_clusters = ((EXFAT_I(inode)->i_size_ondisk - 1) >>
 				sbi->cluster_size_bits) + 1;
 
 	if (clu_offset >= num_clusters)
@@ -404,7 +403,7 @@ static int __exfat_map_clus(struct inode *inode, unsigned int clu_offset,
 		new_clu.size = 0;
 		new_clu.flags = fid->flags;
 
-		/* (1) allocate a cluster */
+		/* allocate a cluster */
 		if (num_to_be_allocated < 1) {
 			/* Broken FAT (i_sze > allocated FAT) */
 			exfat_fs_error(sb, "broken FAT chain.");
@@ -422,7 +421,7 @@ static int __exfat_map_clus(struct inode *inode, unsigned int clu_offset,
 			return -EIO;
 		}
 
-		/* (2) append to the FAT chain */
+		/* append to the FAT chain */
 		if (IS_CLUS_EOF(last_clu)) {
 			if (new_clu.flags == 0x01)
 				fid->flags = 0x01;
@@ -454,7 +453,7 @@ static int __exfat_map_clus(struct inode *inode, unsigned int clu_offset,
 			/* get stream entry */
 			ep++;
 
-			/* (3) update directory entry */
+			/* update directory entry */
 			if (modified) {
 				if (exfat_get_entry_flag(ep) != fid->flags)
 					exfat_set_entry_flag(ep, fid->flags);
@@ -476,7 +475,7 @@ static int __exfat_map_clus(struct inode *inode, unsigned int clu_offset,
 		inode->i_blocks += num_to_be_allocated <<
 			(sbi->cluster_size_bits - sb->s_blocksize_bits);
 
-		/* (4) Move *clu pointer along FAT chains (hole care)
+		/* Move *clu pointer along FAT chains (hole care)
 		 * because the caller of this function expect *clu to be
 		 * the last cluster.
 		 * This only works when num_to_be_allocated >= 2,
@@ -565,8 +564,8 @@ static int exfat_get_block(struct inode *inode, sector_t iblock,
 	if (err) {
 		if (err != -ENOSPC)
 			exfat_fs_error_ratelimit(sb,
-				"failed to bmap (inode:%p iblock:%u, err:%d)",
-				inode, (unsigned int)iblock, err);
+				"failed to bmap (inode : %p iblock : %llu, err : %d)",
+				inode, iblock, err);
 		goto unlock_ret;
 	}
 
@@ -585,7 +584,7 @@ static int exfat_get_block(struct inode *inode, sector_t iblock,
 				if (buffer_delay(bh_result) && (pos >
 					EXFAT_I(inode)->i_size_aligned)) {
 					exfat_fs_error(sb,
-						"requested for bmap out of range(pos:(%llu)>i_size_aligned(%llu)\n",
+						"requested for bmap out of range(pos : (%llu) > i_size_aligned(%llu)\n",
 						pos,
 						EXFAT_I(inode)->i_size_aligned);
 					err = -EIO;
@@ -618,19 +617,13 @@ unlock_ret:
 
 static int exfat_readpage(struct file *file, struct page *page)
 {
-	int ret;
-
-	ret = mpage_readpage(page, exfat_get_block);
-	return ret;
+	return mpage_readpage(page, exfat_get_block);
 }
 
 static int exfat_readpages(struct file *file, struct address_space *mapping,
 		struct list_head *pages, unsigned int nr_pages)
 {
-	int ret;
-
-	ret = mpage_readpages(mapping, pages, nr_pages, exfat_get_block);
-	return ret;
+	return mpage_readpages(mapping, pages, nr_pages, exfat_get_block);
 }
 
 static int exfat_writepage(struct page *page, struct writeback_control *wbc)
@@ -655,9 +648,8 @@ static void exfat_write_failed(struct address_space *mapping, loff_t to)
 }
 
 static int __exfat_write_begin(struct file *file, struct address_space *mapping,
-		loff_t pos, unsigned int len,
-		unsigned int flags, struct page **pagep,
-		void **fsdata, get_block_t *get_block,
+		loff_t pos, unsigned int len, unsigned int flags,
+		struct page **pagep, void **fsdata, get_block_t *get_block,
 		loff_t *bytes)
 {
 	int ret;
@@ -742,7 +734,7 @@ static inline ssize_t __exfat_direct_IO(int rw, struct kiocb *iocb,
 	}
 
 	/*
-	 * sdFAT need to use the DIO_LOCKING for avoiding the race
+	 * Need to use the DIO_LOCKING for avoiding the race
 	 * condition of exfat_get_block() and ->truncate().
 	 */
 	ret = __exfat_blkdev_direct_IO(rw, iocb, inode, iov_u, offset, nr_segs);
@@ -835,7 +827,7 @@ struct inode *exfat_iget(struct super_block *sb, loff_t i_pos)
 }
 
 static int __count_num_clusters(struct super_block *sb,
-	struct exfat_chain *p_chain, unsigned int *ret_count)
+		struct exfat_chain *p_chain, unsigned int *ret_count)
 {
 	unsigned int i, count;
 	unsigned int clu;
@@ -867,7 +859,8 @@ static int __count_num_clusters(struct super_block *sb,
 
 #define EXFAT_MIN_SUBDIR    (2)
 static int exfat_count_dos_name_entries(struct super_block *sb,
-	struct exfat_chain *p_dir, unsigned int type, unsigned int *dotcnt)
+		struct exfat_chain *p_dir, unsigned int type,
+		unsigned int *dotcnt)
 {
 	int i, count = 0;
 	int dentries_per_clu;
@@ -875,6 +868,7 @@ static int exfat_count_dos_name_entries(struct super_block *sb,
 	struct exfat_chain clu;
 	struct exfat_dentry *ep;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
+	struct buffer_head *bh;
 
 	dentries_per_clu = sbi->dentries_per_clu;
 
@@ -887,11 +881,12 @@ static int exfat_count_dos_name_entries(struct super_block *sb,
 
 	while (!IS_CLUS_EOF(clu.dir)) {
 		for (i = 0; i < dentries_per_clu; i++) {
-			ep = exfat_get_dentry(sb, &clu, i, NULL);
+			ep = exfat_get_dentry(sb, &clu, i, &bh, NULL);
 			if (!ep)
 				return -EIO;
 
 			entry_type = exfat_get_entry_type(ep);
+			brelse(bh);
 
 			if (entry_type == TYPE_UNUSED)
 				return count;
@@ -939,18 +934,18 @@ int exfat_read_inode(struct inode *inode, struct exfat_dir_entry *info)
 	struct exfat_entry_set_cache *es = NULL;
 	unsigned char is_dir = (fid->type == TYPE_DIR) ? 1 : 0;
 
-	exfat_clu_cache_init_inode(inode);
+	exfat_cache_init_inode(inode);
 
 	/* if root directory */
 	if (is_dir && (fid->dir.dir == sbi->root_dir) && (fid->entry == -1)) {
 		unsigned int num_clu;
 
 		info->attr = ATTR_SUBDIR;
-		memset((char *) &info->create_timestamp, 0,
+		memset(&info->create_timestamp, 0,
 				sizeof(struct exfat_date_time));
-		memset((char *) &info->modify_timestamp, 0,
+		memset(&info->modify_timestamp, 0,
 				sizeof(struct exfat_date_time));
-		memset((char *) &info->access_timestamp, 0,
+		memset(&info->access_timestamp, 0,
 				sizeof(struct exfat_date_time));
 
 		dir.dir = sbi->root_dir;
@@ -959,8 +954,7 @@ int exfat_read_inode(struct inode *inode, struct exfat_dir_entry *info)
 
 		if (__count_num_clusters(sb, &dir, &num_clu))
 			return -EIO;
-		info->size = (unsigned long long)num_clu <<
-			sbi->cluster_size_bits;
+		info->size = num_clu << sbi->cluster_size_bits;
 
 		count = exfat_count_dos_name_entries(sb, &dir, TYPE_DIR, NULL);
 		if (count < 0)
@@ -998,7 +992,7 @@ int exfat_read_inode(struct inode *inode, struct exfat_dir_entry *info)
 	info->modify_timestamp.second = tm.sec;
 	info->modify_timestamp.milli_second = 0;
 
-	memset((char *) &info->access_timestamp, 0,
+	memset(&info->access_timestamp, 0,
 			sizeof(struct exfat_date_time));
 
 	info->num_subdirs = 0;
@@ -1139,6 +1133,6 @@ void exfat_evict_inode(struct inode *inode)
 	 * If any other function can call it,
 	 * you should check whether volume lock is needed or not.
 	 */
-	exfat_clu_cache_inval_inode(inode);
+	exfat_cache_inval_inode(inode);
 	exfat_detach(inode);
 }

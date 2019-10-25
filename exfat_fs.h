@@ -151,7 +151,7 @@ struct exfat_dentry_namebuf {
 };
 
 struct exfat_dir_entry {
-	unsigned int attr;
+	unsigned short attr;
 	unsigned long long size;
 	unsigned int num_subdirs;
 	struct exfat_date_time create_timestamp;
@@ -205,13 +205,6 @@ struct exfat_entry_set_cache {
 	int sync;
 };
 
-struct exfat_clu_cache_lru {
-	spinlock_t cache_lru_lock;
-	struct list_head cache_lru;
-	int nr_caches;
-	unsigned int cache_valid_id;	/* for avoiding the race between alloc and free */
-};
-
 /*
  * exfat mount in-memory data
  */
@@ -229,19 +222,6 @@ struct exfat_mount_options {
 	unsigned char symlink;		/* support symlink operation */
 	unsigned char errors;		/* on error: continue, panic, remount-ro */
 	unsigned char discard;		/* flag on if -o dicard specified and device support discard() */
-};
-
-/* cache information */
-struct exfat_meta_cache {
-	struct exfat_meta_cache *next;
-	struct exfat_meta_cache *prev;
-	struct {
-		struct exfat_meta_cache *next;
-		struct exfat_meta_cache *prev;
-	} hash;
-	unsigned long long sec;
-	unsigned int flag;
-	struct buffer_head *bh;
 };
 
 /*
@@ -279,20 +259,6 @@ struct exfat_sb_info {
 	int reserved_clusters;			/* # of reserved clusters (DA) */
 	void *amap;				/* AU Allocation Map */
 
-	/* fat cache */
-	struct {
-		struct exfat_meta_cache pool[FAT_CACHE_SIZE];
-		struct exfat_meta_cache lru_list;
-		struct exfat_meta_cache hash_list[FAT_CACHE_HASH_SIZE];
-	} fcache;
-
-	/* meta cache */
-	struct {
-		struct exfat_meta_cache pool[BUF_CACHE_SIZE];
-		struct exfat_meta_cache lru_list;
-		struct exfat_meta_cache hash_list[BUF_CACHE_HASH_SIZE];
-	} dcache;
-
 	int s_dirt;
 	struct mutex s_lock;			/* superblock lock */
 	struct super_block *host_sb;		/* sb pointer */
@@ -309,17 +275,22 @@ struct exfat_file_id {
 	struct exfat_chain dir;
 	int entry;
 	unsigned int type;
-	unsigned int attr;
+	unsigned short attr;
 	unsigned int start_clu;
 	unsigned long long size;
 	unsigned char flags;
 	unsigned char reserved[3];	/* padding */
 	unsigned int version;		/* the copy of low 32bit of i_version to check the validation of hint_stat */
 	s64 rwoffset;			/* file offset or dentry index for readdir */
-	struct exfat_clu_cache_lru exfat_lru; /* exfat cache for a file */
+
 	struct exfat_hint hint_bmap;	/* hint for cluster last accessed */
 	struct exfat_hint hint_stat;	/* hint for entry index we try to lookup next time */
 	struct exfat_hint_femp hint_femp; /* hint for first empty entry */
+
+	spinlock_t cache_lru_lock;
+	struct list_head cache_lru;
+	int nr_caches;
+	unsigned int cache_valid_id;	/* for avoiding the race between alloc and free */
 };
 
 /*
@@ -328,7 +299,7 @@ struct exfat_file_id {
 struct exfat_inode_info {
 	struct exfat_file_id *fid;
 
-	char  *target;
+	char *target;
 	/* NOTE: i_size_ondisk is 64bits, so must hold ->inode_lock to access */
 	loff_t i_size_ondisk;		/* physically allocated size */
 	loff_t i_size_aligned;		/* block-aligned i_size (used in cont_write_begin) */
@@ -376,7 +347,7 @@ static inline int exfat_mode_can_hold_ro(struct inode *inode)
  */
 /* Convert attribute bits and a mask to the UNIX mode. */
 static inline mode_t exfat_make_mode(struct exfat_sb_info *sbi,
-		unsigned int attr, mode_t mode)
+		unsigned short attr, mode_t mode)
 {
 	if ((attr & ATTR_READONLY) && !(attr & ATTR_SUBDIR))
 		mode &= ~0222;
@@ -390,18 +361,18 @@ static inline mode_t exfat_make_mode(struct exfat_sb_info *sbi,
 }
 
 /* Return the FAT attribute byte for this inode */
-static inline unsigned int exfat_make_attr(struct inode *inode)
+static inline unsigned short exfat_make_attr(struct inode *inode)
 {
-	unsigned int attrs = EXFAT_I(inode)->fid->attr;
+	unsigned short attr = EXFAT_I(inode)->fid->attr;
 
 	if (S_ISDIR(inode->i_mode))
-		attrs |= ATTR_SUBDIR;
+		attr |= ATTR_SUBDIR;
 	if (exfat_mode_can_hold_ro(inode) && !(inode->i_mode & 0222))
-		attrs |= ATTR_READONLY;
-	return attrs;
+		attr |= ATTR_READONLY;
+	return attr;
 }
 
-static inline void exfat_save_attr(struct inode *inode, unsigned int attr)
+static inline void exfat_save_attr(struct inode *inode, unsigned short attr)
 {
 	if (exfat_mode_can_hold_ro(inode))
 		EXFAT_I(inode)->fid->attr = attr & ATTR_RWMASK;
@@ -418,32 +389,34 @@ extern inline void set_sb_dirty(struct super_block *sb);
 #define get_next_clus_safe(sb, pclu)	exfat_ent_get_safe(sb, *(pclu), pclu)
 
 extern int exfat_alloc_cluster(struct super_block *sb, unsigned int num_alloc,
-	struct exfat_chain *p_chain);
+		struct exfat_chain *p_chain);
 extern int exfat_free_cluster(struct super_block *sb,
-	struct exfat_chain *p_chain, int do_relse);
+		struct exfat_chain *p_chain);
 extern int exfat_ent_get(struct super_block *sb, unsigned int loc,
-	unsigned int *content);
+		unsigned int *content);
 extern int exfat_ent_set(struct super_block *sb, unsigned int loc,
-	unsigned int content);
+		unsigned int content);
 extern int exfat_ent_get_safe(struct super_block *sb, unsigned int loc,
-	unsigned int *content);
+		unsigned int *content);
 extern int exfat_count_ext_entries(struct super_block *sb,
-	struct exfat_chain *p_dir, int entry, struct exfat_dentry *p_entry);
+		struct exfat_chain *p_dir, int entry,
+		struct exfat_dentry *p_entry);
 extern int exfat_chain_cont_cluster(struct super_block *sb, unsigned int chain,
-	unsigned int len);
+		unsigned int len);
 extern struct exfat_dentry *exfat_get_dentry(struct super_block *sb,
-	struct exfat_chain *p_dir, int entry, unsigned long long *sector);
+		struct exfat_chain *p_dir, int entry, struct buffer_head **bh,
+		unsigned long long *sector);
 extern struct exfat_entry_set_cache *exfat_get_dentry_set(
-	struct super_block *sb, struct exfat_chain *p_dir, int entry,
-	unsigned int type, struct exfat_dentry **file_ep);
+		struct super_block *sb, struct exfat_chain *p_dir, int entry,
+		unsigned int type, struct exfat_dentry **file_ep);
 extern int exfat_clear_cluster(struct inode *inode, unsigned int clu);
 extern int exfat_find_location(struct super_block *sb,
-	struct exfat_chain *p_dir, int entry, unsigned long long *sector,
-	int *offset);
+		struct exfat_chain *p_dir, int entry,
+		unsigned long long *sector, int *offset);
 extern int exfat_find_last_cluster(struct super_block *sb,
-	struct exfat_chain *p_chain, unsigned int *ret_clu);
+		struct exfat_chain *p_chain, unsigned int *ret_clu);
 extern int exfat_mirror_bhs(struct super_block *sb, unsigned long long sec,
-	struct buffer_head *bh);
+		struct buffer_head *bh);
 
 /* balloc.c */
 extern int exfat_load_alloc_bmp(struct super_block *sb);
@@ -451,12 +424,12 @@ extern void exfat_free_alloc_bmp(struct super_block *sb);
 extern int exfat_set_alloc_bitmap(struct super_block *sb, unsigned int clu);
 extern void exfat_clr_alloc_bitmap(struct super_block *sb, unsigned int clu);
 extern unsigned int exfat_test_alloc_bitmap(struct super_block *sb,
-	unsigned int clu);
+		unsigned int clu);
 
 /* file.c */
 extern const struct file_operations exfat_file_operations;
 extern int exfat_file_fsync(struct file *filp, loff_t start, loff_t end,
-	int datasync);
+		int datasync);
 
 /* namei.c */
 extern const struct dentry_operations exfat_dentry_ops;
@@ -465,94 +438,83 @@ extern int exfat_setattr(struct dentry *dentry, struct iattr *attr);
 extern int exfat_getattr(const struct path *path, struct kstat *stat,
 		unsigned int request_mask, unsigned int query_flags);
 extern int exfat_find_empty_entry(struct inode *inode,
-	struct exfat_chain *p_dir, int num_entries);
+		struct exfat_chain *p_dir, int num_entries);
 
 /* cache.c */
-extern int exfat_clu_cache_init(void);
-extern void exfat_clu_cache_shutdown(void);
-extern void exfat_clu_cache_init_inode(struct inode *inode);
-extern void exfat_clu_cache_inval_inode(struct inode *inode);
+extern int exfat_cache_init(void);
+extern void exfat_cache_shutdown(void);
+extern void exfat_cache_init_inode(struct inode *inode);
+extern void exfat_cache_inval_inode(struct inode *inode);
 extern int exfat_get_clus(struct inode *inode, unsigned int cluster,
-	unsigned int *fclus, unsigned int *dclus, unsigned int *last_dclus,
-	int allow_eof);
-extern int exfat_lock_dcache(struct super_block *sb, unsigned long long sec);
-extern int exfat_unlock_dcache(struct super_block *sb, unsigned long long sec);
-extern int exfat_update_dcache(struct super_block *sb, unsigned long long sec,
-	int sync);
-extern int exfat_meta_cache_init(struct super_block *sb);
-extern int exfat_release_dcache(struct super_block *sb, unsigned long long sec);
-extern void exfat_release_dcache_cluster(struct super_block *sb,
-		unsigned int clu);
-void exfat_release_caches(struct exfat_meta_cache *lru_list);
-extern unsigned char *exfat_fcache_getblk(struct super_block *sb,
-	unsigned long long sec);
-extern int exfat_update_fcache(struct super_block *sb, unsigned long long sec);
-extern int exfat_dcache_readahead(struct super_block *sb,
-	unsigned long long sec);
-extern unsigned char *exfat_dcache_getblk(struct super_block *sb,
-	unsigned long long sec);
+		unsigned int *fclus, unsigned int *dclus,
+		unsigned int *last_dclus, int allow_eof);
 
 /* dir.c */
 extern const struct inode_operations exfat_dir_inode_operations;
 extern const struct file_operations exfat_dir_operations;
+extern void exfat_update_bh(struct super_block *sb, struct buffer_head *bh,
+		int sync);
 extern int exfat_create_dir(struct inode *inode, struct exfat_chain *p_dir,
-	struct exfat_uni_name *p_uniname, struct exfat_file_id *fid);
+		struct exfat_uni_name *p_uniname, struct exfat_file_id *fid);
 extern void exfat_get_uniname_from_ext_entry(struct super_block *sb,
-	struct exfat_chain *p_dir, int entry, unsigned short *uniname);
+		struct exfat_chain *p_dir, int entry, unsigned short *uniname);
 extern int exfat_count_used_clusters(struct super_block *sb,
-	unsigned int *ret_count);
+		unsigned int *ret_count);
 extern unsigned int exfat_get_entry_type(struct exfat_dentry *p_entry);
-extern unsigned int exfat_get_entry_attr(struct exfat_dentry *p_entry);
+extern unsigned short exfat_get_entry_attr(struct exfat_dentry *p_entry);
 extern void exfat_set_entry_attr(struct exfat_dentry *p_entry,
-	unsigned int attr);
+		unsigned short attr);
 extern unsigned char exfat_get_entry_flag(struct exfat_dentry *p_entry);
 extern void exfat_set_entry_flag(struct exfat_dentry *p_entry,
-	unsigned char flags);
+		unsigned char flags);
 extern unsigned int exfat_get_entry_clu0(struct exfat_dentry *p_entry);
 extern void exfat_set_entry_clu0(struct exfat_dentry *p_entry,
-	unsigned int start_clu);
+		unsigned int start_clu);
 extern unsigned long long exfat_get_entry_size(struct exfat_dentry *p_entry);
 extern void exfat_set_entry_size(struct exfat_dentry *p_entry,
-	unsigned long long size);
+		unsigned long long size);
 extern void exfat_get_entry_time(struct exfat_dentry *p_entry,
-	struct exfat_timestamp *tp, unsigned char mode);
+		struct exfat_timestamp *tp, unsigned char mode);
 extern void exfat_set_entry_time(struct exfat_dentry *p_entry,
-	struct exfat_timestamp *tp, unsigned char mode);
+		struct exfat_timestamp *tp, unsigned char mode);
 extern int exfat_init_dir_entry(struct super_block *sb,
-	struct exfat_chain *p_dir, int entry, unsigned int type,
-	unsigned int start_clu, unsigned long long size);
+		struct exfat_chain *p_dir, int entry, unsigned int type,
+		unsigned int start_clu, unsigned long long size);
 extern int exfat_init_ext_entry(struct super_block *sb,
-	struct exfat_chain *p_dir, int entry, int num_entries,
-	struct exfat_uni_name *p_uniname, struct exfat_dos_name *p_dosname);
+		struct exfat_chain *p_dir, int entry, int num_entries,
+		struct exfat_uni_name *p_uniname,
+		struct exfat_dos_name *p_dosname);
 extern int exfat_delete_dir_entry(struct super_block *sb,
-	struct exfat_chain *p_dir, int entry, int order, int num_entries);
+		struct exfat_chain *p_dir, int entry, int order,
+		int num_entries);
 extern int update_dir_chksum(struct super_block *sb, struct exfat_chain *p_dir,
-	int entry);
+		int entry);
 extern int exfat_update_dir_chksum_with_entry_set(struct super_block *sb,
-	struct exfat_entry_set_cache *es);
+		struct exfat_entry_set_cache *es);
 extern void exfat_release_dentry_set(struct exfat_entry_set_cache *es);
 extern int exfat_get_num_entries_and_dos_name(struct super_block *sb,
-	struct exfat_chain *p_dir, struct exfat_uni_name *p_uniname,
-	int *entries, struct exfat_dos_name *p_dosname, int lookup);
+		struct exfat_chain *p_dir, struct exfat_uni_name *p_uniname,
+		int *entries, struct exfat_dos_name *p_dosname, int lookup);
 extern int exfat_find_dir_entry(struct super_block *sb,
-	struct exfat_file_id *fid, struct exfat_chain *p_dir,
-	struct exfat_uni_name *p_uniname, int num_entries,
-	struct exfat_dos_name *unused, unsigned int type);
+		struct exfat_file_id *fid, struct exfat_chain *p_dir,
+		struct exfat_uni_name *p_uniname, int num_entries,
+		struct exfat_dos_name *unused, unsigned int type);
 extern int exfat_zeroed_cluster(struct super_block *sb,
-	unsigned long long blknr, unsigned long long num_secs);
+		unsigned long long blknr, unsigned int num_secs);
+extern int exfat_alloc_new_dir(struct inode *inode, struct exfat_chain *clu);
 
 /* inode.c */
 extern const struct inode_operations exfat_symlink_inode_operations;
 extern const struct inode_operations exfat_file_inode_operations;
 extern int exfat_sync_inode(struct inode *inode);
 extern struct inode *exfat_build_inode(struct super_block *sb,
-	struct exfat_file_id *fid, loff_t i_pos);
+		struct exfat_file_id *fid, loff_t i_pos);
 extern void exfat_attach(struct inode *inode, loff_t i_pos);
 extern void exfat_detach(struct inode *inode);
 extern void exfat_truncate(struct inode *inode, loff_t old_size);
 extern struct inode *exfat_iget(struct super_block *sb, loff_t i_pos);
 extern int exfat_write_inode(struct inode *inode,
-	struct writeback_control *wbc);
+		struct writeback_control *wbc);
 extern struct inode *exfat_alloc_inode(struct super_block *sb);
 extern void exfat_destroy_inode(struct inode *inode);
 extern void exfat_evict_inode(struct inode *inode);
@@ -560,20 +522,22 @@ extern int exfat_read_inode(struct inode *inode, struct exfat_dir_entry *info);
 
 /* exfat/nls.c */
 /* NLS management function */
-extern int  nls_cmp_sfn(struct super_block *sb, unsigned char *a,
-	unsigned char *b);
-extern int  nls_cmp_uniname(struct super_block *sb, unsigned short *a,
-	unsigned short *b);
-extern int  nls_uni16s_to_sfn(struct super_block *sb,
-	struct exfat_uni_name *p_uniname, struct exfat_dos_name *p_dosname,
-	int *p_lossy);
-extern int  nls_sfn_to_uni16s(struct super_block *sb,
-	struct exfat_dos_name *p_dosname, struct exfat_uni_name *p_uniname);
-extern int  nls_uni16s_to_vfsname(struct super_block *sb,
-	struct exfat_uni_name *uniname, unsigned char *p_cstring, int len);
-extern int  nls_vfsname_to_uni16s(struct super_block *sb,
-	const unsigned char *p_cstring, const int len,
-	struct exfat_uni_name *uniname, int *p_lossy);
+extern int nls_cmp_sfn(struct super_block *sb, unsigned char *a,
+		unsigned char *b);
+extern int nls_cmp_uniname(struct super_block *sb, unsigned short *a,
+		unsigned short *b);
+extern int nls_uni16s_to_sfn(struct super_block *sb,
+		struct exfat_uni_name *p_uniname,
+		struct exfat_dos_name *p_dosname, int *p_lossy);
+extern int nls_sfn_to_uni16s(struct super_block *sb,
+		struct exfat_dos_name *p_dosname,
+		struct exfat_uni_name *p_uniname);
+extern int nls_uni16s_to_vfsname(struct super_block *sb,
+		struct exfat_uni_name *uniname, unsigned char *p_cstring,
+		int len);
+extern int nls_vfsname_to_uni16s(struct super_block *sb,
+		const unsigned char *p_cstring, const int len,
+		struct exfat_uni_name *uniname, int *p_lossy);
 
 /* exfat/misc.c */
 extern void
@@ -585,14 +549,14 @@ __exfat_fs_error(struct super_block *sb, int report, const char *fmt, ...)
 		__exfat_fs_error(sb, __ratelimit(&EXFAT_SB(sb)->ratelimit), fmt, ## args)
 extern void
 exfat_msg(struct super_block *sb, const char *lv, const char *fmt, ...)
-	__printf(3, 4) __cold;
+		__printf(3, 4) __cold;
 extern void exfat_time_fat2unix(struct exfat_sb_info *sbi,
-	struct timespec64 *ts, struct exfat_date_time *tp);
+		struct timespec64 *ts, struct exfat_date_time *tp);
 extern void exfat_time_unix2fat(struct exfat_sb_info *sbi,
-	struct timespec64 *ts, struct exfat_date_time *tp);
+		struct timespec64 *ts, struct exfat_date_time *tp);
 extern struct exfat_timestamp *tm_now(struct exfat_sb_info *sbi,
-	struct exfat_timestamp *tm);
+		struct exfat_timestamp *tm);
 
 extern unsigned short calc_chksum_2byte(void *data, int len,
-	unsigned short chksum, int type);
+		unsigned short chksum, int type);
 #endif /* !_EXFAT_H */

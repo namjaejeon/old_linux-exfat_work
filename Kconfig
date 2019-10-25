@@ -9,7 +9,6 @@ config EXFAT_FS
 	  here to inlucde exFAT support.
 
 	  To compile this as a module, choose M here: the module will be called
-	  sdfat_core and sdfat_fs.
 
 config EXFAT_DEFAULT_CODEPAGE
 	int "Default codepage for exFAT"

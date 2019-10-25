@@ -204,7 +204,7 @@ struct exfat_timestamp *tm_now(struct exfat_sb_info *sbi,
 unsigned char calc_chksum_1byte(void *data, int len, unsigned char chksum)
 {
 	int i;
-	unsigned char *c = (unsigned char *) data;
+	unsigned char *c = (unsigned char *)data;
 
 	for (i = 0; i < len; i++, c++)
 		chksum = (((chksum & 1) << 7) | ((chksum & 0xFE) >> 1)) + *c;
@@ -216,13 +216,13 @@ unsigned short calc_chksum_2byte(void *data, int len, unsigned short chksum,
 		int type)
 {
 	int i;
-	unsigned char *c = (unsigned char *) data;
+	unsigned char *c = (unsigned char *)data;
 
 	for (i = 0; i < len; i++, c++) {
 		if (((i == 2) || (i == 3)) && (type == CS_DIR_ENTRY))
 			continue;
 		chksum = (((chksum & 1) << 15) | ((chksum & 0xFFFE) >> 1)) +
-			(unsigned short) *c;
+			(unsigned short)*c;
 	}
 	return chksum;
 }
