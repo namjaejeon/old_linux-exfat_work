@@ -145,7 +145,7 @@ static int exfat_statfs(struct dentry *dentry, struct kstatfs *buf)
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 	unsigned long long id = huge_encode_dev(sb->s_bdev->bd_dev);
 
-	if (sbi->used_clusters == (unsigned int) ~0) {
+	if (sbi->used_clusters == ~0u) {
 		mutex_lock(&sbi->s_lock);
 		if (exfat_count_used_clusters(sb, &sbi->used_clusters)) {
 			mutex_unlock(&sbi->s_lock);
@@ -345,7 +345,7 @@ static int parse_options(struct super_block *sb, char *options, int silent,
 	opts->fs_uid = current_uid();
 	opts->fs_gid = current_gid();
 	opts->fs_fmask = opts->fs_dmask = current->fs->umask;
-	opts->allow_utime = (unsigned short) -1;
+	opts->allow_utime = -1;
 	opts->codepage = exfat_default_codepage;
 	opts->iocharset = exfat_default_iocharset;
 	opts->casesensitive = 0;
@@ -442,7 +442,7 @@ static int parse_options(struct super_block *sb, char *options, int silent,
 	}
 
 out:
-	if (opts->allow_utime == (unsigned short) -1)
+	if (opts->allow_utime == -1)
 		opts->allow_utime = ~opts->fs_dmask & (0022);
 
 	if (opts->utf8 && strcmp(opts->iocharset, exfat_iocharset_with_utf8)) {
@@ -570,9 +570,9 @@ int mount_exfat(struct super_block *sb, struct pbr *p_pbr)
 	sbi->dentries_per_clu = 1 <<
 			(sbi->cluster_size_bits - DENTRY_SIZE_BITS);
 
-	sbi->vol_flag = (unsigned int) le16_to_cpu(p_bpb->bsx.vol_flags);
+	sbi->vol_flag = le16_to_cpu(p_bpb->bsx.vol_flags);
 	sbi->clu_srch_ptr = CLUS_BASE;
-	sbi->used_clusters = (unsigned int) ~0;
+	sbi->used_clusters = ~0u;
 
 	if (p_bpb->bsx.vol_flags & VOL_DIRTY) {
 		sbi->vol_flag |= VOL_DIRTY;
@@ -600,7 +600,7 @@ static int exfat_load_upcase_table(struct super_block *sb,
 {
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 	struct buffer_head *bh = NULL;
-	unsigned int sect_size = (unsigned int)sb->s_blocksize;
+	unsigned int sect_size = sb->s_blocksize;
 	int ret = -EIO;
 	unsigned int i, j;
 
@@ -627,8 +627,7 @@ static int exfat_load_upcase_table(struct super_block *sb,
 		sector++;
 
 		for (i = 0; i < sect_size && index <= 0xFFFF; i += 2) {
-			unsigned short uni = get_unaligned_le16(
-				(unsigned char *)bh->b_data + i);
+			unsigned short uni = get_unaligned_le16(bh->b_data + i);
 
 			checksum = ((checksum & 1) ? 0x80000000 : 0) +
 				(checksum >> 1) +
@@ -948,9 +947,9 @@ static int __exfat_fill_super(struct super_block *sb)
 	sbi->dentries_per_clu = 1 <<
 		(sbi->cluster_size_bits - DENTRY_SIZE_BITS);
 
-	sbi->vol_flag = (unsigned int) le16_to_cpu(p_bpb->bsx.vol_flags);
+	sbi->vol_flag = le16_to_cpu(p_bpb->bsx.vol_flags);
 	sbi->clu_srch_ptr = CLUS_BASE;
-	sbi->used_clusters = (unsigned int) ~0;
+	sbi->used_clusters = ~0u;
 
 	if (p_bpb->bsx.vol_flags & VOL_DIRTY) {
 		sbi->vol_flag |= VOL_DIRTY;
@@ -978,7 +977,7 @@ free_bh:
 		goto free_upcase;
 	}
 
-	if (sbi->used_clusters == (unsigned int) ~0) {
+	if (sbi->used_clusters == ~0) {
 		ret = exfat_count_used_clusters(sb, &sbi->used_clusters);
 		if (ret) {
 			exfat_msg(sb, KERN_ERR, "failed to scan clusters");

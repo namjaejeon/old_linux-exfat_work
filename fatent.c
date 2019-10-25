@@ -19,7 +19,7 @@ static int __exfat_ent_get(struct super_block *sb, unsigned int loc,
 	struct buffer_head *bh;
 
 	sec = sbi->FAT1_start_sector + (loc >> (sb->s_blocksize_bits-2));
-	off = (loc << 2) & (unsigned int)(sb->s_blocksize - 1);
+	off = (loc << 2) & (sb->s_blocksize - 1);
 
 	bh = sb_bread(sb, sec);
 	if (!bh)
@@ -46,7 +46,7 @@ int exfat_ent_set(struct super_block *sb, unsigned int loc,
 	struct buffer_head *bh;
 
 	sec = sbi->FAT1_start_sector + (loc >> (sb->s_blocksize_bits-2));
-	off = (loc << 2) & (unsigned int)(sb->s_blocksize - 1);
+	off = (loc << 2) & (sb->s_blocksize - 1);
 
 	bh = sb_bread(sb, sec);
 	if (!bh)
@@ -231,7 +231,6 @@ int exfat_clear_cluster(struct inode *inode, unsigned int clu)
 {
 	unsigned long long s, n;
 	struct super_block *sb = inode->i_sb;
-	unsigned int sect_size = (unsigned int)sb->s_blocksize;
 	int ret = 0;
 	struct buffer_head *bh = NULL;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
@@ -240,8 +239,7 @@ int exfat_clear_cluster(struct inode *inode, unsigned int clu)
 	n = s + sbi->sect_per_clus;
 
 	if (IS_DIRSYNC(inode)) {
-		ret = exfat_zeroed_cluster(sb, s,
-			(unsigned long long)sbi->sect_per_clus);
+		ret = exfat_zeroed_cluster(sb, s, sbi->sect_per_clus);
 		if (ret == -EIO)
 			return ret;
 	}
@@ -254,7 +252,7 @@ int exfat_clear_cluster(struct inode *inode, unsigned int clu)
 		if (!bh)
 			goto out;
 
-		memset((unsigned char *)bh->b_data, 0x0, sect_size);
+		memset(bh->b_data, 0x0, sb->s_blocksize);
 		set_buffer_uptodate(bh);
 		mark_buffer_dirty(bh);
 	}

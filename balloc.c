@@ -160,7 +160,7 @@ int exfat_set_alloc_bitmap(struct super_block *sb, unsigned int clu)
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 
 	i = clu >> (sb->s_blocksize_bits + 3);
-	b = clu & (unsigned int)((sb->s_blocksize << 3) - 1);
+	b = clu & ((sb->s_blocksize << 3) - 1);
 
 	sector = CLUS_TO_SECT(sbi, sbi->map_clu) + i;
 	bitmap_set((unsigned long *)(sbi->vol_amap[i]->b_data), b, 1);
@@ -183,7 +183,7 @@ void exfat_clr_alloc_bitmap(struct super_block *sb, unsigned int clu)
 	struct exfat_mount_options *opts = &sbi->options;
 
 	i = clu >> (sb->s_blocksize_bits + 3);
-	b = clu & (unsigned int)((sb->s_blocksize << 3) - 1);
+	b = clu & ((sb->s_blocksize << 3) - 1);
 
 	sector = CLUS_TO_SECT(sbi, sbi->map_clu) + i;
 
@@ -224,7 +224,7 @@ unsigned int exfat_test_alloc_bitmap(struct super_block *sb, unsigned int clu)
 	map_b = (clu >> 3) & (unsigned int)(sb->s_blocksize - 1);
 
 	for (i = 2; i < sbi->num_clusters; i += 8) {
-		k = *(((unsigned char *) sbi->vol_amap[map_i]->b_data) + map_b);
+		k = *(sbi->vol_amap[map_i]->b_data + map_b);
 		if (clu_mask > 0) {
 			k |= clu_mask;
 			clu_mask = 0;
@@ -236,7 +236,7 @@ unsigned int exfat_test_alloc_bitmap(struct super_block *sb, unsigned int clu)
 		}
 		clu_base += 8;
 
-		if (((++map_b) >= (unsigned int)sb->s_blocksize) ||
+		if ((++map_b >= sb->s_blocksize) ||
 				(clu_base >= sbi->num_clusters)) {
 			if ((++map_i) >= sbi->map_sectors) {
 				clu_base = 2;
@@ -259,8 +259,7 @@ int exfat_count_used_clusters(struct super_block *sb, unsigned int *ret_count)
 	map_i = map_b = 0;
 
 	for (i = 0; i < total_clus; i += 8) {
-		unsigned char k = *(((unsigned char *)
-				sbi->vol_amap[map_i]->b_data) + map_b);
+		unsigned char k = *(sbi->vol_amap[map_i]->b_data + map_b);
 
 		count += used_bit[k];
 		if ((++map_b) >= (unsigned int)sb->s_blocksize) {

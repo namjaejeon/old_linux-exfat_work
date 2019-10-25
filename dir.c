@@ -49,7 +49,7 @@ static int exfat_readdir(struct inode *inode, struct exfat_dir_entry *dir_entry)
 	struct super_block *sb = inode->i_sb;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 	struct exfat_file_id *fid = EXFAT_I(inode)->fid;
-	unsigned int dentry = (unsigned int)(fid->rwoffset & 0xFFFFFFFF);
+	unsigned int dentry = fid->rwoffset & 0xFFFFFFFF;
 	struct buffer_head *bh;
 
 	/* check if the given file ID is opened */
@@ -135,7 +135,7 @@ static int exfat_readdir(struct inode *inode, struct exfat_dir_entry *dir_entry)
 			dir_entry->modify_timestamp.second = tm.sec;
 			dir_entry->modify_timestamp.milli_second = 0;
 
-			memset((char *) &dir_entry->access_timestamp, 0,
+			memset(&dir_entry->access_timestamp, 0,
 				sizeof(struct exfat_date_time));
 
 			*(uni_name.name) = 0x0;
@@ -253,7 +253,7 @@ get_new:
 		// move cpos to next sector position (should be aligned)
 		if (err == -EIO) {
 			cpos += 1 << (sb->s_blocksize_bits);
-			cpos &= ~((unsigned int)sb->s_blocksize - 1);
+			cpos &= ~(sb->s_blocksize - 1);
 		}
 
 		err = -EIO;
@@ -849,7 +849,7 @@ int exfat_find_location(struct super_block *sb, struct exfat_chain *p_dir,
 {
 	int ret;
 	unsigned int off, clu = 0;
-	unsigned int blksize_mask = (unsigned int)(sb->s_blocksize - 1);
+	unsigned int blksize_mask = sb->s_blocksize - 1;
 	unsigned char blksize_bits = sb->s_blocksize_bits;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 
@@ -983,7 +983,7 @@ struct exfat_entry_set_cache *exfat_get_dentry_set(struct super_block *sb,
 	byte_offset &= sbi->cluster_size - 1;
 
 	/* byte offset in sector */
-	off = byte_offset & (unsigned int)(sb->s_blocksize - 1);
+	off = byte_offset & (sb->s_blocksize - 1);
 
 	/* sector offset in cluster */
 	sec = byte_offset >> (sb->s_blocksize_bits);
@@ -1074,8 +1074,8 @@ struct exfat_entry_set_cache *exfat_get_dentry_set(struct super_block *sb,
 			break;
 
 		if (((off + DENTRY_SIZE) &
-			(unsigned int)(sb->s_blocksize - 1)) <
-			(off & (unsigned int)(sb->s_blocksize - 1))) {
+			(sb->s_blocksize - 1)) <
+			(off & (sb->s_blocksize - 1))) {
 			// get the next sector
 			if (IS_LAST_SECT_IN_CLUS(sbi, sec)) {
 				if (es->alloc_flag == 0x03)
@@ -1449,7 +1449,7 @@ static inline int exfat_sync_bhs(struct buffer_head **bhs, int nr_bhs)
 }
 
 int exfat_zeroed_cluster(struct super_block *sb,
-		unsigned long long blknr, unsigned long long num_secs)
+		unsigned long long blknr, unsigned int num_secs)
 {
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 	struct buffer_head *bhs[MAX_BUF_PER_PAGE];
@@ -1458,7 +1458,7 @@ int exfat_zeroed_cluster(struct super_block *sb,
 	int err, i, n;
 
 	if (((blknr + num_secs) > sbi->num_sectors) && (sbi->num_sectors > 0)) {
-		exfat_fs_error_ratelimit(sb, "%s: out of range(sect:%llu len:%llu)",
+		exfat_fs_error_ratelimit(sb, "%s: out of range(sect:%llu len:%u)",
 				__func__, blknr, num_secs);
 		return -EIO;
 	}
