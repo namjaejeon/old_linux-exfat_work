@@ -532,57 +532,6 @@ static void exfat_setup_dops(struct super_block *sb)
 		sb->s_d_op = &exfat_dentry_ops;
 }
 
-int mount_exfat(struct super_block *sb, struct pbr *p_pbr)
-{
-	struct pbr64 *p_bpb = (struct pbr64 *)p_pbr;
-	struct exfat_sb_info *sbi = EXFAT_SB(sb);
-
-	if (!p_bpb->bsx.num_fats) {
-		exfat_msg(sb, KERN_ERR, "bogus number of FAT structure");
-		return -EINVAL;
-	}
-
-	sbi->sect_per_clus = 1 << p_bpb->bsx.sect_per_clus_bits;
-	sbi->sect_per_clus_bits = p_bpb->bsx.sect_per_clus_bits;
-	sbi->cluster_size_bits = sbi->sect_per_clus_bits + sb->s_blocksize_bits;
-	sbi->cluster_size = 1 << sbi->cluster_size_bits;
-
-	sbi->num_FAT_sectors = le32_to_cpu(p_bpb->bsx.fat_length);
-
-	sbi->FAT1_start_sector = le32_to_cpu(p_bpb->bsx.fat_offset);
-	if (p_bpb->bsx.num_fats == 1)
-		sbi->FAT2_start_sector = sbi->FAT1_start_sector;
-	else
-		sbi->FAT2_start_sector =
-			sbi->FAT1_start_sector + sbi->num_FAT_sectors;
-
-	sbi->root_start_sector = le32_to_cpu(p_bpb->bsx.clu_offset);
-	sbi->data_start_sector = sbi->root_start_sector;
-
-	sbi->num_sectors = le64_to_cpu(p_bpb->bsx.vol_length);
-	sbi->num_clusters = le32_to_cpu(p_bpb->bsx.clu_count) + 2;
-	/* because the cluster index starts with 2 */
-
-	sbi->vol_id = le32_to_cpu(p_bpb->bsx.vol_serial);
-
-	sbi->root_dir = le32_to_cpu(p_bpb->bsx.root_cluster);
-	sbi->dentries_in_root = 0;
-	sbi->dentries_per_clu = 1 <<
-			(sbi->cluster_size_bits - DENTRY_SIZE_BITS);
-
-	sbi->vol_flag = le16_to_cpu(p_bpb->bsx.vol_flags);
-	sbi->clu_srch_ptr = CLUS_BASE;
-	sbi->used_clusters = ~0u;
-
-	if (p_bpb->bsx.vol_flags & VOL_DIRTY) {
-		sbi->vol_flag |= VOL_DIRTY;
-		exfat_msg(sb, KERN_WARNING,
-			"Volume was not properly unmounted. Some data may be corrupt. Please run fsck.");
-	}
-
-	return 0;
-} /* end of mount_exfat */
-
 static bool is_exfat(struct pbr *pbr)
 {
 	int i = 53;
@@ -909,10 +858,8 @@ static int __exfat_fill_super(struct super_block *sb)
 
 	/* set maximum file size for exFAT */
 	sb->s_maxbytes = 0x7fffffffffffffffLL;
-	ret = mount_exfat(sb, p_pbr);
 
 	p_bpb = (struct pbr64 *)p_pbr;
-
 	if (!p_bpb->bsx.num_fats) {
 		exfat_msg(sb, KERN_ERR, "bogus number of FAT structure");
 		ret = -EINVAL;
@@ -923,10 +870,9 @@ static int __exfat_fill_super(struct super_block *sb)
 	sbi->sect_per_clus_bits = p_bpb->bsx.sect_per_clus_bits;
 	sbi->cluster_size_bits = sbi->sect_per_clus_bits + sb->s_blocksize_bits;
 	sbi->cluster_size = 1 << sbi->cluster_size_bits;
-
 	sbi->num_FAT_sectors = le32_to_cpu(p_bpb->bsx.fat_length);
-
 	sbi->FAT1_start_sector = le32_to_cpu(p_bpb->bsx.fat_offset);
+
 	if (p_bpb->bsx.num_fats == 1)
 		sbi->FAT2_start_sector = sbi->FAT1_start_sector;
 	else
@@ -935,13 +881,11 @@ static int __exfat_fill_super(struct super_block *sb)
 
 	sbi->root_start_sector = le32_to_cpu(p_bpb->bsx.clu_offset);
 	sbi->data_start_sector = sbi->root_start_sector;
-
 	sbi->num_sectors = le64_to_cpu(p_bpb->bsx.vol_length);
-	sbi->num_clusters = le32_to_cpu(p_bpb->bsx.clu_count) + 2;
 	/* because the cluster index starts with 2 */
+	sbi->num_clusters = le32_to_cpu(p_bpb->bsx.clu_count) + 2;
 
 	sbi->vol_id = le32_to_cpu(p_bpb->bsx.vol_serial);
-
 	sbi->root_dir = le32_to_cpu(p_bpb->bsx.root_cluster);
 	sbi->dentries_in_root = 0;
 	sbi->dentries_per_clu = 1 <<
@@ -955,13 +899,6 @@ static int __exfat_fill_super(struct super_block *sb)
 		sbi->vol_flag |= VOL_DIRTY;
 		exfat_msg(sb, KERN_WARNING,
 			"Volume was not properly unmounted. Some data may be corrupt. Please run fsck.");
-	}
-
-free_bh:
-	brelse(bh);
-	if (ret) {
-		exfat_msg(sb, KERN_ERR, "failed to mount fs-core");
-		goto out;
 	}
 
 	ret = load_upcase_table(sb);
@@ -986,10 +923,13 @@ free_bh:
 	}
 
 	return 0;
+
 free_alloc_bmp:
 	exfat_free_alloc_bmp(sb);
 free_upcase:
 	free_upcase_table(sb);
+free_bh:
+	brelse(bh);
 out:
 	return ret;
 }
