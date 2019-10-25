@@ -648,7 +648,7 @@ int update_dir_chksum(struct super_block *sb, struct exfat_chain *p_dir,
 		return -EIO;
 
 	lock_buffer(fbh);
-	num_entries = (int) file_ep->num_ext + 1;
+	num_entries = file_ep->num_ext + 1;
 	chksum = calc_chksum_2byte((void *) file_ep, DENTRY_SIZE, 0,
 			CS_DIR_ENTRY);
 
@@ -758,8 +758,9 @@ static int exfat_write_partial_entries_in_entry_set(struct super_block *sb,
 	while (num_entries) {
 		/* write per sector base */
 		remaining_byte_in_sector = (1 << sb->s_blocksize_bits) - off;
-		copy_entries = min((int)(remaining_byte_in_sector >>
-					DENTRY_SIZE_BITS), num_entries);
+		copy_entries = min_t(int,
+			remaining_byte_in_sector >> DENTRY_SIZE_BITS,
+			num_entries);
 		bh = sb_bread(sb, sec);
 		if (!bh)
 			goto err_out;

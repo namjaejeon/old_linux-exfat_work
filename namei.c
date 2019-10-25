@@ -431,8 +431,8 @@ int exfat_find_empty_entry(struct inode *inode, struct exfat_chain *p_dir,
 			/* the special case that new dentry
 			 * should be allocated from the start of new cluster
 			 */
-			hint_femp.eidx = (int)(p_dir->size <<
-				(sbi->cluster_size_bits - DENTRY_SIZE_BITS));
+			hint_femp.eidx = p_dir->size <<
+				(sbi->cluster_size_bits - DENTRY_SIZE_BITS);
 			hint_femp.count = sbi->dentries_per_clu;
 
 			hint_femp.cur.dir = clu.dir;
@@ -854,7 +854,7 @@ static int exfat_read_link(struct inode *inode, struct exfat_file_id *fid,
 		fid->hint_bmap.off = fid->rwoffset >> sbi->cluster_size_bits;
 		fid->hint_bmap.clu = clu;
 
-		offset = (int)(fid->rwoffset & (sbi->cluster_size - 1));
+		offset = fid->rwoffset & (sbi->cluster_size - 1);
 		sec_offset = offset >> sb->s_blocksize_bits;
 		offset &= (sb->s_blocksize - 1);
 
@@ -1244,7 +1244,7 @@ static int exfat_write_link(struct inode *inode, struct exfat_file_id *fid,
 		fid->hint_bmap.clu = clu;
 
 		/* byte offset in cluster   */
-		offset = (int)(fid->rwoffset & (sbi->cluster_size - 1));
+		offset = fid->rwoffset & (sbi->cluster_size - 1);
 		/* sector offset in cluster */
 		sec_offset = offset >> blksize_bits;
 		/* byte offset in sector    */
