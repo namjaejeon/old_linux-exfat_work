@@ -615,9 +615,10 @@ int exfat_init_dir_entry(struct super_block *sb, struct exfat_chain *p_dir,
 
 	strm_ep = (struct exfat_strm_dentry *)exfat_get_dentry(sb, p_dir,
 			entry + 1, &sbh, &sector);
-	if (!strm_ep)
+	if (!strm_ep) {
+		brelse(fbh);
 		return -EIO;
-
+	}
 	exfat_init_file_entry(sb, file_ep, type);
 	exfat_update_bh(sb, fbh, 0);
 	brelse(fbh);
