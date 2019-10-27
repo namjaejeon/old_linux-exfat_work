@@ -163,7 +163,7 @@ static int exfat_d_hashi(const struct dentry *dentry, struct qstr *qstr)
 /*
  * Case sensitive compare of two exfat names.
  */
-static int __exfat_cmp(const struct dentry *dentry, unsigned int len,
+static int exfat_cmp(const struct dentry *dentry, unsigned int len,
 		const char *str, const struct qstr *name)
 {
 	unsigned int alen, blen;
@@ -181,7 +181,7 @@ static int __exfat_cmp(const struct dentry *dentry, unsigned int len,
 /*
  * Case insensitive compare of two exfat names.
  */
-static int __exfat_cmpi(const struct dentry *dentry, unsigned int len,
+static int exfat_cmpi(const struct dentry *dentry, unsigned int len,
 		const char *str, const struct qstr *name)
 {
 	struct nls_table *t = EXFAT_SB(dentry->d_sb)->nls_io;
@@ -195,18 +195,6 @@ static int __exfat_cmpi(const struct dentry *dentry, unsigned int len,
 			return 0;
 	}
 	return 1;
-}
-
-static int exfat_cmp(const struct dentry *dentry,
-		unsigned int len, const char *str, const struct qstr *name)
-{
-	return __exfat_cmp(dentry, len, str, name);
-}
-
-static int exfat_cmpi(const struct dentry *dentry,
-		unsigned int len, const char *str, const struct qstr *name)
-{
-	return __exfat_cmpi(dentry, len, str, name);
 }
 
 static int exfat_revalidate(struct dentry *dentry, unsigned int flags)
