@@ -13,35 +13,15 @@
 #include "exfat_raw.h"
 #include "exfat_fs.h"
 
-#define EXFAT_DSTATE_LOCKED     (void *)(0xCAFE2016)
-#define EXFAT_DSTATE_UNLOCKED   (void *)(0x00000000)
-
-static inline void __lock_d_revalidate(struct dentry *dentry)
-{
-	spin_lock(&dentry->d_lock);
-	dentry->d_fsdata = EXFAT_DSTATE_LOCKED;
-	spin_unlock(&dentry->d_lock);
-}
-
-static inline void __unlock_d_revalidate(struct dentry *dentry)
-{
-	spin_lock(&dentry->d_lock);
-	dentry->d_fsdata = EXFAT_DSTATE_UNLOCKED;
-	spin_unlock(&dentry->d_lock);
-}
-
-/* __check_dstate_locked requires dentry->d_lock */
-static inline int __check_dstate_locked(struct dentry *dentry)
-{
-	if (dentry->d_fsdata == EXFAT_DSTATE_LOCKED)
-		return 1;
-
-	return 0;
-}
-
 static inline unsigned long exfat_d_version(struct dentry *dentry)
 {
 	return (unsigned long) dentry->d_fsdata;
+}
+
+static inline void exfat_d_version_set(struct dentry *dentry,
+		unsigned long version)
+{
+	dentry->d_fsdata = (void *) version;
 }
 
 /*
@@ -57,9 +37,8 @@ static int __exfat_revalidate_common(struct dentry *dentry)
 	int ret = 1;
 
 	spin_lock(&dentry->d_lock);
-	if ((!dentry->d_inode) && (!__check_dstate_locked(dentry) &&
-		(!inode_eq_iversion(d_inode(dentry->d_parent),
-			exfat_d_version(dentry)))))
+	if (!inode_eq_iversion(d_inode(dentry->d_parent),
+			exfat_d_version(dentry)))
 		ret = 0;
 	spin_unlock(&dentry->d_lock);
 	return ret;
@@ -68,7 +47,7 @@ static int __exfat_revalidate_common(struct dentry *dentry)
 static int __exfat_revalidate(struct dentry *dentry)
 {
 	/* This is not negative dentry. Always valid. */
-	if (dentry->d_inode)
+	if (d_really_is_positive(dentry))
 		return 1;
 	return __exfat_revalidate_common(dentry);
 }
@@ -85,7 +64,7 @@ static int __exfat_revalidate_ci(struct dentry *dentry, unsigned int flags)
 	 * positive dentry isn't good idea. So it's unsupported like
 	 * rename("filename", "FILENAME") for now.
 	 */
-	if (dentry->d_inode)
+	if (d_really_is_positive(dentry))
 		return 1;
 	/*
 	 * Drop the negative dentry, in order to make sure to use the
@@ -128,7 +107,7 @@ static inline unsigned long __exfat_init_name_hash(const struct dentry *dentry)
  * that the existing dentry can be used. The exfat fs routines will
  * return ENOENT or EINVAL as appropriate.
  */
-static int __exfat_d_hash(const struct dentry *dentry, struct qstr *qstr)
+static int exfat_d_hash(const struct dentry *dentry, struct qstr *qstr)
 {
 	unsigned int len = exfat_striptail_len(qstr);
 
@@ -142,7 +121,7 @@ static int __exfat_d_hash(const struct dentry *dentry, struct qstr *qstr)
  * that the existing dentry can be used. The exfat fs routines will
  * return ENOENT or EINVAL as appropriate.
  */
-static int __exfat_d_hashi(const struct dentry *dentry, struct qstr *qstr)
+static int exfat_d_hashi(const struct dentry *dentry, struct qstr *qstr)
 {
 	struct nls_table *t = EXFAT_SB(dentry->d_sb)->nls_io;
 	const unsigned char *name;
@@ -160,20 +139,10 @@ static int __exfat_d_hashi(const struct dentry *dentry, struct qstr *qstr)
 	return 0;
 }
 
-static int exfat_d_hash(const struct dentry *dentry, struct qstr *qstr)
-{
-	return __exfat_d_hash(dentry, qstr);
-}
-
-static int exfat_d_hashi(const struct dentry *dentry, struct qstr *qstr)
-{
-	return __exfat_d_hashi(dentry, qstr);
-}
-
 /*
  * Case sensitive compare of two exfat names.
  */
-static int __exfat_cmp(const struct dentry *dentry, unsigned int len,
+static int exfat_cmp(const struct dentry *dentry, unsigned int len,
 		const char *str, const struct qstr *name)
 {
 	unsigned int alen, blen;
@@ -191,7 +160,7 @@ static int __exfat_cmp(const struct dentry *dentry, unsigned int len,
 /*
  * Case insensitive compare of two exfat names.
  */
-static int __exfat_cmpi(const struct dentry *dentry, unsigned int len,
+static int exfat_cmpi(const struct dentry *dentry, unsigned int len,
 		const char *str, const struct qstr *name)
 {
 	struct nls_table *t = EXFAT_SB(dentry->d_sb)->nls_io;
@@ -205,18 +174,6 @@ static int __exfat_cmpi(const struct dentry *dentry, unsigned int len,
 			return 0;
 	}
 	return 1;
-}
-
-static int exfat_cmp(const struct dentry *dentry,
-		unsigned int len, const char *str, const struct qstr *name)
-{
-	return __exfat_cmp(dentry, len, str, name);
-}
-
-static int exfat_cmpi(const struct dentry *dentry,
-		unsigned int len, const char *str, const struct qstr *name)
-{
-	return __exfat_cmpi(dentry, len, str, name);
 }
 
 static int exfat_revalidate(struct dentry *dentry, unsigned int flags)
@@ -568,14 +525,6 @@ out:
 	return ERR_PTR(ret);
 }
 
-/* returns the length of a struct qstr, ignoring trailing dots */
-static inline unsigned int __striptail_len(unsigned int len, const char *name)
-{
-	while (len && name[len - 1] == '.')
-		len--;
-	return len;
-}
-
 /*
  * Name Resolution Functions :
  * Zero if it was successful; otherwise nonzero.
@@ -596,7 +545,7 @@ static int __exfat_resolve_path(struct inode *inode, const unsigned char *path,
 	/* DO NOTHING : Is needed? */
 
 	/* strip all trailing periods */
-	namelen = __striptail_len(strlen(path), path);
+	namelen = __exfat_striptail_len(strlen(path), path);
 	if (!namelen)
 		return -ENOENT;
 
@@ -671,7 +620,6 @@ static int exfat_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 		goto out;
 	}
 
-	__lock_d_revalidate(dentry);
 	inode_inc_iversion(dir);
 	dir->i_ctime = dir->i_mtime = dir->i_atime = current_time(dir);
 	if (IS_DIRSYNC(dir))
@@ -692,7 +640,6 @@ static int exfat_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 
 	d_instantiate(dentry, inode);
 out:
-	__unlock_d_revalidate(dentry);
 	mutex_unlock(&EXFAT_SB(sb)->s_lock);
 	return err;
 }
@@ -973,9 +920,10 @@ out:
 	/* initialize d_time even though it is positive dentry */
 	dentry->d_time = inode_peek_iversion_raw(dir);
 	mutex_unlock(&EXFAT_SB(sb)->s_lock);
+	if (!inode)
+		exfat_d_version_set(dentry, inode_query_iversion(dir));
 
-	dentry = d_splice_alias(inode, dentry);
-	return dentry;
+	return d_splice_alias(inode, dentry);
 error:
 	mutex_unlock(&EXFAT_SB(sb)->s_lock);
 	return ERR_PTR(err);
@@ -1029,7 +977,6 @@ static int exfat_unlink(struct inode *dir, struct dentry *dentry)
 	fid->dir.dir = DIR_DELETED;
 	exfat_set_vol_flags(sb, VOL_CLEAN);
 
-	__lock_d_revalidate(dentry);
 	inode_inc_iversion(dir);
 	dir->i_mtime = dir->i_atime = current_time(dir);
 	if (IS_DIRSYNC(dir))
@@ -1041,8 +988,8 @@ static int exfat_unlink(struct inode *dir, struct dentry *dentry)
 	inode->i_mtime = inode->i_atime = current_time(inode);
 	exfat_detach(inode);
 	dentry->d_time = inode_peek_iversion_raw(dir);
+	exfat_d_version_set(dentry, inode_query_iversion(dir));
 out:
-	__unlock_d_revalidate(dentry);
 	mutex_unlock(&EXFAT_SB(sb)->s_lock);
 
 	return err;
@@ -1344,8 +1291,6 @@ static int exfat_symlink(struct inode *dir, struct dentry *dentry,
 		goto out;
 	}
 
-	__lock_d_revalidate(dentry);
-
 	inode_inc_iversion(dir);
 	dir->i_ctime = dir->i_mtime = dir->i_atime = current_time(dir);
 	if (IS_DIRSYNC(dir))
@@ -1357,7 +1302,6 @@ static int exfat_symlink(struct inode *dir, struct dentry *dentry,
 	inode = exfat_build_inode(sb, fid, i_pos);
 	if (IS_ERR(inode)) {
 		err = PTR_ERR(inode);
-		__unlock_d_revalidate(dentry);
 		goto out;
 	}
 
@@ -1368,13 +1312,11 @@ static int exfat_symlink(struct inode *dir, struct dentry *dentry,
 	EXFAT_I(inode)->target = kmalloc((len + 1), GFP_KERNEL);
 	if (!EXFAT_I(inode)->target) {
 		err = -ENOMEM;
-		__unlock_d_revalidate(dentry);
 		goto out;
 	}
 	memcpy(EXFAT_I(inode)->target, target, len + 1);
 
 	d_instantiate(dentry, inode);
-	__unlock_d_revalidate(dentry);
 out:
 	mutex_unlock(&EXFAT_SB(sb)->s_lock);
 	return err;
@@ -1405,7 +1347,6 @@ static int exfat_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 		goto out;
 	}
 
-	__lock_d_revalidate(dentry);
 	inode_inc_iversion(dir);
 	dir->i_ctime = dir->i_mtime = dir->i_atime = current_time(dir);
 	if (IS_DIRSYNC(dir))
@@ -1428,7 +1369,6 @@ static int exfat_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 	d_instantiate(dentry, inode);
 
 out:
-	__unlock_d_revalidate(dentry);
 	mutex_unlock(&EXFAT_SB(sb)->s_lock);
 	return err;
 }
@@ -1540,7 +1480,6 @@ static int exfat_rmdir(struct inode *dir, struct dentry *dentry)
 	fid->dir.dir = DIR_DELETED;
 	exfat_set_vol_flags(sb, VOL_CLEAN);
 
-	__lock_d_revalidate(dentry);
 	inode_inc_iversion(dir);
 	dir->i_mtime = dir->i_atime = current_time(dir);
 	if (IS_DIRSYNC(dir))
@@ -1553,7 +1492,7 @@ static int exfat_rmdir(struct inode *dir, struct dentry *dentry)
 	inode->i_mtime = inode->i_atime = current_time(inode);
 	exfat_detach(inode);
 	dentry->d_time = inode_peek_iversion_raw(dir);
-	__unlock_d_revalidate(dentry);
+	exfat_d_version_set(dentry, inode_query_iversion(dir));
 out:
 	mutex_unlock(&EXFAT_SB(inode->i_sb)->s_lock);
 	return err;
@@ -1923,9 +1862,6 @@ static int exfat_rename(struct inode *old_dir, struct dentry *old_dentry,
 	if (err)
 		goto out;
 
-	__lock_d_revalidate(old_dentry);
-	__lock_d_revalidate(new_dentry);
-
 	inode_inc_iversion(new_dir);
 	new_dir->i_ctime = new_dir->i_mtime = new_dir->i_atime =
 		current_time(new_dir);
@@ -1972,8 +1908,6 @@ static int exfat_rename(struct inode *old_dir, struct dentry *old_dentry,
 	}
 
 out:
-	__unlock_d_revalidate(old_dentry);
-	__unlock_d_revalidate(new_dentry);
 	mutex_unlock(&EXFAT_SB(sb)->s_lock);
 	return err;
 }
