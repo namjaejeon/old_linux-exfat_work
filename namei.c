@@ -568,14 +568,6 @@ out:
 	return ERR_PTR(ret);
 }
 
-/* returns the length of a struct qstr, ignoring trailing dots */
-static inline unsigned int __striptail_len(unsigned int len, const char *name)
-{
-	while (len && name[len - 1] == '.')
-		len--;
-	return len;
-}
-
 /*
  * Name Resolution Functions :
  * Zero if it was successful; otherwise nonzero.
@@ -596,7 +588,7 @@ static int __exfat_resolve_path(struct inode *inode, const unsigned char *path,
 	/* DO NOTHING : Is needed? */
 
 	/* strip all trailing periods */
-	namelen = __striptail_len(strlen(path), path);
+	namelen = __exfat_striptail_len(strlen(path), path);
 	if (!namelen)
 		return -ENOENT;
 
