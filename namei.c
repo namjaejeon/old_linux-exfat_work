@@ -370,7 +370,7 @@ int exfat_find_empty_entry(struct inode *inode, struct exfat_chain *p_dir,
 	int dentry;
 	unsigned int ret, last_clu;
 	unsigned long long sector;
-	unsigned long long size = 0;
+	loff_t size = 0;
 	struct exfat_chain clu;
 	struct exfat_dentry *ep = NULL;
 	struct super_block *sb = inode->i_sb;
@@ -460,7 +460,7 @@ int exfat_find_empty_entry(struct inode *inode, struct exfat_chain *p_dir,
 		}
 
 		/* directory inode should be updated in here */
-		i_size_write(inode, (loff_t)size);
+		i_size_write(inode, size);
 		EXFAT_I(inode)->i_size_ondisk += sbi->cluster_size;
 		EXFAT_I(inode)->i_size_aligned += sbi->cluster_size;
 		EXFAT_I(inode)->fid->size = size;
