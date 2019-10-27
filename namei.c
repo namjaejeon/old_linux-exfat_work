@@ -994,14 +994,10 @@ static int exfat_remove_file(struct inode *inode, struct exfat_chain *p_dir,
 	if (!ep)
 		return -EIO;
 
-	lock_buffer(bh);
 	num_entries = exfat_count_ext_entries(sb, p_dir, entry, ep);
-	if (num_entries < 0) {
-		unlock_buffer(bh);
+	if (num_entries < 0)
 		return -EIO;
-	}
 	num_entries++;
-	unlock_buffer(bh);
 	brelse(bh);
 
 	/* update the directory entry */
@@ -1601,37 +1597,28 @@ static int exfat_rename_file(struct inode *inode, struct exfat_chain *p_dir,
 	if (!epold)
 		return -EIO;
 
-	lock_buffer(old_bh);
 	num_old_entries = exfat_count_ext_entries(sb, p_dir, oldentry, epold);
-	if (num_old_entries < 0) {
-		unlock_buffer(old_bh);
+	if (num_old_entries < 0)
 		return -EIO;
-	}
 	num_old_entries++;
 
 	ret = exfat_get_num_entries_and_dos_name(sb, p_dir, p_uniname,
 		&num_new_entries, &dos_name, 0);
-	if (ret) {
-		unlock_buffer(old_bh);
+	if (ret)
 		return ret;
-	}
 
 	if (num_old_entries < num_new_entries) {
 		int newentry;
 
 		newentry =
 			exfat_find_empty_entry(inode, p_dir, num_new_entries);
-		if (newentry < 0) {
-			unlock_buffer(old_bh);
+		if (newentry < 0)
 			return newentry; /* -EIO or -ENOSPC */
-		}
 
 		epnew = exfat_get_dentry(sb, p_dir, newentry, &new_bh,
 			&sector_new);
-		if (!epnew) {
-			unlock_buffer(old_bh);
+		if (!epnew)
 			return -EIO;
-		}
 
 		memcpy((void *) epnew, (void *) epold, DENTRY_SIZE);
 		if (exfat_get_entry_type(epnew) == TYPE_FILE) {
@@ -1640,23 +1627,18 @@ static int exfat_rename_file(struct inode *inode, struct exfat_chain *p_dir,
 			fid->attr |= ATTR_ARCHIVE;
 		}
 		exfat_update_bh(sb, new_bh, 0);
-		unlock_buffer(old_bh);
 		brelse(old_bh);
 		brelse(new_bh);
 
 		epold = exfat_get_dentry(sb, p_dir, oldentry + 1, &old_bh,
 			&sector_old);
-		lock_buffer(old_bh);
 		epnew = exfat_get_dentry(sb, p_dir, newentry + 1, &new_bh,
 			&sector_new);
-		if (!epold || !epnew) {
-			unlock_buffer(old_bh);
+		if (!epold || !epnew)
 			return -EIO;
-		}
 
 		memcpy((void *) epnew, (void *) epold, DENTRY_SIZE);
 		exfat_update_bh(sb, new_bh, 0);
-		unlock_buffer(old_bh);
 		brelse(old_bh);
 		brelse(new_bh);
 
@@ -1674,7 +1656,6 @@ static int exfat_rename_file(struct inode *inode, struct exfat_chain *p_dir,
 			fid->attr |= ATTR_ARCHIVE;
 		}
 		exfat_update_bh(sb, old_bh, 0);
-		unlock_buffer(old_bh);
 		brelse(old_bh);
 		ret = exfat_init_ext_entry(sb, p_dir, oldentry, num_new_entries,
 			p_uniname, &dos_name);
@@ -1708,33 +1689,24 @@ static int exfat_move_file(struct inode *inode, struct exfat_chain *p_olddir,
 			exfat_get_entry_clu0(epmov) == p_newdir->dir)
 		return -EINVAL;
 
-	lock_buffer(mov_bh);
 	num_old_entries = exfat_count_ext_entries(sb, p_olddir, oldentry,
 		epmov);
-	if (num_old_entries < 0) {
-		unlock_buffer(mov_bh);
+	if (num_old_entries < 0)
 		return -EIO;
-	}
 	num_old_entries++;
 
 	ret = exfat_get_num_entries_and_dos_name(sb, p_newdir, p_uniname,
 		&num_new_entries, &dos_name, 0);
-	if (ret) {
-		unlock_buffer(mov_bh);
+	if (ret)
 		return ret;
-	}
 
 	newentry = exfat_find_empty_entry(inode, p_newdir, num_new_entries);
-	if (newentry < 0) {
-		unlock_buffer(mov_bh);
+	if (newentry < 0)
 		return newentry; /* -EIO or -ENOSPC */
-	}
 
 	epnew = exfat_get_dentry(sb, p_newdir, newentry, &new_bh, &sector_new);
-	if (!epnew) {
-		unlock_buffer(mov_bh);
+	if (!epnew)
 		return -EIO;
-	}
 
 	memcpy((void *) epnew, (void *) epmov, DENTRY_SIZE);
 	if (exfat_get_entry_type(epnew) == TYPE_FILE) {
@@ -1743,23 +1715,18 @@ static int exfat_move_file(struct inode *inode, struct exfat_chain *p_olddir,
 		fid->attr |= ATTR_ARCHIVE;
 	}
 	exfat_update_bh(sb, new_bh, 0);
-	unlock_buffer(mov_bh);
 	brelse(mov_bh);
 	brelse(new_bh);
 
 	epmov = exfat_get_dentry(sb, p_olddir, oldentry + 1, &mov_bh,
 		&sector_mov);
-	lock_buffer(mov_bh);
 	epnew = exfat_get_dentry(sb, p_newdir, newentry + 1, &new_bh,
 		&sector_new);
-	if (!epmov || !epnew) {
-		unlock_buffer(mov_bh);
+	if (!epmov || !epnew)
 		return -EIO;
-	}
 
 	memcpy((void *) epnew, (void *) epmov, DENTRY_SIZE);
 	exfat_update_bh(sb, new_bh, 0);
-	unlock_buffer(mov_bh);
 	brelse(mov_bh);
 	brelse(new_bh);
 
