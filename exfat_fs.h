@@ -281,7 +281,7 @@ struct exfat_file_id {
 	unsigned char flags;
 	unsigned char reserved[3];	/* padding */
 	unsigned int version;		/* the copy of low 32bit of i_version to check the validation of hint_stat */
-	s64 rwoffset;			/* file offset or dentry index for readdir */
+	loff_t rwoffset;		/* file offset or dentry index for readdir */
 
 	struct exfat_hint hint_bmap;	/* hint for cluster last accessed */
 	struct exfat_hint hint_stat;	/* hint for entry index we try to lookup next time */
@@ -375,9 +375,9 @@ static inline unsigned short exfat_make_attr(struct inode *inode)
 static inline void exfat_save_attr(struct inode *inode, unsigned short attr)
 {
 	if (exfat_mode_can_hold_ro(inode))
-		EXFAT_I(inode)->fid->attr = attr & ATTR_RWMASK;
-	else
 		EXFAT_I(inode)->fid->attr = attr & (ATTR_RWMASK | ATTR_READONLY);
+	else
+		EXFAT_I(inode)->fid->attr = attr & ATTR_RWMASK;
 }
 
 /* super.c */
@@ -484,7 +484,7 @@ extern int exfat_init_ext_entry(struct super_block *sb,
 		struct exfat_chain *p_dir, int entry, int num_entries,
 		struct exfat_uni_name *p_uniname,
 		struct exfat_dos_name *p_dosname);
-extern int exfat_delete_dir_entry(struct super_block *sb,
+extern int exfat_remove_entries(struct super_block *sb,
 		struct exfat_chain *p_dir, int entry, int order,
 		int num_entries);
 extern int update_dir_chksum(struct super_block *sb, struct exfat_chain *p_dir,

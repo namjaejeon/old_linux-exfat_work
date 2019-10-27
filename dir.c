@@ -114,7 +114,6 @@ static int exfat_readdir(struct inode *inode, struct exfat_dir_entry *dir_entry)
 				continue;
 			}
 
-			lock_buffer(bh);
 			dir_entry->attr = exfat_get_entry_attr(ep);
 
 			exfat_get_entry_time(ep, &tm, TM_CREATE);
@@ -148,7 +147,6 @@ static int exfat_readdir(struct inode *inode, struct exfat_dir_entry *dir_entry)
 			nls_uni16s_to_vfsname(sb, &uni_name,
 				dir_entry->namebuf.lfn,
 				dir_entry->namebuf.lfnbuf_len);
-			unlock_buffer(bh);
 			brelse(bh);
 
 			ep = exfat_get_dentry(sb, &clu, i + 1, &bh, NULL);
@@ -160,7 +158,7 @@ static int exfat_readdir(struct inode *inode, struct exfat_dir_entry *dir_entry)
 			fid->hint_bmap.off = dentry >> dentries_per_clu_bits;
 			fid->hint_bmap.clu = clu.dir;
 
-			fid->rwoffset = (s64) ++dentry;
+			fid->rwoffset = ++dentry;
 			return 0;
 		}
 
@@ -176,7 +174,7 @@ static int exfat_readdir(struct inode *inode, struct exfat_dir_entry *dir_entry)
 	}
 
 	dir_entry->namebuf.lfn[0] = '\0';
-	fid->rwoffset = (s64)dentry;
+	fid->rwoffset = dentry;
 	return 0;
 }
 
@@ -617,9 +615,10 @@ int exfat_init_dir_entry(struct super_block *sb, struct exfat_chain *p_dir,
 
 	strm_ep = (struct exfat_strm_dentry *)exfat_get_dentry(sb, p_dir,
 			entry + 1, &sbh, &sector);
-	if (!strm_ep)
+	if (!strm_ep) {
+		brelse(fbh);
 		return -EIO;
-
+	}
 	exfat_init_file_entry(sb, file_ep, type);
 	exfat_update_bh(sb, fbh, 0);
 	brelse(fbh);
@@ -647,7 +646,6 @@ int update_dir_chksum(struct super_block *sb, struct exfat_chain *p_dir,
 	if (!file_ep)
 		return -EIO;
 
-	lock_buffer(fbh);
 	num_entries = file_ep->num_ext + 1;
 	chksum = calc_chksum_2byte((void *) file_ep, DENTRY_SIZE, 0,
 			CS_DIR_ENTRY);
@@ -666,7 +664,6 @@ int update_dir_chksum(struct super_block *sb, struct exfat_chain *p_dir,
 	file_ep->checksum = cpu_to_le16(chksum);
 	exfat_update_bh(sb, fbh, 0);
 out_unlock:
-	unlock_buffer(fbh);
 	brelse(fbh);
 	return ret;
 }
@@ -718,7 +715,7 @@ int exfat_init_ext_entry(struct super_block *sb, struct exfat_chain *p_dir,
 	return 0;
 }
 
-int exfat_delete_dir_entry(struct super_block *sb, struct exfat_chain *p_dir,
+int exfat_remove_entries(struct super_block *sb, struct exfat_chain *p_dir,
 		int entry, int order, int num_entries)
 {
 	int i;

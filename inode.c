@@ -303,7 +303,7 @@ void exfat_truncate(struct inode *inode, loff_t old_size)
 		mark_inode_dirty(inode);
 
 	inode->i_blocks = ((i_size_read(inode) + (sbi->cluster_size - 1)) &
-			~((loff_t)sbi->cluster_size - 1)) >> inode->i_blkbits;
+			~(sbi->cluster_size - 1)) >> inode->i_blkbits;
 out:
 	aligned_size = i_size_read(inode);
 	if (aligned_size & (blocksize - 1)) {
@@ -339,7 +339,7 @@ static int __exfat_map_clus(struct inode *inode, unsigned int clu_offset,
 	int reserved_clusters = sbi->reserved_clusters;
 	unsigned int num_to_be_allocated = 0, num_clusters = 0;
 
-	fid->rwoffset = (s64)(clu_offset) << sbi->cluster_size_bits;
+	fid->rwoffset = clu_offset << sbi->cluster_size_bits;
 
 	if (EXFAT_I(inode)->i_size_ondisk > 0)
 		num_clusters = ((EXFAT_I(inode)->i_size_ondisk - 1) >>
@@ -1075,7 +1075,7 @@ static int exfat_fill_inode(struct inode *inode, struct exfat_file_id *fid)
 	exfat_save_attr(inode, info.attr);
 
 	inode->i_blocks = ((i_size_read(inode) + (sbi->cluster_size - 1))
-		& ~((loff_t)sbi->cluster_size - 1)) >> inode->i_blkbits;
+		& ~(sbi->cluster_size - 1)) >> inode->i_blkbits;
 
 	exfat_time_fat2unix(sbi, &inode->i_mtime, &info.modify_timestamp);
 	exfat_time_fat2unix(sbi, &inode->i_ctime, &info.create_timestamp);
