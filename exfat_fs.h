@@ -375,9 +375,9 @@ static inline unsigned short exfat_make_attr(struct inode *inode)
 static inline void exfat_save_attr(struct inode *inode, unsigned short attr)
 {
 	if (exfat_mode_can_hold_ro(inode))
-		EXFAT_I(inode)->fid->attr = attr & ATTR_RWMASK;
-	else
 		EXFAT_I(inode)->fid->attr = attr & (ATTR_RWMASK | ATTR_READONLY);
+	else
+		EXFAT_I(inode)->fid->attr = attr & ATTR_RWMASK;
 }
 
 /* super.c */
