@@ -565,7 +565,7 @@ static int exfat_get_block(struct inode *inode, sector_t iblock,
 		if (err != -ENOSPC)
 			exfat_fs_error_ratelimit(sb,
 				"failed to bmap (inode : %p iblock : %llu, err : %d)",
-				inode, iblock, err);
+				inode, (unsigned long long)iblock, err);
 		goto unlock_ret;
 	}
 
