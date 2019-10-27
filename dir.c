@@ -715,7 +715,7 @@ int exfat_init_ext_entry(struct super_block *sb, struct exfat_chain *p_dir,
 	return 0;
 }
 
-int exfat_delete_dir_entry(struct super_block *sb, struct exfat_chain *p_dir,
+int exfat_remove_entries(struct super_block *sb, struct exfat_chain *p_dir,
 		int entry, int order, int num_entries)
 {
 	int i;

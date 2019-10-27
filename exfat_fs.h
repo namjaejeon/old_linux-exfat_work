@@ -484,7 +484,7 @@ extern int exfat_init_ext_entry(struct super_block *sb,
 		struct exfat_chain *p_dir, int entry, int num_entries,
 		struct exfat_uni_name *p_uniname,
 		struct exfat_dos_name *p_dosname);
-extern int exfat_delete_dir_entry(struct super_block *sb,
+extern int exfat_remove_entries(struct super_block *sb,
 		struct exfat_chain *p_dir, int entry, int order,
 		int num_entries);
 extern int update_dir_chksum(struct super_block *sb, struct exfat_chain *p_dir,
