@@ -160,7 +160,7 @@ static int exfat_readdir(struct inode *inode, struct exfat_dir_entry *dir_entry)
 			fid->hint_bmap.off = dentry >> dentries_per_clu_bits;
 			fid->hint_bmap.clu = clu.dir;
 
-			fid->rwoffset = (s64) ++dentry;
+			fid->rwoffset = ++dentry;
 			return 0;
 		}
 
@@ -176,7 +176,7 @@ static int exfat_readdir(struct inode *inode, struct exfat_dir_entry *dir_entry)
 	}
 
 	dir_entry->namebuf.lfn[0] = '\0';
-	fid->rwoffset = (s64)dentry;
+	fid->rwoffset = dentry;
 	return 0;
 }
 

@@ -281,7 +281,7 @@ struct exfat_file_id {
 	unsigned char flags;
 	unsigned char reserved[3];	/* padding */
 	unsigned int version;		/* the copy of low 32bit of i_version to check the validation of hint_stat */
-	s64 rwoffset;			/* file offset or dentry index for readdir */
+	loff_t rwoffset;		/* file offset or dentry index for readdir */
 
 	struct exfat_hint hint_bmap;	/* hint for cluster last accessed */
 	struct exfat_hint hint_stat;	/* hint for entry index we try to lookup next time */

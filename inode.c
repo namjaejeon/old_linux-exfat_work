@@ -339,7 +339,7 @@ static int __exfat_map_clus(struct inode *inode, unsigned int clu_offset,
 	int reserved_clusters = sbi->reserved_clusters;
 	unsigned int num_to_be_allocated = 0, num_clusters = 0;
 
-	fid->rwoffset = (s64)(clu_offset) << sbi->cluster_size_bits;
+	fid->rwoffset = clu_offset << sbi->cluster_size_bits;
 
 	if (EXFAT_I(inode)->i_size_ondisk > 0)
 		num_clusters = ((EXFAT_I(inode)->i_size_ondisk - 1) >>
