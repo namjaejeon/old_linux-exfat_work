@@ -128,7 +128,7 @@ static inline unsigned long __exfat_init_name_hash(const struct dentry *dentry)
  * that the existing dentry can be used. The exfat fs routines will
  * return ENOENT or EINVAL as appropriate.
  */
-static int __exfat_d_hash(const struct dentry *dentry, struct qstr *qstr)
+static int exfat_d_hash(const struct dentry *dentry, struct qstr *qstr)
 {
 	unsigned int len = exfat_striptail_len(qstr);
 
@@ -142,7 +142,7 @@ static int __exfat_d_hash(const struct dentry *dentry, struct qstr *qstr)
  * that the existing dentry can be used. The exfat fs routines will
  * return ENOENT or EINVAL as appropriate.
  */
-static int __exfat_d_hashi(const struct dentry *dentry, struct qstr *qstr)
+static int exfat_d_hashi(const struct dentry *dentry, struct qstr *qstr)
 {
 	struct nls_table *t = EXFAT_SB(dentry->d_sb)->nls_io;
 	const unsigned char *name;
@@ -158,16 +158,6 @@ static int __exfat_d_hashi(const struct dentry *dentry, struct qstr *qstr)
 	qstr->hash = end_name_hash(hash);
 
 	return 0;
-}
-
-static int exfat_d_hash(const struct dentry *dentry, struct qstr *qstr)
-{
-	return __exfat_d_hash(dentry, qstr);
-}
-
-static int exfat_d_hashi(const struct dentry *dentry, struct qstr *qstr)
-{
-	return __exfat_d_hashi(dentry, qstr);
 }
 
 /*
