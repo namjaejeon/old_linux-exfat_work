@@ -416,7 +416,7 @@ extern int exfat_find_last_cluster(struct super_block *sb,
 		struct exfat_chain *p_chain, unsigned int *ret_clu);
 extern int exfat_mirror_bhs(struct super_block *sb, unsigned long long sec,
 		struct buffer_head *bh);
-extern int __count_num_clusters(struct super_block *sb,
+extern int count_num_clusters(struct super_block *sb,
 		struct exfat_chain *p_chain, unsigned int *ret_count);
 extern int exfat_count_dos_name_entries(struct super_block *sb,
 		struct exfat_chain *p_dir, unsigned int type,

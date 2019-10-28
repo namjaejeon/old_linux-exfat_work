@@ -384,7 +384,7 @@ error:
 	return ret;
 }
 
-int __count_num_clusters(struct super_block *sb,
+int count_num_clusters(struct super_block *sb,
 		struct exfat_chain *p_chain, unsigned int *ret_count)
 {
 	unsigned int i, count;
