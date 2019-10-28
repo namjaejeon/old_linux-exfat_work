@@ -255,9 +255,9 @@ int exfat_clear_cluster(struct inode *inode, unsigned int clu)
 		memset(bh->b_data, 0x0, sb->s_blocksize);
 		set_buffer_uptodate(bh);
 		mark_buffer_dirty(bh);
+		brelse(bh);
 	}
 out:
-	brelse(bh);
 	return ret;
 }
 
