@@ -841,17 +841,15 @@ static int __exfat_fill_super(struct super_block *sb)
 	/* check the validity of PBR */
 	if (le16_to_cpu((p_pbr->signature)) != PBR_SIGNATURE) {
 		exfat_msg(sb, KERN_ERR, "invalid boot record signature");
-		brelse(bh);
 		ret = -EINVAL;
-		goto out;
+		goto free_bh;
 	}
 
 	/* check logical sector size */
 	p_pbr = exfat_read_pbr_with_logical_sector(sb, &bh);
 	if (!p_pbr) {
-		brelse(bh);
 		ret = -EIO;
-		goto out;
+		goto free_bh;
 	}
 
 	if (!is_exfat(p_pbr)) {
