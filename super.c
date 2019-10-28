@@ -477,30 +477,35 @@ static int exfat_read_root(struct inode *inode)
 {
 	struct super_block *sb = inode->i_sb;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
-	struct exfat_file_id *fid;
-	struct exfat_dir_entry info;
+	struct exfat_inode_info *ei = EXFAT_I(inode);
+	struct exfat_chain cdir;
+	int num_subdirs, num_clu;
 
-	fid = kmalloc(sizeof(struct exfat_file_id), GFP_KERNEL);
-	if (!fid)
-		return -ENOMEM;	
+	ei->dir.dir = sbi->root_dir;
+	ei->dir.flags = 0x01;
+	ei->entry = -1;
+	ei->start_clu = sbi->root_dir;
+	ei->flags = 0x01;
+	ei->type = TYPE_DIR;
+	ei->version = 0;
+	ei->rwoffset = 0;
+	ei->hint_bmap.off = CLUS_EOF;
+	ei->hint_stat.eidx = 0;
+	ei->hint_stat.clu = sbi->root_dir;
+	ei->hint_femp.eidx = EXFAT_HINT_NONE;
+	ei->target = NULL;
 
-	fid->dir.dir = sbi->root_dir;
-	fid->dir.flags = 0x01;
-	fid->entry = -1;
-	fid->start_clu = sbi->root_dir;
-	fid->flags = 0x01;
-	fid->type = TYPE_DIR;
-	fid->version = 0;
-	fid->rwoffset = 0;
-	fid->hint_bmap.off = CLUS_EOF;
-	fid->hint_stat.eidx = 0;
-	fid->hint_stat.clu = sbi->root_dir;
-	fid->hint_femp.eidx = EXFAT_HINT_NONE;
-	EXFAT_I(inode)->fid = fid;
-	EXFAT_I(inode)->target = NULL;
-
-	if (exfat_read_inode(inode, &info) < 0)
+	cdir.dir = sbi->root_dir;
+	cdir.flags = 0x01;
+	cdir.size = 0; /* UNUSED */
+	if (__count_num_clusters(sb, &cdir, &num_clu))
 		return -EIO;
+	i_size_write(inode, num_clu << sbi->cluster_size_bits);
+
+	num_subdirs = exfat_count_dos_name_entries(sb, &cdir, TYPE_DIR, NULL);
+	if (num_subdirs < 0)
+		return -EIO;
+	set_nlink(inode, num_subdirs + 2);
 
 	inode->i_uid = sbi->options.fs_uid;
 	inode->i_gid = sbi->options.fs_gid;
@@ -510,8 +515,6 @@ static int exfat_read_root(struct inode *inode)
 	inode->i_op = &exfat_dir_inode_operations;
 	inode->i_fop = &exfat_dir_operations;
 
-	i_size_write(inode, info.size);
-	fid->size = info.size;
 	inode->i_blocks = ((i_size_read(inode) + (sbi->cluster_size - 1))
 			& ~(sbi->cluster_size - 1)) >> inode->i_blkbits;
 	EXFAT_I(inode)->i_pos = ((loff_t)sbi->root_dir << 32) | 0xffffffff;
@@ -520,7 +523,7 @@ static int exfat_read_root(struct inode *inode)
 
 	exfat_save_attr(inode, ATTR_SUBDIR);
 	inode->i_mtime = inode->i_atime = inode->i_ctime = current_time(inode);
-	set_nlink(inode, info.num_subdirs + 2);
+	exfat_cache_init_inode(inode);
 	return 0;
 }
 
@@ -1077,7 +1080,6 @@ void exfat_destroy_inode(struct inode *inode)
 		EXFAT_I(inode)->target = NULL;
 	}
 
-	kfree(EXFAT_I(inode)->fid);
 	kmem_cache_free(exfat_inode_cachep, EXFAT_I(inode));
 }
 

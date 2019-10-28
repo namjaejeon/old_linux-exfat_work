@@ -384,6 +384,37 @@ error:
 	return ret;
 }
 
+int __count_num_clusters(struct super_block *sb,
+		struct exfat_chain *p_chain, unsigned int *ret_count)
+{
+	unsigned int i, count;
+	unsigned int clu;
+	struct exfat_sb_info *sbi = EXFAT_SB(sb);
+
+	if (!p_chain->dir || IS_CLUS_EOF(p_chain->dir)) {
+		*ret_count = 0;
+		return 0;
+	}
+
+	if (p_chain->flags == 0x03) {
+		*ret_count = p_chain->size;
+		return 0;
+	}
+
+	clu = p_chain->dir;
+	count = 0;
+	for (i = CLUS_BASE; i < sbi->num_clusters; i++) {
+		count++;
+		if (exfat_ent_get_safe(sb, clu, &clu))
+			return -EIO;
+		if (IS_CLUS_EOF(clu))
+			break;
+	}
+
+	*ret_count = count;
+	return 0;
+}
+
 int exfat_mirror_bhs(struct super_block *sb, unsigned long long sec,
 		struct buffer_head *bh)
 {
