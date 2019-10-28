@@ -917,12 +917,10 @@ static int __exfat_fill_super(struct super_block *sb)
 		goto free_upcase;
 	}
 
-	if (sbi->used_clusters == ~0) {
-		ret = exfat_count_used_clusters(sb, &sbi->used_clusters);
-		if (ret) {
-			exfat_msg(sb, KERN_ERR, "failed to scan clusters");
-			goto free_alloc_bmp;
-		}
+	ret = exfat_count_used_clusters(sb, &sbi->used_clusters);
+	if (ret) {
+		exfat_msg(sb, KERN_ERR, "failed to scan clusters");
+		goto free_alloc_bmp;
 	}
 
 	return 0;
