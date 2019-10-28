@@ -249,9 +249,10 @@ int exfat_clear_cluster(struct inode *inode, unsigned int clu)
 	 */
 	for ( ; s < n; s++) {
 		bh = sb_getblk(sb, s);
-		if (!bh)
+		if (!bh) {
+			ret = -ENOMEM;
 			goto out;
-
+		}
 		memset(bh->b_data, 0x0, sb->s_blocksize);
 		set_buffer_uptodate(bh);
 		mark_buffer_dirty(bh);
