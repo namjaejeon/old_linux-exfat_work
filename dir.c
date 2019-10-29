@@ -868,11 +868,12 @@ int exfat_find_location(struct super_block *sb, struct exfat_chain *p_dir,
 	return 0;
 }
 
+#define EXFAT_MAX_RA_SIZE     (128*1024)
 static int exfat_dir_readahead(struct super_block *sb, unsigned long long sec)
 {
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 	struct buffer_head *bh;
-	unsigned int max_ra_count = DCACHE_MAX_RA_SIZE >> sb->s_blocksize_bits;
+	unsigned int max_ra_count = EXFAT_MAX_RA_SIZE >> sb->s_blocksize_bits;
 	unsigned int page_ra_count = PAGE_SIZE >> sb->s_blocksize_bits;
 	unsigned int adj_ra_count = max(sbi->sect_per_clus, page_ra_count);
 	unsigned int ra_count = min(adj_ra_count, max_ra_count);
