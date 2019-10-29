@@ -283,7 +283,7 @@ struct exfat_inode_info {
 
 static inline struct exfat_sb_info *EXFAT_SB(struct super_block *sb)
 {
-	return (struct exfat_sb_info *)sb->s_fs_info;
+	return sb->s_fs_info;
 }
 
 static inline struct exfat_inode_info *EXFAT_I(struct inode *inode)
