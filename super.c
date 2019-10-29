@@ -547,7 +547,7 @@ static bool is_exfat(struct pbr *pbr)
 }
 
 static int exfat_load_upcase_table(struct super_block *sb,
-		unsigned long long sector, unsigned long long num_sectors,
+		sector_t sector, unsigned long long num_sectors,
 		unsigned int utbl_checksum)
 {
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
@@ -709,7 +709,8 @@ static int load_upcase_table(struct super_block *sb)
 {
 	int i, ret;
 	unsigned int tbl_clu, type;
-	unsigned long long sector, tbl_size, num_sectors;
+	sector_t sector;
+	unsigned long long tbl_size, num_sectors;
 	unsigned char blksize_bits = sb->s_blocksize_bits;
 	struct exfat_chain clu;
 	struct exfat_case_dentry *ep;

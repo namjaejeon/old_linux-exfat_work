@@ -326,7 +326,7 @@ int exfat_find_empty_entry(struct inode *inode, struct exfat_chain *p_dir,
 {
 	int dentry;
 	unsigned int ret, last_clu;
-	unsigned long long sector;
+	sector_t sector;
 	loff_t size = 0;
 	struct exfat_chain clu;
 	struct exfat_dentry *ep = NULL;
@@ -759,7 +759,8 @@ static int exfat_read_link(struct inode *inode, char *buffer)
 	int offset, sec_offset;
 	unsigned int clu_offset;
 	unsigned int clu;
-	unsigned long long logsector, oneblkread, read_bytes;
+	sector_t logsector;
+	unsigned long long oneblkread, read_bytes;
 	struct buffer_head *bh = NULL;
 	struct super_block *sb = inode->i_sb;
 	struct exfat_inode_info *ei = EXFAT_I(inode);
@@ -938,7 +939,7 @@ static int exfat_unlink(struct inode *dir, struct dentry *dentry)
 	struct inode *inode = dentry->d_inode;
 	struct exfat_inode_info *ei = EXFAT_I(inode);
 	struct buffer_head *bh;
-	unsigned long long sector;
+	sector_t sector;
 	int num_entries, entry, err = 0;
 
 	mutex_lock(&EXFAT_SB(sb)->s_lock);
@@ -999,7 +1000,7 @@ static int __exfat_remove(struct inode *inode, struct exfat_inode_info *ei)
 	struct super_block *sb = inode->i_sb;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 	struct buffer_head *bh;
-	unsigned long long sector;
+	sector_t sector;
 	int num_entries, entry, ret;
 
 	cdir.dir = ei->dir.dir;
@@ -1058,7 +1059,8 @@ static int exfat_write_link(struct inode *inode, char *buffer,
 	int modified = false, offset, sec_offset;
 	unsigned int clu_offset, num_clusters, num_alloc;
 	unsigned int clu, last_clu;
-	unsigned long long logsector, oneblkwrite, write_bytes;
+	sector_t logsector;
+	unsigned long long oneblkwrite, write_bytes;
 	struct exfat_chain new_clu;
 	struct exfat_timestamp tm;
 	struct exfat_dentry *ep, *ep2;
@@ -1414,7 +1416,7 @@ static int exfat_rmdir(struct inode *dir, struct dentry *dentry)
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 	struct exfat_inode_info *ei = EXFAT_I(inode);
 	struct buffer_head *bh;
-	unsigned long long sector;
+	sector_t sector;
 	int num_entries, entry, err;
 
 	mutex_lock(&EXFAT_SB(inode->i_sb)->s_lock);
@@ -1488,7 +1490,7 @@ static int exfat_rename_file(struct inode *inode, struct exfat_chain *p_dir,
 		struct exfat_inode_info *ei)
 {
 	int ret, num_old_entries, num_new_entries;
-	unsigned long long sector_old, sector_new;
+	sector_t sector_old, sector_new;
 	struct exfat_dos_name dos_name;
 	struct exfat_dentry *epold, *epnew;
 	struct super_block *sb = inode->i_sb;
@@ -1575,7 +1577,7 @@ static int exfat_move_file(struct inode *inode, struct exfat_chain *p_olddir,
 		struct exfat_uni_name *p_uniname, struct exfat_inode_info *ei)
 {
 	int ret, newentry, num_new_entries, num_old_entries;
-	unsigned long long sector_mov, sector_new;
+	sector_t sector_mov, sector_new;
 	struct exfat_dos_name dos_name;
 	struct exfat_dentry *epmov, *epnew;
 	struct super_block *sb = inode->i_sb;

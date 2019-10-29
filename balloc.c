@@ -48,7 +48,7 @@ static unsigned char used_bit[] = {
 int exfat_load_alloc_bmp(struct super_block *sb)
 {
 	unsigned int i, j, map_size, type, need_map_size;
-	unsigned long long sector;
+	sector_t sector;
 	struct exfat_chain clu;
 	struct exfat_bmap_dentry *ep = NULL;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
@@ -156,7 +156,7 @@ void exfat_sync_alloc_bmp(struct super_block *sb)
 int exfat_set_alloc_bitmap(struct super_block *sb, unsigned int clu)
 {
 	int i, b;
-	unsigned long long sector;
+	sector_t sector;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 
 	i = clu >> (sb->s_blocksize_bits + 3);
@@ -178,7 +178,7 @@ int exfat_set_alloc_bitmap(struct super_block *sb, unsigned int clu)
 void exfat_clr_alloc_bitmap(struct super_block *sb, unsigned int clu)
 {
 	int i, b;
-	unsigned long long sector;
+	sector_t sector;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 	struct exfat_mount_options *opts = &sbi->options;
 
