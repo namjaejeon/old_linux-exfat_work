@@ -1424,8 +1424,7 @@ out:
 }
 
 int exfat_count_dos_name_entries(struct super_block *sb,
-		struct exfat_chain *p_dir, unsigned int type,
-		unsigned int *dotcnt)
+		struct exfat_chain *p_dir, unsigned int type)
 {
 	int i, count = 0;
 	int dentries_per_clu;
@@ -1440,9 +1439,6 @@ int exfat_count_dos_name_entries(struct super_block *sb,
 	clu.dir = p_dir->dir;
 	clu.size = p_dir->size;
 	clu.flags = p_dir->flags;
-
-	if (dotcnt)
-		*dotcnt = 0;
 
 	while (!IS_CLUS_EOF(clu.dir)) {
 		for (i = 0; i < dentries_per_clu; i++) {

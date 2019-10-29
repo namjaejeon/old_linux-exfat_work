@@ -404,8 +404,7 @@ int exfat_mirror_bhs(struct super_block *sb, sector_t sec,
 int count_num_clusters(struct super_block *sb, struct exfat_chain *p_chain,
 		unsigned int *ret_count);
 int exfat_count_dos_name_entries(struct super_block *sb,
-		struct exfat_chain *p_dir, unsigned int type,
-		unsigned int *dotcnt);
+		struct exfat_chain *p_dir, unsigned int type);
 
 /* balloc.c */
 int exfat_load_alloc_bmp(struct super_block *sb);
