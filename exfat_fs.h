@@ -93,7 +93,6 @@
 
 #define MAX_CHARSET_SIZE	6	/* max size of multi-byte character */
 #define MAX_NAME_LENGTH		255     /* max len of file name excluding NULL */
-#define DOS_NAME_LENGTH		11      /* DOS file name length excluding NULL */
 #define MAX_VFSNAME_BUF_SIZE	((MAX_NAME_LENGTH + 1) * MAX_CHARSET_SIZE)
 #define MAX_DOSNAME_BUF_SIZE	((DOS_NAME_LENGTH + 2) + 6)
 

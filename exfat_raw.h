@@ -54,6 +54,8 @@
 #define ATTR_RWMASK		(ATTR_HIDDEN | ATTR_SYSTEM | ATTR_VOLUME | \
 				 ATTR_SUBDIR | ATTR_ARCHIVE | ATTR_SYMLINK) /* 0x007E */
 
+#define DOS_NAME_LENGTH		11	/* DOS file name length excluding NULL */
+
 /* EXFAT BIOS parameter block (64 bytes) */
 struct bpb64 {
 	__u8 jmp_boot[3];
