@@ -3,7 +3,6 @@
  * Copyright (C) 2012-2013 Samsung Electronics Co., Ltd.
  */
 
-
 #ifndef _EXFAT_H
 #define _EXFAT_H
 
@@ -530,4 +529,5 @@ struct exfat_timestamp *tm_now(struct exfat_sb_info *sbi,
 		struct exfat_timestamp *tm);
 unsigned short calc_chksum_2byte(void *data, int len, unsigned short chksum,
 		int type);
+
 #endif /* !_EXFAT_H */

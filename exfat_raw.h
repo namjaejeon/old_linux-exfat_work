@@ -3,6 +3,9 @@
  * Copyright (C) 2012-2013 Samsung Electronics Co., Ltd.
  */
 
+#ifndef _EXFAT_RAW_H
+#define _EXFAT_RAW_H
+
 #include <linux/types.h>
 
 #define PBR_SIGNATURE		0xAA55
@@ -182,3 +185,5 @@ struct exfat_dos_dentry {
 	__le16 start_clu_lo;
 	__le32 size;
 };
+
+#endif /* !_EXFAT_RAW_H */
