@@ -600,8 +600,8 @@ static int exfat_load_upcase_table(struct super_block *sb,
 
 				if (!upcase_table[col_index]) {
 					upcase_table[col_index] =
-						kmalloc((UTBL_ROW_COUNT *
-							sizeof(unsigned short)),
+						kmalloc_array(UTBL_ROW_COUNT,
+						sizeof(unsigned short),
 						GFP_KERNEL);
 					if (!upcase_table[col_index]) {
 						exfat_msg(sb, KERN_ERR,
@@ -652,7 +652,7 @@ static int exfat_load_default_upcase_table(struct super_block *sb)
 	unsigned short uni = 0;
 	unsigned short **upcase_table;
 
-	upcase_table = kmalloc((UTBL_COL_COUNT * sizeof(unsigned short *)),
+	upcase_table = kmalloc_array(UTBL_COL_COUNT, sizeof(unsigned short *),
 		GFP_KERNEL);
 	if (!upcase_table)
 		return -ENOMEM;
@@ -674,8 +674,8 @@ static int exfat_load_default_upcase_table(struct super_block *sb)
 
 			if (!upcase_table[col_index]) {
 				upcase_table[col_index] =
-					kmalloc((UTBL_ROW_COUNT *
-						sizeof(unsigned short)),
+					kmalloc_array(UTBL_ROW_COUNT,
+					sizeof(unsigned short),
 					GFP_KERNEL);
 				if (!upcase_table[col_index]) {
 					exfat_msg(sb, KERN_ERR,

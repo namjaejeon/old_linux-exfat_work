@@ -98,8 +98,8 @@ alloc:
 	}
 	sbi->map_sectors = ((need_map_size - 1) >>
 			(sb->s_blocksize_bits)) + 1;
-	sbi->vol_amap = kmalloc((sizeof(struct buffer_head *) *
-				sbi->map_sectors), GFP_KERNEL);
+	sbi->vol_amap = kmalloc_array(sbi->map_sectors, sizeof(struct buffer_head *),
+				GFP_KERNEL);
 	if (!sbi->vol_amap)
 		return -ENOMEM;
 
