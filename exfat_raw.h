@@ -11,7 +11,7 @@
 #define PBR_SIGNATURE		0xAA55
 
 #define VOL_CLEAN		0x0000
-#define VOL_DIRTY		0x0001
+#define VOL_DIRTY		0x0002
 
 #define DENTRY_SIZE		32 /* directory entry size */
 #define DENTRY_SIZE_BITS	5
