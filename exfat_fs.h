@@ -427,12 +427,12 @@ void exfat_clr_alloc_bitmap(struct super_block *sb, unsigned int clu);
 unsigned int exfat_test_alloc_bitmap(struct super_block *sb, unsigned int clu);
 
 /* file.c */
-const struct file_operations exfat_file_operations;
+extern const struct file_operations exfat_file_operations;
 int exfat_file_fsync(struct file *filp, loff_t start, loff_t end, int datasync);
 
 /* namei.c */
-const struct dentry_operations exfat_dentry_ops;
-const struct dentry_operations exfat_ci_dentry_ops;
+extern const struct dentry_operations exfat_dentry_ops;
+extern const struct dentry_operations exfat_ci_dentry_ops;
 int exfat_setattr(struct dentry *dentry, struct iattr *attr);
 int exfat_getattr(const struct path *path, struct kstat *stat,
 		unsigned int request_mask, unsigned int query_flags);
@@ -449,8 +449,8 @@ int exfat_get_clus(struct inode *inode, unsigned int cluster,
 		unsigned int *last_dclus, int allow_eof);
 
 /* dir.c */
-const struct inode_operations exfat_dir_inode_operations;
-const struct file_operations exfat_dir_operations;
+extern const struct inode_operations exfat_dir_inode_operations;
+extern const struct file_operations exfat_dir_operations;
 void exfat_update_bh(struct super_block *sb, struct buffer_head *bh, int sync);
 void exfat_get_uniname_from_ext_entry(struct super_block *sb,
 		struct exfat_chain *p_dir, int entry, unsigned short *uniname);
@@ -494,8 +494,8 @@ int exfat_zeroed_cluster(struct super_block *sb, unsigned long long blknr,
 int exfat_alloc_new_dir(struct inode *inode, struct exfat_chain *clu);
 
 /* inode.c */
-const struct inode_operations exfat_symlink_inode_operations;
-const struct inode_operations exfat_file_inode_operations;
+extern const struct inode_operations exfat_symlink_inode_operations;
+extern const struct inode_operations exfat_file_inode_operations;
 int exfat_sync_inode(struct inode *inode);
 struct inode *exfat_build_inode(struct super_block *sb,
 		struct exfat_dir_entry *info, loff_t i_pos);
