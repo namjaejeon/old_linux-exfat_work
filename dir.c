@@ -768,13 +768,13 @@ static int exfat_write_partial_entries_in_entry_set(struct super_block *sb,
 
 		if (num_entries) {
 			// get next sector
-			if (IS_LAST_SECT_IN_CLUS(sbi, sec)) {
-				clu = SECT_TO_CLUS(sbi, sec);
+			if (is_last_sect_in_clus(sbi, sec)) {
+				clu = sect_to_clus(sbi, sec);
 				if (es->alloc_flag == 0x03)
 					clu++;
 				else if (get_next_clus_safe(sb, &clu))
 					goto err_out;
-				sec = CLUS_TO_SECT(sbi, clu);
+				sec = clus_to_sect(sbi, clu);
 			} else {
 				sec++;
 			}
@@ -864,7 +864,7 @@ int exfat_find_location(struct super_block *sb, struct exfat_chain *p_dir,
 
 	/* sector offset in cluster */
 	*sector = off >> blksize_bits;
-	*sector += CLUS_TO_SECT(sbi, clu);
+	*sector += clus_to_sect(sbi, clu);
 	return 0;
 }
 
@@ -985,7 +985,7 @@ struct exfat_entry_set_cache *exfat_get_dentry_set(struct super_block *sb,
 
 	/* sector offset in cluster */
 	sec = byte_offset >> (sb->s_blocksize_bits);
-	sec += CLUS_TO_SECT(sbi, clu);
+	sec += clus_to_sect(sbi, clu);
 
 	bh = sb_bread(sb, sec);
 	if (!bh)
@@ -1075,12 +1075,12 @@ struct exfat_entry_set_cache *exfat_get_dentry_set(struct super_block *sb,
 			(sb->s_blocksize - 1)) <
 			(off & (sb->s_blocksize - 1))) {
 			// get the next sector
-			if (IS_LAST_SECT_IN_CLUS(sbi, sec)) {
+			if (is_last_sect_in_clus(sbi, sec)) {
 				if (es->alloc_flag == 0x03)
 					clu++;
 				else if (get_next_clus_safe(sb, &clu))
 					goto err_out;
-				sec = CLUS_TO_SECT(sbi, clu);
+				sec = clus_to_sect(sbi, clu);
 			} else {
 				sec++;
 			}

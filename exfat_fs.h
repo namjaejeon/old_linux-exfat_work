@@ -43,15 +43,6 @@
 #define IS_CLUS_EOF(x)	((x) == CLUS_EOF)
 #define IS_CLUS_BAD(x)	((x) == CLUS_BAD)
 #define IS_CLUS_FREE(x)	((x) == CLUS_FREE)
-#define IS_LAST_SECT_IN_CLUS(sbi, sec)				\
-	((((sec) - (sbi)->data_start_sector + 1)		\
-	  & ((1 << (sbi)->sect_per_clus_bits) - 1)) == 0)
-
-#define CLUS_TO_SECT(sbi, x)	\
-	((((unsigned long long)(x) - CLUS_BASE) << (sbi)->sect_per_clus_bits) + (sbi)->data_start_sector)
-
-#define SECT_TO_CLUS(sbi, sec)	\
-	((unsigned int)((((sec) - (sbi)->data_start_sector) >> (sbi)->sect_per_clus_bits) + CLUS_BASE))
 
 #define EXFAT_HASH_BITS		8
 #define EXFAT_HASH_SIZE		(1UL << EXFAT_HASH_BITS)
@@ -359,6 +350,27 @@ static inline void exfat_save_attr(struct inode *inode, unsigned short attr)
 		EXFAT_I(inode)->attr = attr & (ATTR_RWMASK | ATTR_READONLY);
 	else
 		EXFAT_I(inode)->attr = attr & ATTR_RWMASK;
+}
+
+static inline bool is_last_sect_in_clus(struct exfat_sb_info *sbi,
+		unsigned long long sec)
+{
+	return ((sec - sbi->data_start_sector + 1) &
+			((1 << sbi->sect_per_clus_bits) - 1)) == 0;
+}
+
+static inline unsigned long long clus_to_sect(struct exfat_sb_info *sbi,
+		unsigned int clus)
+{
+	return ((clus - CLUS_BASE) << sbi->sect_per_clus_bits)
+			+ sbi->data_start_sector;
+}
+
+static inline int sect_to_clus(struct exfat_sb_info *sbi,
+		unsigned long long sec)
+{
+	return ((sec - sbi->data_start_sector) >> sbi->sect_per_clus_bits) +
+			CLUS_BASE;
 }
 
 /* super.c */

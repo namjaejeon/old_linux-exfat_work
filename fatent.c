@@ -235,7 +235,7 @@ int exfat_clear_cluster(struct inode *inode, unsigned int clu)
 	struct buffer_head *bh = NULL;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 
-	s = CLUS_TO_SECT(sbi, clu);
+	s = clus_to_sect(sbi, clu);
 	n = s + sbi->sect_per_clus;
 
 	if (IS_DIRSYNC(inode)) {

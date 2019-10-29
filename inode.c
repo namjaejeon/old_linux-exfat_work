@@ -523,7 +523,7 @@ static int exfat_bmap(struct inode *inode, sector_t sector, sector_t *phys,
 		/* sector offset in cluster */
 		sec_offset = sector & (sbi->sect_per_clus - 1);
 
-		*phys = CLUS_TO_SECT(sbi, cluster) + sec_offset;
+		*phys = clus_to_sect(sbi, cluster) + sec_offset;
 		*mapped_blocks = sbi->sect_per_clus - sec_offset;
 	}
 

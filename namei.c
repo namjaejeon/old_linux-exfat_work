@@ -811,7 +811,7 @@ static int exfat_read_link(struct inode *inode, char *buffer)
 		sec_offset = offset >> sb->s_blocksize_bits;
 		offset &= (sb->s_blocksize - 1);
 
-		logsector = CLUS_TO_SECT(sbi, clu) + sec_offset;
+		logsector = clus_to_sect(sbi, clu) + sec_offset;
 
 		oneblkread = sb->s_blocksize - offset;
 		if (oneblkread > size)
@@ -1175,7 +1175,7 @@ static int exfat_write_link(struct inode *inode, char *buffer,
 		sec_offset = offset >> blksize_bits;
 		/* byte offset in sector    */
 		offset &= blksize_mask;
-		logsector = CLUS_TO_SECT(sbi, clu) + sec_offset;
+		logsector = clus_to_sect(sbi, clu) + sec_offset;
 
 		oneblkwrite = blksize - offset;
 		if (oneblkwrite > tsize)
