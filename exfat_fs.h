@@ -110,21 +110,6 @@
 
 #define EXFAT_HINT_NONE		-1
 
-struct exfat_dos_dentry {
-	__u8 name[DOS_NAME_LENGTH];  /* 11 chars */
-	__u8 attr;
-	__u8 lcase;
-	__u8 create_time_ms;
-	__le16 create_time;
-	__le16 create_date;
-	__le16 access_date;
-	__le16 start_clu_hi;
-	__le16 modify_time;
-	__le16 modify_date;
-	__le16 start_clu_lo;
-	__le32 size;
-};
-
 struct exfat_timestamp {
 	unsigned short sec;	/* 0 ~ 59 */
 	unsigned short min;	/* 0 ~ 59 */
