@@ -281,10 +281,6 @@ struct exfat_inode_info {
 	struct inode vfs_inode;
 };
 
-/*
- * FIXME : needs on-disk-slot in-memory data
- */
-
 static inline struct exfat_sb_info *EXFAT_SB(struct super_block *sb)
 {
 	return (struct exfat_sb_info *)sb->s_fs_info;
