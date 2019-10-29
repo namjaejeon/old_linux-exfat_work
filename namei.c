@@ -551,25 +551,37 @@ static int exfat_add_entry(struct inode *inode, const char *path,
 
 	memcpy(&info->dir, p_dir, sizeof(struct exfat_chain));
 	info->entry = dentry;
+	info->flags = 0x03;
+	info->type = type;
 
 	if (type == TYPE_FILE) {
 		info->attr = ATTR_ARCHIVE | mode;
 		info->start_clu = CLUS_EOF;
 		info->size = 0;
+		info->num_subdirs = 0;
 	} else {
+		int count;
+		struct exfat_chain cdir;
+
 		info->attr = ATTR_SUBDIR | mode;
 		info->start_clu = start_clu;
 		info->size = clu_size;
+
+		cdir.dir = info->start_clu;
+		cdir.flags = info->flags;
+		cdir.size = info->size >> sbi->cluster_size_bits;
+		count = exfat_count_dos_name_entries(sb,
+				&cdir, TYPE_DIR, NULL);
+		if (count < 0)
+			return -EIO;
+		info->num_subdirs = count + EXFAT_MIN_SUBDIR;
 	}
-	info->flags = 0x03;
-	info->type = type;
 	memset(&info->create_timestamp, 0,
 			sizeof(struct exfat_date_time));
 	memset(&info->modify_timestamp, 0,
 			sizeof(struct exfat_date_time));
 	memset(&info->access_timestamp, 0,
 			sizeof(struct exfat_date_time));
-
 out:
 	return ret;
 }
@@ -614,12 +626,11 @@ out:
 	return err;
 }
 
-#define EXFAT_MIN_SUBDIR	(2)
 /* lookup a file */
 static int exfat_find(struct inode *dir, struct qstr *qname,
 		struct exfat_dir_entry *info)
 {
-	int ret, dentry, num_entries;
+	int ret, dentry, num_entries, count;
 	struct exfat_chain cdir;
 	struct exfat_uni_name uni_name;
 	struct exfat_dos_name dos_name;
@@ -660,6 +671,7 @@ static int exfat_find(struct inode *dir, struct qstr *qname,
 
 	memcpy(&info->dir, &cdir.dir, sizeof(struct exfat_chain));
 	info->entry = dentry;
+	info->num_subdirs = 0;
 
 	/* root directory itself */
 	if (unlikely(dentry == -EEXIST)) {
@@ -678,10 +690,12 @@ static int exfat_find(struct inode *dir, struct qstr *qname,
 		cdir.dir = sbi->root_dir;
 		cdir.flags = 0x01;
 		cdir.size = 0;
-		info->num_subdirs = exfat_count_dos_name_entries(sb, &cdir,
+		count = exfat_count_dos_name_entries(sb, &cdir,
 			TYPE_DIR, NULL);
-		if (info->num_subdirs < 0)
+		if (count < 0)
 			return -EIO;
+
+		info->num_subdirs = count;
 	} else {
 		es = exfat_get_dentry_set(sb, &cdir, dentry, ES_2_ENTRIES, &ep);
 		if (!es)
@@ -726,21 +740,20 @@ static int exfat_find(struct inode *dir, struct qstr *qname,
 
 		memset(&info->access_timestamp, 0,
 				sizeof(struct exfat_date_time));
-
 		exfat_release_dentry_set(es);
-		info->num_subdirs = 0;
+
 		if (info->type == TYPE_DIR) {
 			unsigned int dotcnt = 0;
 
 			cdir.dir = info->start_clu;
 			cdir.flags = info->flags;
 			cdir.size = info->size >> sbi->cluster_size_bits;
-			info->num_subdirs = exfat_count_dos_name_entries(sb,
+			count = exfat_count_dos_name_entries(sb,
 				&cdir, TYPE_DIR, &dotcnt);
-			if (info->num_subdirs < 0)
+			if (count < 0)
 				return -EIO;
 
-			info->num_subdirs += EXFAT_MIN_SUBDIR;
+			info->num_subdirs = count + EXFAT_MIN_SUBDIR;
 		}
 	}
 

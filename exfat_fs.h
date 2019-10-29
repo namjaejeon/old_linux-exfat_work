@@ -96,6 +96,7 @@
 #define BUF_CACHE_HASH_SIZE	64
 
 #define EXFAT_HINT_NONE		-1
+#define EXFAT_MIN_SUBDIR	2
 
 struct exfat_timestamp {
 	unsigned short sec;	/* 0 ~ 59 */

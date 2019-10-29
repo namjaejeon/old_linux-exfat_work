@@ -505,7 +505,7 @@ static int exfat_read_root(struct inode *inode)
 	num_subdirs = exfat_count_dos_name_entries(sb, &cdir, TYPE_DIR, NULL);
 	if (num_subdirs < 0)
 		return -EIO;
-	set_nlink(inode, num_subdirs + 2);
+	set_nlink(inode, num_subdirs + EXFAT_MIN_SUBDIR);
 
 	inode->i_uid = sbi->options.fs_uid;
 	inode->i_gid = sbi->options.fs_gid;
