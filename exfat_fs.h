@@ -101,7 +101,6 @@
 #define FM_REGULAR	0x00
 #define FM_SYMLINK	0x40
 
-#define FCACHE_MAX_RA_SIZE     (PAGE_SIZE)
 #define FAT_CACHE_SIZE		128
 #define FAT_CACHE_HASH_SIZE	64
 #define BUF_CACHE_SIZE		256
