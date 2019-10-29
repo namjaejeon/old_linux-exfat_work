@@ -355,7 +355,7 @@ static int __exfat_map_clus(struct inode *inode, unsigned int clu_offset,
 		}
 	} else if (ei->type == TYPE_FILE) {
 		unsigned int fclus = 0;
-		int err = exfat_get_clus(inode, clu_offset,
+		int err = exfat_get_cluster(inode, clu_offset,
 				&fclus, clu, &last_clu, 1);
 		if (err)
 			return -EIO;

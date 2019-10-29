@@ -151,7 +151,7 @@ static void exfat_cache_add(struct inode *inode,
 	struct exfat_inode_info *ei = EXFAT_I(inode);
 	struct exfat_cache *cache, *tmp;
 
-	if (new->fcluster == -1) /* dummy cache */
+	if (new->fcluster == CLUS_EOF) /* dummy cache */
 		return;
 
 	spin_lock(&ei->cache_lru_lock);
@@ -244,7 +244,7 @@ static inline void cache_init(struct exfat_cache_id *cid,
 	cid->nr_contig = 0;
 }
 
-int exfat_get_clus(struct inode *inode, unsigned int cluster,
+int exfat_get_cluster(struct inode *inode, unsigned int cluster,
 		unsigned int *fclus, unsigned int *dclus,
 		unsigned int *last_dclus, int allow_eof)
 {
