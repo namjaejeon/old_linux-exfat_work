@@ -517,6 +517,8 @@ int exfat_nls_uni16s_to_vfsname(struct super_block *sb,
 int exfat_nls_vfsname_to_uni16s(struct super_block *sb,
 		const unsigned char *p_cstring, const int len,
 		struct exfat_uni_name *uniname, int *p_lossy);
+int exfat_create_upcase_table(struct super_block *sb);
+void exfat_free_upcase_table(struct super_block *sb);
 
 /* exfat/misc.c */
 void __exfat_fs_error(struct super_block *sb, int report, const char *fmt, ...)
