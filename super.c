@@ -549,8 +549,8 @@ static int exfat_load_upcase_table(struct super_block *sb,
 	unsigned int index = 0;
 	unsigned int checksum = 0;
 	unsigned short **upcase_table =
-		kzalloc((UTBL_COL_COUNT * sizeof(unsigned short *)),
-			GFP_KERNEL);
+		kmalloc_array(UTBL_COL_COUNT, sizeof(unsigned short *),
+			GFP_KERNEL | __GFP_ZERO);
 
 	if (!upcase_table)
 		return -ENOMEM;
