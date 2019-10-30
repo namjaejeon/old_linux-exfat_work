@@ -516,9 +516,9 @@ void exfat_time_fat2unix(struct exfat_sb_info *sbi, struct timespec64 *ts,
 		struct exfat_date_time *tp);
 void exfat_time_unix2fat(struct exfat_sb_info *sbi, struct timespec64 *ts,
 		struct exfat_date_time *tp);
-struct exfat_timestamp *tm_now(struct exfat_sb_info *sbi,
+struct exfat_timestamp *exfat_tm_now(struct exfat_sb_info *sbi,
 		struct exfat_timestamp *tm);
-unsigned short calc_chksum_2byte(void *data, int len, unsigned short chksum,
+unsigned short exfat_calc_chksum_2byte(void *data, int len, unsigned short chksum,
 		int type);
 
 #endif /* !_EXFAT_H */

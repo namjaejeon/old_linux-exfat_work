@@ -340,7 +340,7 @@ static int __nls_vfsname_to_utf16s(struct super_block *sb,
 
 	*uniname = (unsigned short)'\0';
 	p_uniname->name_len = unilen;
-	p_uniname->name_hash = calc_chksum_2byte((void *) upname,
+	p_uniname->name_hash = exfat_calc_chksum_2byte((void *) upname,
 				unilen << 1, 0, CS_DEFAULT);
 
 	if (p_lossy)
@@ -415,8 +415,8 @@ static int __nls_vfsname_to_uni16s(struct super_block *sb,
 
 	*uniname = (unsigned short)'\0';
 	p_uniname->name_len = unilen;
-	p_uniname->name_hash =
-		calc_chksum_2byte((void *) upname, unilen<<1, 0, CS_DEFAULT);
+	p_uniname->name_hash = exfat_calc_chksum_2byte((void *) upname,
+		unilen << 1, 0, CS_DEFAULT);
 
 	if (p_lossy)
 		*p_lossy = lossy;

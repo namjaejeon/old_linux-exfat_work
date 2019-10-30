@@ -117,7 +117,8 @@ static int __exfat_truncate(struct inode *inode, loff_t new_size)
 			return -EIO;
 		ep2 = ep + 1;
 
-		exfat_set_entry_time(ep, tm_now(EXFAT_SB(sb), &tm), TM_MODIFY);
+		exfat_set_entry_time(ep, exfat_tm_now(EXFAT_SB(sb), &tm),
+			TM_MODIFY);
 		ep->file_attr = cpu_to_le16(ei->attr);
 
 		/* File size should be zero if there is no cluster allocated */

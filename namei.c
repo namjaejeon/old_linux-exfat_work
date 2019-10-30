@@ -1244,7 +1244,7 @@ static int exfat_write_link(struct inode *inode, char *buffer,
 	}
 	ep2 = ep + 1;
 
-	exfat_set_entry_time(ep, tm_now(EXFAT_SB(sb), &tm), TM_MODIFY);
+	exfat_set_entry_time(ep, exfat_tm_now(EXFAT_SB(sb), &tm), TM_MODIFY);
 	ep->file_attr = ei->attr;
 
 	if (modified) {
