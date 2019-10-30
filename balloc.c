@@ -69,7 +69,7 @@ int exfat_load_alloc_bmp(struct super_block *sb)
 				break;
 			if (type != TYPE_BITMAP)
 				continue;
-			if (ep->bitmap.flags == 0x0)
+			if (ep->dentry.bitmap.flags == 0x0)
 				goto alloc;
 		}
 
@@ -81,8 +81,8 @@ int exfat_load_alloc_bmp(struct super_block *sb)
 		return -EIO;
 
 alloc:
-	sbi->map_clu = le32_to_cpu(ep->bitmap.start_clu);
-	map_size = (unsigned int)le64_to_cpu(ep->bitmap.size);
+	sbi->map_clu = le32_to_cpu(ep->dentry.bitmap.start_clu);
+	map_size = (unsigned int)le64_to_cpu(ep->dentry.bitmap.size);
 	need_map_size = (((sbi->num_clusters - CLUS_BASE) - 1) >> 3) + 1;
 	if (need_map_size != map_size) {
 		exfat_msg(sb, KERN_ERR,

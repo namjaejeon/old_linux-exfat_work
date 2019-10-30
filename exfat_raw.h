@@ -117,55 +117,52 @@ struct pbr {
 
 struct exfat_dentry {
 	__u8 type;
-
 	union {
-		__u8 num_ext;
-		__le16 checksum;
-		__le16 attr;
-		__le16 reserved1;
-		__le16 create_time;
-		__le16 create_date;
-		__le16 modify_time;
-		__le16 modify_date;
-		__le16 access_time;
-		__le16 access_date;
-		__u8 create_time_ms;
-		__u8 modify_time_ms;
-		__u8 access_time_ms;
-		__u8 reserved2[9];
-	} file; /* file directory entry */
-
-	union {
-		__u8 flags;
-		__u8 reserved1;
-		__u8 name_len;
-		__le16 name_hash;
-		__le16 reserved2;
-		__le64 valid_size;
-		__le32 reserved3;
-		__le32 start_clu;
-		__le64 size;
-	} stream; /* stream extension directory entry */
-
-	union {
-		__u8 flags;
-		__le16 unicode_0_14[15];
-	} name; /* file name directory entry */
-
-	union {
-		__u8 flags;
-		__u8 reserved[18];
-		__le32 start_clu;
-		__le64 size;
-	} bitmap; /* allocation bitmap directory entry */
-
-	union {
-		__u8 reserved1[3];
-		__le32 checksum;
-		__u8 reserved2[12];
-		__le32 start_clu;
-		__le64 size;
-	} upcase; /* up-case table directory entry */
-};
+		struct {
+			__u8 num_ext;
+			__le16 checksum;
+			__le16 attr;
+			__le16 reserved1;
+			__le16 create_time;
+			__le16 create_date;
+			__le16 modify_time;
+			__le16 modify_date;
+			__le16 access_time;
+			__le16 access_date;
+			__u8 create_time_ms;
+			__u8 modify_time_ms;
+			__u8 access_time_ms;
+			__u8 reserved2[9];
+		} __packed file; /* file directory entry */
+		struct {
+			__u8 flags;
+			__u8 reserved1;
+			__u8 name_len;
+			__le16 name_hash;
+			__le16 reserved2;
+			__le64 valid_size;
+			__le32 reserved3;
+			__le32 start_clu;
+			__le64 size;
+		} __packed stream; /* stream extension directory entry */
+		struct {
+			__u8 flags;
+			__le16 unicode_0_14[15];
+		} __packed name; /* file name directory entry */
+		struct {
+			__u8 flags;
+			__u8 reserved[18];
+			__le32 start_clu;
+			__le64 size;
+		} __packed bitmap; /* allocation bitmap directory entry */
+		struct {
+			__u8 reserved1[3];
+			__le32 checksum;
+			__u8 reserved2[12];
+			__le32 start_clu;
+			__le64 size;
+		} __packed upcase; /* up-case table directory entry */
+	} __packed dentry;
+} __packed;
 
 #endif /* !_EXFAT_RAW_H */

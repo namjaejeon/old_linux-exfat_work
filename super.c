@@ -727,7 +727,6 @@ static int load_upcase_table(struct super_block *sb)
 				return -EIO;
 
 			type = exfat_get_entry_type(ep);
-
 			if (type == TYPE_UNUSED) {
 				brelse(bh);
 				break;
@@ -738,13 +737,13 @@ static int load_upcase_table(struct super_block *sb)
 				continue;
 			}
 
-			tbl_clu  = le32_to_cpu(ep->upcase.start_clu);
-			tbl_size = le64_to_cpu(ep->upcase.size);
-
+			tbl_clu  = le32_to_cpu(ep->dentry.upcase.start_clu);
+			tbl_size = le64_to_cpu(ep->dentry.upcase.size);
+			
 			sector = clus_to_sect(sbi, tbl_clu);
 			num_sectors = ((tbl_size - 1) >> blksize_bits) + 1;
 			ret = exfat_load_upcase_table(sb, sector, num_sectors,
-					le32_to_cpu(ep->upcase.checksum));
+					le32_to_cpu(ep->dentry.upcase.checksum));
 
 			brelse(bh);
 			if (ret && (ret != -EIO))
@@ -761,7 +760,7 @@ static int load_upcase_table(struct super_block *sb)
 load_default:
 	/* load default upcase table */
 	return exfat_load_default_upcase_table(sb);
-} /* end of load_upcase_table */
+}
 
 static struct pbr *exfat_read_pbr_with_logical_sector(struct super_block *sb,
 		struct buffer_head **prev_bh)
@@ -967,7 +966,7 @@ static int exfat_fill_super(struct super_block *sb, void *data, int silent)
 
 	err = __exfat_fill_super(sb);
 	if (err) {
-		exfat_msg(sb, KERN_ERR, "failed to recognize fat type");
+		exfat_msg(sb, KERN_ERR, "failed to recognize exfat type");
 		goto failed_mount;
 	}
 
