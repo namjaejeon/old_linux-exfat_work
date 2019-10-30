@@ -737,13 +737,13 @@ static int load_upcase_table(struct super_block *sb)
 				continue;
 			}
 
-			tbl_clu  = le32_to_cpu(ep->dentry.upcase.start_clu);
-			tbl_size = le64_to_cpu(ep->dentry.upcase.size);
+			tbl_clu  = le32_to_cpu(ep->upcase_start_clu);
+			tbl_size = le64_to_cpu(ep->upcase_size);
 			
 			sector = clus_to_sect(sbi, tbl_clu);
 			num_sectors = ((tbl_size - 1) >> blksize_bits) + 1;
 			ret = exfat_load_upcase_table(sb, sector, num_sectors,
-					le32_to_cpu(ep->dentry.upcase.checksum));
+					le32_to_cpu(ep->upcase_checksum));
 
 			brelse(bh);
 			if (ret && (ret != -EIO))

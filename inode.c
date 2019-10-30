@@ -118,22 +118,22 @@ static int __exfat_truncate(struct inode *inode, loff_t new_size)
 		ep2 = ep + 1;
 
 		exfat_set_entry_time(ep, tm_now(EXFAT_SB(sb), &tm), TM_MODIFY);
-		ep->dentry.file.attr = cpu_to_le16(ei->attr);
+		ep->file_attr = cpu_to_le16(ei->attr);
 
 		/* File size should be zero if there is no cluster allocated */
 		if (IS_CLUS_EOF(ei->start_clu))
-			ep->dentry.stream.valid_size = ep->dentry.stream.size = 0;
+			ep->stream_valid_size = ep->stream_size = 0;
 		else {
-			ep->dentry.stream.valid_size = cpu_to_le64(new_size);
-			ep->dentry.stream.size = ep->dentry.stream.valid_size;
+			ep->stream_valid_size = cpu_to_le64(new_size);
+			ep->stream_size = ep->stream_valid_size;
 		}
 
 		if (new_size == 0) {
 			/* Any directory can not be truncated to zero */
 			WARN_ON(ei->type != TYPE_FILE);
 
-			ep2->dentry.stream.flags = 0x01;
-			ep2->dentry.stream.start_clu = CLUS_FREE;
+			ep2->stream_flags = 0x01;
+			ep2->stream_start_clu = CLUS_FREE;
 		}
 
 		if (exfat_update_dir_chksum_with_entry_set(sb, es))
@@ -218,7 +218,7 @@ static int __exfat_write_inode(struct inode *inode, int sync)
 		return -EIO;
 	ep2 = ep + 1;
 
-	ep->dentry.file.attr = cpu_to_le16(info.attr);
+	ep->file_attr = cpu_to_le16(info.attr);
 
 	/* set FILE_INFO structure using the acquired struct exfat_dentry */
 	tm.sec  = info.create_timestamp.second;
@@ -243,8 +243,8 @@ static int __exfat_write_inode(struct inode *inode, int sync)
 	if (IS_CLUS_EOF(ei->start_clu))
 		on_disk_size = 0;
 
-	ep2->dentry.stream.valid_size = cpu_to_le64(on_disk_size);
-	ep2->dentry.stream.size = ep2->dentry.stream.valid_size;
+	ep2->stream_valid_size = cpu_to_le64(on_disk_size);
+	ep2->stream_size = ep2->stream_valid_size;
 
 	es->sync = sync;
 	ret = exfat_update_dir_chksum_with_entry_set(sb, es);
@@ -448,17 +448,17 @@ static int __exfat_map_clus(struct inode *inode, unsigned int clu_offset,
 
 			/* update directory entry */
 			if (modified) {
-				if (ep->dentry.stream.flags != ei->flags)
-					ep->dentry.stream.flags = ei->flags;
+				if (ep->stream_flags != ei->flags)
+					ep->stream_flags = ei->flags;
 
-				if (le32_to_cpu(ep->dentry.stream.start_clu) !=
+				if (le32_to_cpu(ep->stream_start_clu) !=
 						ei->start_clu)
-					ep->dentry.stream.start_clu =
+					ep->stream_start_clu =
 						cpu_to_le32(ei->start_clu);
 
-				ep->dentry.stream.valid_size =
+				ep->stream_valid_size =
 					cpu_to_le64(i_size_read(inode));
-				ep->dentry.stream.size = ep->dentry.stream.valid_size;
+				ep->stream_size = ep->stream_valid_size;
 			}
 
 			if (exfat_update_dir_chksum_with_entry_set(sb, es))
