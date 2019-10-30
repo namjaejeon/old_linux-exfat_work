@@ -10,13 +10,6 @@
 #include "exfat_fs.h"
 #include "upcase.h"
 
-static unsigned short bad_dos_chars[] = {
-	/* + , ; = [ ] */
-	0x002B, 0x002C, 0x003B, 0x003D, 0x005B, 0x005D,
-	0xFF0B, 0xFF0C, 0xFF1B, 0xFF1D, 0xFF3B, 0xFF3D,
-	0
-};
-
 /*
  * Allow full-width illegal characters :
  * "MS windows 7" supports full-width-invalid-name-characters.
