@@ -695,20 +695,12 @@ static int exfat_write_end(struct file *file, struct address_space *mapping,
 	return err;
 }
 
-static inline ssize_t __exfat_blkdev_direct_IO(int unused, struct kiocb *iocb,
-		struct inode *inode, void *iov_u, loff_t unused_1,
-		unsigned long nr_segs)
-{
-	struct iov_iter *iter = (struct iov_iter *)iov_u;
-
-	return blockdev_direct_IO(iocb, inode, iter, exfat_get_block);
-}
-
 static inline ssize_t __exfat_direct_IO(int rw, struct kiocb *iocb,
 		struct inode *inode, void *iov_u, loff_t offset,
 		loff_t count, unsigned long nr_segs)
 {
 	struct address_space *mapping = inode->i_mapping;
+	struct iov_iter *iter = (struct iov_iter *)iov_u;
 	loff_t size = offset + count;
 	ssize_t ret;
 
@@ -730,7 +722,7 @@ static inline ssize_t __exfat_direct_IO(int rw, struct kiocb *iocb,
 	 * Need to use the DIO_LOCKING for avoiding the race
 	 * condition of exfat_get_block() and ->truncate().
 	 */
-	ret = __exfat_blkdev_direct_IO(rw, iocb, inode, iov_u, offset, nr_segs);
+	ret = blockdev_direct_IO(iocb, inode, iter, exfat_get_block);
 	if (ret < 0 && (rw & WRITE))
 		exfat_write_failed(mapping, size);
 
