@@ -467,7 +467,8 @@ static int __exfat_resolve_path(struct inode *inode, const unsigned char *path,
 	/* file name conversion :
 	 * If lookup case, we allow bad-name for compatibility.
 	 */
-	namelen = nls_vfsname_to_uni16s(sb, path, namelen, p_uniname, &lossy);
+	namelen = exfat_nls_vfsname_to_uni16s(sb, path, namelen, p_uniname,
+			&lossy);
 	if (namelen < 0)
 		return namelen; /* return error value */
 

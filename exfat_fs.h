@@ -489,17 +489,12 @@ int exfat_read_inode(struct inode *inode, struct exfat_dir_entry *info);
 
 /* exfat/nls.c */
 /* NLS management function */
-int nls_cmp_sfn(struct super_block *sb, unsigned char *a, unsigned char *b);
-int nls_cmp_uniname(struct super_block *sb, unsigned short *a,
+int exfat_nls_cmp_uniname(struct super_block *sb, unsigned short *a,
 		unsigned short *b);
-int nls_uni16s_to_sfn(struct super_block *sb, struct exfat_uni_name *p_uniname,
-		struct exfat_dos_name *p_dosname, int *p_lossy);
-int nls_sfn_to_uni16s(struct super_block *sb, struct exfat_dos_name *p_dosname,
-		struct exfat_uni_name *p_uniname);
-int nls_uni16s_to_vfsname(struct super_block *sb,
+int exfat_nls_uni16s_to_vfsname(struct super_block *sb,
 		struct exfat_uni_name *uniname, unsigned char *p_cstring,
 		int len);
-int nls_vfsname_to_uni16s(struct super_block *sb,
+int exfat_nls_vfsname_to_uni16s(struct super_block *sb,
 		const unsigned char *p_cstring, const int len,
 		struct exfat_uni_name *uniname, int *p_lossy);
 

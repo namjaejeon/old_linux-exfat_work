@@ -125,7 +125,7 @@ static int exfat_readdir(struct inode *inode, struct exfat_dir_entry *dir_entry)
 			*(uni_name.name) = 0x0;
 			exfat_get_uniname_from_ext_entry(sb, &dir, dentry,
 				uni_name.name);
-			nls_uni16s_to_vfsname(sb, &uni_name,
+			exfat_nls_uni16s_to_vfsname(sb, &uni_name,
 				dir_entry->namebuf.lfn,
 				dir_entry->namebuf.lfnbuf_len);
 			brelse(bh);
@@ -1177,7 +1177,7 @@ rewind:
 				unichar = *(uniname+len);
 				*(uniname+len) = 0x0;
 
-				if (nls_cmp_uniname(sb, uniname,
+				if (exfat_nls_cmp_uniname(sb, uniname,
 							entry_uniname)) {
 					step = DIRENT_STEP_FILE;
 				} else if (name_len == p_uniname->name_len) {
