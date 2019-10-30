@@ -1246,7 +1246,7 @@ static int exfat_write_link(struct inode *inode, char *buffer,
 	ep2 = ep + 1;
 
 	exfat_set_entry_time(ep, exfat_tm_now(EXFAT_SB(sb), &tm), TM_MODIFY);
-	ep->file_attr = ei->attr;
+	ep->file_attr = cpu_to_le16(ei->attr);
 
 	if (modified) {
 		if (ep2->stream_flags != ei->flags)
