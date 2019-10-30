@@ -22,7 +22,6 @@
 
 #include "exfat_raw.h"
 #include "exfat_fs.h"
-#include "upcase.h"
 
 #ifndef CONFIG_EXFAT_DEFAULT_CODEPAGE /* if Kconfig lacked codepage */
 #define CONFIG_EXFAT_DEFAULT_CODEPAGE   437
