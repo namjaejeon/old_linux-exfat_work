@@ -477,8 +477,8 @@ extern const struct inode_operations exfat_file_inode_operations;
 void exfat_sync_inode(struct inode *inode);
 struct inode *exfat_build_inode(struct super_block *sb,
 		struct exfat_dir_entry *info, loff_t i_pos);
-void exfat_attach(struct inode *inode, loff_t i_pos);
-void exfat_detach(struct inode *inode);
+void exfat_hash_inode(struct inode *inode, loff_t i_pos);
+void exfat_unhash_inode(struct inode *inode);
 void exfat_truncate(struct inode *inode, loff_t size);
 struct inode *exfat_iget(struct super_block *sb, loff_t i_pos);
 int exfat_write_inode(struct inode *inode, struct writeback_control *wbc);

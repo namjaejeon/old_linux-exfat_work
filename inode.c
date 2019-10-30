@@ -770,7 +770,7 @@ static inline unsigned long exfat_hash(loff_t i_pos)
 	return hash_32(i_pos, EXFAT_HASH_BITS);
 }
 
-void exfat_attach(struct inode *inode, loff_t i_pos)
+void exfat_hash_inode(struct inode *inode, loff_t i_pos)
 {
 	struct exfat_sb_info *sbi = EXFAT_SB(inode->i_sb);
 	struct hlist_head *head = sbi->inode_hashtable + exfat_hash(i_pos);
@@ -781,7 +781,7 @@ void exfat_attach(struct inode *inode, loff_t i_pos)
 	spin_unlock(&sbi->inode_hash_lock);
 }
 
-void exfat_detach(struct inode *inode)
+void exfat_unhash_inode(struct inode *inode)
 {
 	struct exfat_sb_info *sbi = EXFAT_SB(inode->i_sb);
 
@@ -906,7 +906,7 @@ struct inode *exfat_build_inode(struct super_block *sb,
 		inode = ERR_PTR(err);
 		goto out;
 	}
-	exfat_attach(inode, i_pos);
+	exfat_hash_inode(inode, i_pos);
 	insert_inode_hash(inode);
 out:
 	return inode;
@@ -931,5 +931,5 @@ void exfat_evict_inode(struct inode *inode)
 	 * you should check whether volume lock is needed or not.
 	 */
 	exfat_cache_inval_inode(inode);
-	exfat_detach(inode);
+	exfat_unhash_inode(inode);
 }

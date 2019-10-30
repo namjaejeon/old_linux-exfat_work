@@ -1000,7 +1000,7 @@ static int exfat_fill_super(struct super_block *sb, void *data, int silent)
 		goto failed_mount2;
 	}
 
-	exfat_attach(root_inode, EXFAT_I(root_inode)->i_pos);
+	exfat_hash_inode(root_inode, EXFAT_I(root_inode)->i_pos);
 	insert_inode_hash(root_inode);
 
 	err = -ENOMEM;
