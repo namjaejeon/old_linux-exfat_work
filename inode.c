@@ -22,6 +22,11 @@
 #define BMAP_ADD_CLUSTER			2
 #define BLOCK_ADDED(bmap_ops)	(bmap_ops)
 
+static inline unsigned int num_clusters(struct exfat_sb_info *sbi, loff_t size)
+{
+	return size ? ((size - 1) >> sbi->cluster_size_bits) + 1 : 0;
+}
+
 /* resize the file length */
 static int __exfat_truncate(struct inode *inode, loff_t new_size)
 {
@@ -43,11 +48,9 @@ static int __exfat_truncate(struct inode *inode, loff_t new_size)
 	exfat_set_vol_flags(sb, VOL_DIRTY);
 
 	/* Reserved count update */
-#define num_clusters(v) ((v) ?	\
-	(((v) - 1) >> sbi->cluster_size_bits) + 1 : 0)
-	num_clusters_da = num_clusters(EXFAT_I(inode)->i_size_aligned);
-	num_clusters_new = num_clusters(i_size_read(inode));
-	num_clusters_phys = num_clusters(EXFAT_I(inode)->i_size_ondisk);
+	num_clusters_da = num_clusters(sbi, EXFAT_I(inode)->i_size_aligned);
+	num_clusters_new = num_clusters(sbi, i_size_read(inode));
+	num_clusters_phys = num_clusters(sbi, EXFAT_I(inode)->i_size_ondisk);
 
 	if ((num_clusters_da != num_clusters_phys) &&
 			(num_clusters_new < num_clusters_da)) {
