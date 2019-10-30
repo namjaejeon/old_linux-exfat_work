@@ -1992,19 +1992,14 @@ static int exfat_sanitize_mode(const struct exfat_sb_info *sbi,
 	return 0;
 }
 
-static int __exfat_getattr(struct inode *inode, struct kstat *stat)
-{
-	generic_fillattr(inode, stat);
-	stat->blksize = EXFAT_SB(inode->i_sb)->cluster_size;
-	return 0;
-}
-
 int exfat_getattr(const struct path *path, struct kstat *stat,
 		unsigned int request_mask, unsigned int query_flags)
 {
 	struct inode *inode = d_backing_inode(path->dentry);
 
-	return __exfat_getattr(inode, stat);
+	generic_fillattr(inode, stat);
+	stat->blksize = EXFAT_SB(inode->i_sb)->cluster_size;
+	return 0
 }
 
 int exfat_setattr(struct dentry *dentry, struct iattr *attr)
