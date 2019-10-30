@@ -713,7 +713,7 @@ static int load_upcase_table(struct super_block *sb)
 	unsigned long long tbl_size, num_sectors;
 	unsigned char blksize_bits = sb->s_blocksize_bits;
 	struct exfat_chain clu;
-	struct exfat_case_dentry *ep;
+	struct exfat_dentry *ep;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 	struct buffer_head *bh;
 
@@ -722,12 +722,11 @@ static int load_upcase_table(struct super_block *sb)
 
 	while (!IS_CLUS_EOF(clu.dir)) {
 		for (i = 0; i < sbi->dentries_per_clu; i++) {
-			ep = (struct exfat_case_dentry *)exfat_get_dentry(sb,
-					&clu, i, &bh, NULL);
+			ep = exfat_get_dentry(sb, &clu, i, &bh, NULL);
 			if (!ep)
 				return -EIO;
 
-			type = exfat_get_entry_type((struct exfat_dentry *) ep);
+			type = exfat_get_entry_type(ep);
 
 			if (type == TYPE_UNUSED) {
 				brelse(bh);
@@ -739,13 +738,13 @@ static int load_upcase_table(struct super_block *sb)
 				continue;
 			}
 
-			tbl_clu  = le32_to_cpu(ep->start_clu);
-			tbl_size = le64_to_cpu(ep->size);
+			tbl_clu  = le32_to_cpu(ep->upcase.start_clu);
+			tbl_size = le64_to_cpu(ep->upcase.size);
 
 			sector = clus_to_sect(sbi, tbl_clu);
 			num_sectors = ((tbl_size - 1) >> blksize_bits) + 1;
 			ret = exfat_load_upcase_table(sb, sector, num_sectors,
-					le32_to_cpu(ep->checksum));
+					le32_to_cpu(ep->upcase.checksum));
 
 			brelse(bh);
 			if (ret && (ret != -EIO))

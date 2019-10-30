@@ -50,7 +50,7 @@ int exfat_load_alloc_bmp(struct super_block *sb)
 	unsigned int i, j, map_size, type, need_map_size;
 	sector_t sector;
 	struct exfat_chain clu;
-	struct exfat_bmap_dentry *ep = NULL;
+	struct exfat_dentry *ep = NULL;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 	struct buffer_head *bh;
 
@@ -59,18 +59,17 @@ int exfat_load_alloc_bmp(struct super_block *sb)
 
 	while (!IS_CLUS_EOF(clu.dir)) {
 		for (i = 0; i < sbi->dentries_per_clu; i++) {
-			ep = (struct exfat_bmap_dentry *)exfat_get_dentry(
-					sb, &clu, i, &bh, NULL);
+			ep = exfat_get_dentry(sb, &clu, i, &bh, NULL);
 			if (!ep)
 				return -EIO;
 
-			type = exfat_get_entry_type((struct exfat_dentry *)ep);
+			type = exfat_get_entry_type(ep);
 			brelse(bh);
 			if (type == TYPE_UNUSED)
 				break;
 			if (type != TYPE_BITMAP)
 				continue;
-			if (ep->flags == 0x0)
+			if (ep->bitmap.flags == 0x0)
 				goto alloc;
 		}
 
@@ -82,8 +81,8 @@ int exfat_load_alloc_bmp(struct super_block *sb)
 		return -EIO;
 
 alloc:
-	sbi->map_clu = le32_to_cpu(ep->start_clu);
-	map_size = (unsigned int)le64_to_cpu(ep->size);
+	sbi->map_clu = le32_to_cpu(ep->bitmap.start_clu);
+	map_size = (unsigned int)le64_to_cpu(ep->bitmap.size);
 	need_map_size = (((sbi->num_clusters - CLUS_BASE) - 1) >> 3) + 1;
 	if (need_map_size != map_size) {
 		exfat_msg(sb, KERN_ERR,

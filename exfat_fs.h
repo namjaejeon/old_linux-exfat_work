@@ -443,15 +443,6 @@ void exfat_get_uniname_from_ext_entry(struct super_block *sb,
 		struct exfat_chain *p_dir, int entry, unsigned short *uniname);
 int exfat_count_used_clusters(struct super_block *sb, unsigned int *ret_count);
 unsigned int exfat_get_entry_type(struct exfat_dentry *p_entry);
-unsigned short exfat_get_entry_attr(struct exfat_dentry *p_entry);
-void exfat_set_entry_attr(struct exfat_dentry *p_entry, unsigned short attr);
-unsigned char exfat_get_entry_flag(struct exfat_dentry *p_entry);
-void exfat_set_entry_flag(struct exfat_dentry *p_entry, unsigned char flags);
-unsigned int exfat_get_entry_clu0(struct exfat_dentry *p_entry);
-void exfat_set_entry_clu0(struct exfat_dentry *p_entry, unsigned int start_clu);
-unsigned long long exfat_get_entry_size(struct exfat_dentry *p_entry);
-void exfat_set_entry_size(struct exfat_dentry *p_entry,
-		unsigned long long size);
 void exfat_get_entry_time(struct exfat_dentry *p_entry,
 		struct exfat_timestamp *tp, unsigned char mode);
 void exfat_set_entry_time(struct exfat_dentry *p_entry,

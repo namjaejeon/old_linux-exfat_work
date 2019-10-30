@@ -115,20 +115,22 @@ static int __exfat_truncate(struct inode *inode, loff_t new_size)
 		ep2 = ep + 1;
 
 		exfat_set_entry_time(ep, tm_now(EXFAT_SB(sb), &tm), TM_MODIFY);
-		exfat_set_entry_attr(ep, ei->attr);
+		ep->file.attr = cpu_to_le16(ei->attr);
 
 		/* File size should be zero if there is no cluster allocated */
 		if (IS_CLUS_EOF(ei->start_clu))
-			exfat_set_entry_size(ep2, 0);
-		else
-			exfat_set_entry_size(ep2, new_size);
+			ep->stream.valid_size = ep->stream.size = 0;
+		else {
+			ep->stream.valid_size = cpu_to_le64(new_size);
+			ep->stream.size = ep->stream.valid_size;
+		}
 
 		if (new_size == 0) {
 			/* Any directory can not be truncated to zero */
 			WARN_ON(ei->type != TYPE_FILE);
 
-			exfat_set_entry_flag(ep2, 0x01);
-			exfat_set_entry_clu0(ep2, CLUS_FREE);
+			ep2->stream.flags = 0x01;
+			ep2->stream.start_clu = CLUS_FREE;
 		}
 
 		if (exfat_update_dir_chksum_with_entry_set(sb, es))
@@ -213,7 +215,7 @@ static int __exfat_write_inode(struct inode *inode, int sync)
 		return -EIO;
 	ep2 = ep + 1;
 
-	exfat_set_entry_attr(ep, info.attr);
+	ep->file.attr = cpu_to_le16(info.attr);
 
 	/* set FILE_INFO structure using the acquired struct exfat_dentry */
 	tm.sec  = info.create_timestamp.second;
@@ -238,7 +240,9 @@ static int __exfat_write_inode(struct inode *inode, int sync)
 	if (IS_CLUS_EOF(ei->start_clu))
 		on_disk_size = 0;
 
-	exfat_set_entry_size(ep2, on_disk_size);
+	ep2->stream.valid_size = cpu_to_le64(on_disk_size);
+	ep2->stream.size = ep2->stream.valid_size;
+
 	es->sync = sync;
 	ret = exfat_update_dir_chksum_with_entry_set(sb, es);
 	exfat_release_dentry_set(es);
@@ -441,14 +445,17 @@ static int __exfat_map_clus(struct inode *inode, unsigned int clu_offset,
 
 			/* update directory entry */
 			if (modified) {
-				if (exfat_get_entry_flag(ep) != ei->flags)
-					exfat_set_entry_flag(ep, ei->flags);
+				if (ep->stream.flags != ei->flags)
+					ep->stream.flags = ei->flags;
 
-				if (exfat_get_entry_clu0(ep) != ei->start_clu)
-					exfat_set_entry_clu0(ep,
-						ei->start_clu);
+				if (le32_to_cpu(ep->stream.start_clu) !=
+						ei->start_clu)
+					ep->stream.start_clu =
+						cpu_to_le32(ei->start_clu);
 
-				exfat_set_entry_size(ep, i_size_read(inode));
+				ep->stream.valid_size =
+					cpu_to_le64(i_size_read(inode));
+				ep->stream.size = ep->stream.valid_size;
 			}
 
 			if (exfat_update_dir_chksum_with_entry_set(sb, es))
@@ -456,7 +463,6 @@ static int __exfat_map_clus(struct inode *inode, unsigned int clu_offset,
 			exfat_release_dentry_set(es);
 
 		} /* end of if != DIR_DELETED */
-
 
 		inode->i_blocks += num_to_be_allocated <<
 			(sbi->cluster_size_bits - sb->s_blocksize_bits);

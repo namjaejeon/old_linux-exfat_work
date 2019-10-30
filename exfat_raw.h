@@ -42,7 +42,6 @@
 #define CS_DEFAULT		2
 
 /* file attributes */
-#define ATTR_NORMAL		0x0000
 #define ATTR_READONLY		0x0001
 #define ATTR_HIDDEN		0x0002
 #define ATTR_SYSTEM		0x0004
@@ -56,6 +55,14 @@
 #define ATTR_EXTEND_MASK	(ATTR_EXTEND | ATTR_SUBDIR | ATTR_ARCHIVE)
 #define ATTR_RWMASK		(ATTR_HIDDEN | ATTR_SYSTEM | ATTR_VOLUME | \
 				 ATTR_SUBDIR | ATTR_ARCHIVE | ATTR_SYMLINK) /* 0x007E */
+
+#define ATTR_READONLY_LE	cpu_to_le16(0x0001)
+#define ATTR_HIDDEN_LE		cpu_to_le16(0x0002)
+#define ATTR_SYSTEM_LE		cpu_to_le16(0x0004)
+#define ATTR_VOLUME_LE		cpu_to_le16(0x0008)
+#define ATTR_SUBDIR_LE		cpu_to_le16(0x0010)
+#define ATTR_ARCHIVE_LE		cpu_to_le16(0x0020)
+#define ATTR_SYMLINK_LE		cpu_to_le16(0x0040)
 
 #define DOS_NAME_LENGTH		11	/* DOS file name length excluding NULL */
 
@@ -107,83 +114,58 @@ struct pbr {
 	__le16 signature;
 };
 
-/* FAT directory entry (32 bytes) */
+
 struct exfat_dentry {
-	__u8       dummy[32];
-};
-
-/* EXFAT stream extension directory entry (32 bytes) */
-struct exfat_strm_dentry {
 	__u8 type;
-	__u8 flags;
-	__u8 reserved1;
-	__u8 name_len;
-	__le16 name_hash;
-	__le16 reserved2;
-	__le64 valid_size;
-	__le32 reserved3;
-	__le32 start_clu;
-	__le64 size;
-};
 
-/* EXFAT file name directory entry (32 bytes) */
-struct exfat_name_dentry {
-	__u8 type;
-	__u8 flags;
-	__le16 unicode_0_14[15];
-};
+	union {
+		__u8 num_ext;
+		__le16 checksum;
+		__le16 attr;
+		__le16 reserved1;
+		__le16 create_time;
+		__le16 create_date;
+		__le16 modify_time;
+		__le16 modify_date;
+		__le16 access_time;
+		__le16 access_date;
+		__u8 create_time_ms;
+		__u8 modify_time_ms;
+		__u8 access_time_ms;
+		__u8 reserved2[9];
+	} file; /* file directory entry */
 
-/* EXFAT allocation bitmap directory entry (32 bytes) */
-struct exfat_bmap_dentry {
-	__u8 type;
-	__u8 flags;
-	__u8 reserved[18];
-	__le32 start_clu;
-	__le64 size;
-};
+	union {
+		__u8 flags;
+		__u8 reserved1;
+		__u8 name_len;
+		__le16 name_hash;
+		__le16 reserved2;
+		__le64 valid_size;
+		__le32 reserved3;
+		__le32 start_clu;
+		__le64 size;
+	} stream; /* stream extension directory entry */
 
-/* EXFAT file directory entry (32 bytes) */
-struct exfat_file_dentry {
-	__u8 type;
-	__u8 num_ext;
-	__le16 checksum;
-	__le16 attr;
-	__le16 reserved1;
-	__le16 create_time;
-	__le16 create_date;
-	__le16 modify_time;
-	__le16 modify_date;
-	__le16 access_time;
-	__le16 access_date;
-	__u8 create_time_ms;
-	__u8 modify_time_ms;
-	__u8 access_time_ms;
-	__u8 reserved2[9];
-};
+	union {
+		__u8 flags;
+		__le16 unicode_0_14[15];
+	} name; /* file name directory entry */
 
-/* EXFAT up-case table directory entry (32 bytes) */
-struct exfat_case_dentry {
-	__u8 type;
-	__u8 reserved1[3];
-	__le32 checksum;
-	__u8 reserved2[12];
-	__le32 start_clu;
-	__le64 size;
-};
+	union {
+		__u8 flags;
+		__u8 reserved[18];
+		__le32 start_clu;
+		__le64 size;
+	} bitmap; /* allocation bitmap directory entry */
 
-struct exfat_dos_dentry {
-	__u8 name[DOS_NAME_LENGTH];  /* 11 chars */
-	__u8 attr;
-	__u8 lcase;
-	__u8 create_time_ms;
-	__le16 create_time;
-	__le16 create_date;
-	__le16 access_date;
-	__le16 start_clu_hi;
-	__le16 modify_time;
-	__le16 modify_date;
-	__le16 start_clu_lo;
-	__le32 size;
+	union {
+		__u8 reserved1[3];
+		__le32 checksum;
+		__u8 reserved2[12];
+		__le32 start_clu;
+		__le64 size;
+	} upcase; /* up-case table directory entry */
 };
 
 #endif /* !_EXFAT_RAW_H */
