@@ -609,7 +609,7 @@ static int exfat_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 	inode_inc_iversion(dir);
 	dir->i_ctime = dir->i_mtime = dir->i_atime = current_time(dir);
 	if (IS_DIRSYNC(dir))
-		(void) exfat_sync_inode(dir);
+		exfat_sync_inode(dir);
 	else
 		mark_inode_dirty(dir);
 
@@ -991,7 +991,7 @@ static int exfat_unlink(struct inode *dir, struct dentry *dentry)
 	inode_inc_iversion(dir);
 	dir->i_mtime = dir->i_atime = current_time(dir);
 	if (IS_DIRSYNC(dir))
-		(void) exfat_sync_inode(dir);
+		exfat_sync_inode(dir);
 	else
 		mark_inode_dirty(dir);
 
@@ -1298,7 +1298,7 @@ static int exfat_symlink(struct inode *dir, struct dentry *dentry,
 	inode_inc_iversion(dir);
 	dir->i_ctime = dir->i_mtime = dir->i_atime = current_time(dir);
 	if (IS_DIRSYNC(dir))
-		(void) exfat_sync_inode(dir);
+		exfat_sync_inode(dir);
 	else
 		mark_inode_dirty(dir);
 
@@ -1352,7 +1352,7 @@ static int exfat_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 	inode_inc_iversion(dir);
 	dir->i_ctime = dir->i_mtime = dir->i_atime = current_time(dir);
 	if (IS_DIRSYNC(dir))
-		(void) exfat_sync_inode(dir);
+		exfat_sync_inode(dir);
 	else
 		mark_inode_dirty(dir);
 	inc_nlink(dir);
@@ -1485,7 +1485,7 @@ static int exfat_rmdir(struct inode *dir, struct dentry *dentry)
 	inode_inc_iversion(dir);
 	dir->i_mtime = dir->i_atime = current_time(dir);
 	if (IS_DIRSYNC(dir))
-		(void) exfat_sync_inode(dir);
+		exfat_sync_inode(dir);
 	else
 		mark_inode_dirty(dir);
 	drop_nlink(dir);
@@ -1863,7 +1863,7 @@ static int exfat_rename(struct inode *old_dir, struct dentry *old_dentry,
 	new_dir->i_ctime = new_dir->i_mtime = new_dir->i_atime =
 		current_time(new_dir);
 	if (IS_DIRSYNC(new_dir))
-		(void) exfat_sync_inode(new_dir);
+		exfat_sync_inode(new_dir);
 	else
 		mark_inode_dirty(new_dir);
 
@@ -1872,7 +1872,7 @@ static int exfat_rename(struct inode *old_dir, struct dentry *old_dentry,
 	exfat_detach(old_inode);
 	exfat_attach(old_inode, i_pos);
 	if (IS_DIRSYNC(new_dir))
-		(void) exfat_sync_inode(old_inode);
+		exfat_sync_inode(old_inode);
 	else
 		mark_inode_dirty(old_inode);
 
@@ -1885,7 +1885,7 @@ static int exfat_rename(struct inode *old_dir, struct dentry *old_dentry,
 	inode_inc_iversion(old_dir);
 	old_dir->i_ctime = old_dir->i_mtime = current_time(old_dir);
 	if (IS_DIRSYNC(old_dir))
-		(void) exfat_sync_inode(old_dir);
+		exfat_sync_inode(old_dir);
 	else
 		mark_inode_dirty(old_dir);
 

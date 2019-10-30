@@ -474,7 +474,7 @@ int exfat_alloc_new_dir(struct inode *inode, struct exfat_chain *clu);
 /* inode.c */
 extern const struct inode_operations exfat_symlink_inode_operations;
 extern const struct inode_operations exfat_file_inode_operations;
-int exfat_sync_inode(struct inode *inode);
+void exfat_sync_inode(struct inode *inode);
 struct inode *exfat_build_inode(struct super_block *sb,
 		struct exfat_dir_entry *info, loff_t i_pos);
 void exfat_attach(struct inode *inode, loff_t i_pos);

@@ -263,9 +263,9 @@ int exfat_write_inode(struct inode *inode, struct writeback_control *wbc)
 	return ret;
 }
 
-int exfat_sync_inode(struct inode *inode)
+void exfat_sync_inode(struct inode *inode)
 {
-	return __exfat_write_inode(inode, 1);
+	__exfat_write_inode(inode, 1);
 }
 
 void exfat_truncate(struct inode *inode, loff_t size)
@@ -291,7 +291,7 @@ void exfat_truncate(struct inode *inode, loff_t size)
 
 	inode->i_ctime = inode->i_mtime = current_time(inode);
 	if (IS_DIRSYNC(inode))
-		(void) exfat_sync_inode(inode);
+		exfat_sync_inode(inode);
 	else
 		mark_inode_dirty(inode);
 
