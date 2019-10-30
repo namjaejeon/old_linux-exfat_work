@@ -1999,7 +1999,7 @@ int exfat_getattr(const struct path *path, struct kstat *stat,
 
 	generic_fillattr(inode, stat);
 	stat->blksize = EXFAT_SB(inode->i_sb)->cluster_size;
-	return 0
+	return 0;
 }
 
 int exfat_setattr(struct dentry *dentry, struct iattr *attr)

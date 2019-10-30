@@ -74,18 +74,6 @@ static void free_upcase_table(struct super_block *sb)
 	sbi->vol_utbl = NULL;
 }
 
-/* umount the file system volume */
-int __exfat_umount(struct super_block *sb)
-{
-	int ret = 0;
-
-	ret = exfat_set_vol_flags(sb, VOL_CLEAN);
-	free_upcase_table(sb);
-	exfat_free_alloc_bmp(sb);
-
-	return ret;
-}
-
 static void exfat_write_super(struct super_block *sb)
 {
 	set_sb_clean(sb);
@@ -95,13 +83,14 @@ static void exfat_write_super(struct super_block *sb)
 static void exfat_put_super(struct super_block *sb)
 {
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
-	int err;
 
 	mutex_lock(&EXFAT_SB(sb)->s_lock);
 	if (is_sb_dirty(sb))
 		exfat_write_super(sb);
 
-	err = __exfat_umount(sb);
+	exfat_set_vol_flags(sb, VOL_CLEAN);
+	free_upcase_table(sb);
+	exfat_free_alloc_bmp(sb);
 	mutex_unlock(&EXFAT_SB(sb)->s_lock);
 
 	if (sbi->nls_disk) {
@@ -1024,7 +1013,9 @@ static int exfat_fill_super(struct super_block *sb, void *data, int silent)
 	return 0;
 
 failed_mount2:
-	__exfat_umount(sb);
+	free_upcase_table(sb);
+	exfat_free_alloc_bmp(sb);
+
 failed_mount:
 	if (root_inode)
 		iput(root_inode);
