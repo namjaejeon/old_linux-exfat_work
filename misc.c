@@ -43,7 +43,6 @@ void __exfat_fs_error(struct super_block *sb, int report, const char *fmt, ...)
 		exfat_msg(sb, KERN_ERR, "Filesystem has been set read-only");
 	}
 }
-EXPORT_SYMBOL(__exfat_fs_error);
 
 /*
  * exfat_msg() - print preformated EXFAT specific messages.
