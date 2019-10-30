@@ -1038,7 +1038,7 @@ static struct dentry *exfat_fs_mount(struct file_system_type *fs_type,
 	return mount_bdev(fs_type, flags, dev_name, data, exfat_fill_super);
 }
 
-static void init_once(void *foo)
+static void exfat_inode_init_once(void *foo)
 {
 	struct exfat_inode_info *ei = (struct exfat_inode_info *)foo;
 
@@ -1074,7 +1074,7 @@ static int __init exfat_init_inodecache(void)
 	exfat_inode_cachep = kmem_cache_create("exfat_inode_cache",
 			sizeof(struct exfat_inode_info),
 			0, (SLAB_RECLAIM_ACCOUNT|SLAB_MEM_SPREAD),
-			init_once);
+			exfat_inode_init_once);
 	if (!exfat_inode_cachep)
 		return -ENOMEM;
 	return 0;

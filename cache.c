@@ -36,7 +36,7 @@ struct exfat_cache_id {
 
 static struct kmem_cache *exfat_cachep;
 
-static void init_once(void *c)
+static void exfat_cache_init_once(void *c)
 {
 	struct exfat_cache *cache = (struct exfat_cache *)c;
 
@@ -48,7 +48,7 @@ int exfat_cache_init(void)
 	exfat_cachep = kmem_cache_create("exfat_cache",
 				sizeof(struct exfat_cache),
 				0, SLAB_RECLAIM_ACCOUNT|SLAB_MEM_SPREAD,
-				init_once);
+				exfat_cache_init_once);
 	if (!exfat_cachep)
 		return -ENOMEM;
 	return 0;
