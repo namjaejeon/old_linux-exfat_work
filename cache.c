@@ -36,7 +36,7 @@ struct exfat_cache_id {
 
 static struct kmem_cache *exfat_cachep;
 
-static void init_once(void *c)
+static void exfat_cache_init_once(void *c)
 {
 	struct exfat_cache *cache = (struct exfat_cache *)c;
 
@@ -48,7 +48,7 @@ int exfat_cache_init(void)
 	exfat_cachep = kmem_cache_create("exfat_cache",
 				sizeof(struct exfat_cache),
 				0, SLAB_RECLAIM_ACCOUNT|SLAB_MEM_SPREAD,
-				init_once);
+				exfat_cache_init_once);
 	if (!exfat_cachep)
 		return -ENOMEM;
 	return 0;
@@ -63,12 +63,12 @@ void exfat_cache_shutdown(void)
 
 void exfat_cache_init_inode(struct inode *inode)
 {
-	struct exfat_file_id *fid = EXFAT_I(inode)->fid;
+	struct exfat_inode_info *ei = EXFAT_I(inode);
 
-	spin_lock_init(&fid->cache_lru_lock);
-	fid->nr_caches = 0;
-	fid->cache_valid_id = EXTENT_CACHE_VALID + 1;
-	INIT_LIST_HEAD(&fid->cache_lru);
+	spin_lock_init(&ei->cache_lru_lock);
+	ei->nr_caches = 0;
+	ei->cache_valid_id = EXTENT_CACHE_VALID + 1;
+	INIT_LIST_HEAD(&ei->cache_lru);
 }
 
 static inline struct exfat_cache *exfat_cache_alloc(void)
@@ -85,23 +85,23 @@ static inline void exfat_cache_free(struct exfat_cache *cache)
 static inline void exfat_cache_update_lru(struct inode *inode,
 		struct exfat_cache *cache)
 {
-	struct exfat_file_id *fid = EXFAT_I(inode)->fid;
+	struct exfat_inode_info *ei = EXFAT_I(inode);
 
-	if (fid->cache_lru.next != &cache->cache_list)
-		list_move(&cache->cache_list, &fid->cache_lru);
+	if (ei->cache_lru.next != &cache->cache_list)
+		list_move(&cache->cache_list, &ei->cache_lru);
 }
 
 static unsigned int exfat_cache_lookup(struct inode *inode,
 		unsigned int fclus, struct exfat_cache_id *cid,
 		unsigned int *cached_fclus, unsigned int *cached_dclus)
 {
-	struct exfat_file_id *fid = EXFAT_I(inode)->fid;
+	struct exfat_inode_info *ei = EXFAT_I(inode);
 	static struct exfat_cache nohit = { .fcluster = 0, };
 	struct exfat_cache *hit = &nohit, *p;
 	unsigned int offset = CLUS_EOF;
 
-	spin_lock(&fid->cache_lru_lock);
-	list_for_each_entry(p, &fid->cache_lru, cache_list) {
+	spin_lock(&ei->cache_lru_lock);
+	list_for_each_entry(p, &ei->cache_lru, cache_list) {
 		/* Find the cache of "fclus" or nearest cache. */
 		if (p->fcluster <= fclus && hit->fcluster < p->fcluster) {
 			hit = p;
@@ -116,14 +116,14 @@ static unsigned int exfat_cache_lookup(struct inode *inode,
 	if (hit != &nohit) {
 		exfat_cache_update_lru(inode, hit);
 
-		cid->id = fid->cache_valid_id;
+		cid->id = ei->cache_valid_id;
 		cid->nr_contig = hit->nr_contig;
 		cid->fcluster = hit->fcluster;
 		cid->dcluster = hit->dcluster;
 		*cached_fclus = cid->fcluster + offset;
 		*cached_dclus = cid->dcluster + offset;
 	}
-	spin_unlock(&fid->cache_lru_lock);
+	spin_unlock(&ei->cache_lru_lock);
 
 	return offset;
 }
@@ -131,10 +131,10 @@ static unsigned int exfat_cache_lookup(struct inode *inode,
 static struct exfat_cache *exfat_cache_merge(struct inode *inode,
 		struct exfat_cache_id *new)
 {
-	struct exfat_file_id *fid = EXFAT_I(inode)->fid;
+	struct exfat_inode_info *ei = EXFAT_I(inode);
 	struct exfat_cache *p;
 
-	list_for_each_entry(p, &fid->cache_lru, cache_list) {
+	list_for_each_entry(p, &ei->cache_lru, cache_list) {
 		/* Find the same part as "new" in cluster-chain. */
 		if (p->fcluster == new->fcluster) {
 			if (new->nr_contig > p->nr_contig)
@@ -148,41 +148,41 @@ static struct exfat_cache *exfat_cache_merge(struct inode *inode,
 static void exfat_cache_add(struct inode *inode,
 		struct exfat_cache_id *new)
 {
-	struct exfat_file_id *fid = EXFAT_I(inode)->fid;
+	struct exfat_inode_info *ei = EXFAT_I(inode);
 	struct exfat_cache *cache, *tmp;
 
-	if (new->fcluster == -1) /* dummy cache */
+	if (new->fcluster == CLUS_EOF) /* dummy cache */
 		return;
 
-	spin_lock(&fid->cache_lru_lock);
+	spin_lock(&ei->cache_lru_lock);
 	if (new->id != EXTENT_CACHE_VALID &&
-	    new->id != fid->cache_valid_id)
+	    new->id != ei->cache_valid_id)
 		goto out;	/* this cache was invalidated */
 
 	cache = exfat_cache_merge(inode, new);
 	if (cache == NULL) {
-		if (fid->nr_caches < EXTENT_MAX_CACHE) {
-			fid->nr_caches++;
-			spin_unlock(&fid->cache_lru_lock);
+		if (ei->nr_caches < EXTENT_MAX_CACHE) {
+			ei->nr_caches++;
+			spin_unlock(&ei->cache_lru_lock);
 
 			tmp = exfat_cache_alloc();
 			if (!tmp) {
-				spin_lock(&fid->cache_lru_lock);
-				fid->nr_caches--;
-				spin_unlock(&fid->cache_lru_lock);
+				spin_lock(&ei->cache_lru_lock);
+				ei->nr_caches--;
+				spin_unlock(&ei->cache_lru_lock);
 				return;
 			}
 
-			spin_lock(&fid->cache_lru_lock);
+			spin_lock(&ei->cache_lru_lock);
 			cache = exfat_cache_merge(inode, new);
 			if (cache != NULL) {
-				fid->nr_caches--;
+				ei->nr_caches--;
 				exfat_cache_free(tmp);
 				goto out_update_lru;
 			}
 			cache = tmp;
 		} else {
-			struct list_head *p = fid->cache_lru.prev;
+			struct list_head *p = ei->cache_lru.prev;
 
 			cache = list_entry(p,
 					struct exfat_cache, cache_list);
@@ -194,7 +194,7 @@ static void exfat_cache_add(struct inode *inode,
 out_update_lru:
 	exfat_cache_update_lru(inode, cache);
 out:
-	spin_unlock(&fid->cache_lru_lock);
+	spin_unlock(&ei->cache_lru_lock);
 }
 
 /*
@@ -203,29 +203,29 @@ out:
  */
 static void __exfat_cache_inval_inode(struct inode *inode)
 {
-	struct exfat_file_id *fid = EXFAT_I(inode)->fid;
+	struct exfat_inode_info *ei = EXFAT_I(inode);
 	struct exfat_cache *cache;
 
-	while (!list_empty(&fid->cache_lru)) {
-		cache = list_entry(fid->cache_lru.next,
+	while (!list_empty(&ei->cache_lru)) {
+		cache = list_entry(ei->cache_lru.next,
 				   struct exfat_cache, cache_list);
 		list_del_init(&cache->cache_list);
-		fid->nr_caches--;
+		ei->nr_caches--;
 		exfat_cache_free(cache);
 	}
 	/* Update. The copy of caches before this id is discarded. */
-	fid->cache_valid_id++;
-	if (fid->cache_valid_id == EXTENT_CACHE_VALID)
-		fid->cache_valid_id++;
+	ei->cache_valid_id++;
+	if (ei->cache_valid_id == EXTENT_CACHE_VALID)
+		ei->cache_valid_id++;
 }
 
 void exfat_cache_inval_inode(struct inode *inode)
 {
-	struct exfat_file_id *fid = EXFAT_I(inode)->fid;
+	struct exfat_inode_info *ei = EXFAT_I(inode);
 
-	spin_lock(&fid->cache_lru_lock);
+	spin_lock(&ei->cache_lru_lock);
 	__exfat_cache_inval_inode(inode);
-	spin_unlock(&fid->cache_lru_lock);
+	spin_unlock(&ei->cache_lru_lock);
 }
 
 static inline int cache_contiguous(struct exfat_cache_id *cid,
@@ -244,26 +244,26 @@ static inline void cache_init(struct exfat_cache_id *cid,
 	cid->nr_contig = 0;
 }
 
-int exfat_get_clus(struct inode *inode, unsigned int cluster,
+int exfat_get_cluster(struct inode *inode, unsigned int cluster,
 		unsigned int *fclus, unsigned int *dclus,
 		unsigned int *last_dclus, int allow_eof)
 {
 	struct super_block *sb = inode->i_sb;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 	unsigned int limit = sbi->num_clusters;
-	struct exfat_file_id *fid = EXFAT_I(inode)->fid;
+	struct exfat_inode_info *ei = EXFAT_I(inode);
 	struct exfat_cache_id cid;
 	unsigned int content;
 
-	if (IS_CLUS_FREE(fid->start_clu)) {
+	if (IS_CLUS_FREE(ei->start_clu)) {
 		exfat_fs_error(sb,
 			"invalid access to exfat cache (entry 0x%08x)",
-			fid->start_clu);
+			ei->start_clu);
 		return -EIO;
 	}
 
 	*fclus = 0;
-	*dclus = fid->start_clu;
+	*dclus = ei->start_clu;
 	*last_dclus = *dclus;
 
 	/*
@@ -272,18 +272,13 @@ int exfat_get_clus(struct inode *inode, unsigned int cluster,
 	if ((cluster == 0) || IS_CLUS_EOF(*dclus))
 		return 0;
 
-	cache_init(&cid, CLUS_EOF, CLUS_EOF);
-
 	if (exfat_cache_lookup(inode, cluster, &cid, fclus, dclus) ==
-		CLUS_EOF) {
+			CLUS_EOF) {
 		/*
 		 * dummy, always not contiguous
 		 * This is reinitialized by cache_init(), later.
 		 */
-		WARN_ON((cid.id != EXTENT_CACHE_VALID)
-			|| (cid.fcluster != CLUS_EOF)
-			|| (cid.dcluster != CLUS_EOF)
-			|| (cid.nr_contig != 0));
+		cache_init(&cid, CLUS_EOF, CLUS_EOF);
 	}
 
 	if (*fclus == cluster)

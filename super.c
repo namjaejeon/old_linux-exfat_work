@@ -74,18 +74,6 @@ static void free_upcase_table(struct super_block *sb)
 	sbi->vol_utbl = NULL;
 }
 
-/* umount the file system volume */
-int __exfat_umount(struct super_block *sb)
-{
-	int ret = 0;
-
-	ret = exfat_set_vol_flags(sb, VOL_CLEAN);
-	free_upcase_table(sb);
-	exfat_free_alloc_bmp(sb);
-
-	return ret;
-}
-
 static void exfat_write_super(struct super_block *sb)
 {
 	set_sb_clean(sb);
@@ -95,13 +83,14 @@ static void exfat_write_super(struct super_block *sb)
 static void exfat_put_super(struct super_block *sb)
 {
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
-	int err;
 
 	mutex_lock(&EXFAT_SB(sb)->s_lock);
 	if (is_sb_dirty(sb))
 		exfat_write_super(sb);
 
-	err = __exfat_umount(sb);
+	exfat_set_vol_flags(sb, VOL_CLEAN);
+	free_upcase_table(sb);
+	exfat_free_alloc_bmp(sb);
 	mutex_unlock(&EXFAT_SB(sb)->s_lock);
 
 	if (sbi->nls_disk) {
@@ -477,30 +466,35 @@ static int exfat_read_root(struct inode *inode)
 {
 	struct super_block *sb = inode->i_sb;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
-	struct exfat_file_id *fid;
-	struct exfat_dir_entry info;
+	struct exfat_inode_info *ei = EXFAT_I(inode);
+	struct exfat_chain cdir;
+	int num_subdirs, num_clu;
 
-	fid = kmalloc(sizeof(struct exfat_file_id), GFP_KERNEL);
-	if (!fid)
-		return -ENOMEM;	
+	ei->dir.dir = sbi->root_dir;
+	ei->dir.flags = 0x01;
+	ei->entry = -1;
+	ei->start_clu = sbi->root_dir;
+	ei->flags = 0x01;
+	ei->type = TYPE_DIR;
+	ei->version = 0;
+	ei->rwoffset = 0;
+	ei->hint_bmap.off = CLUS_EOF;
+	ei->hint_stat.eidx = 0;
+	ei->hint_stat.clu = sbi->root_dir;
+	ei->hint_femp.eidx = EXFAT_HINT_NONE;
+	ei->target = NULL;
 
-	fid->dir.dir = sbi->root_dir;
-	fid->dir.flags = 0x01;
-	fid->entry = -1;
-	fid->start_clu = sbi->root_dir;
-	fid->flags = 0x01;
-	fid->type = TYPE_DIR;
-	fid->version = 0;
-	fid->rwoffset = 0;
-	fid->hint_bmap.off = CLUS_EOF;
-	fid->hint_stat.eidx = 0;
-	fid->hint_stat.clu = sbi->root_dir;
-	fid->hint_femp.eidx = EXFAT_HINT_NONE;
-	EXFAT_I(inode)->fid = fid;
-	EXFAT_I(inode)->target = NULL;
-
-	if (exfat_read_inode(inode, &info) < 0)
+	cdir.dir = sbi->root_dir;
+	cdir.flags = 0x01;
+	cdir.size = 0; /* UNUSED */
+	if (count_num_clusters(sb, &cdir, &num_clu))
 		return -EIO;
+	i_size_write(inode, num_clu << sbi->cluster_size_bits);
+
+	num_subdirs = exfat_count_dos_name_entries(sb, &cdir, TYPE_DIR);
+	if (num_subdirs < 0)
+		return -EIO;
+	set_nlink(inode, num_subdirs + EXFAT_MIN_SUBDIR);
 
 	inode->i_uid = sbi->options.fs_uid;
 	inode->i_gid = sbi->options.fs_gid;
@@ -510,8 +504,6 @@ static int exfat_read_root(struct inode *inode)
 	inode->i_op = &exfat_dir_inode_operations;
 	inode->i_fop = &exfat_dir_operations;
 
-	i_size_write(inode, info.size);
-	fid->size = info.size;
 	inode->i_blocks = ((i_size_read(inode) + (sbi->cluster_size - 1))
 			& ~(sbi->cluster_size - 1)) >> inode->i_blkbits;
 	EXFAT_I(inode)->i_pos = ((loff_t)sbi->root_dir << 32) | 0xffffffff;
@@ -520,7 +512,7 @@ static int exfat_read_root(struct inode *inode)
 
 	exfat_save_attr(inode, ATTR_SUBDIR);
 	inode->i_mtime = inode->i_atime = inode->i_ctime = current_time(inode);
-	set_nlink(inode, info.num_subdirs + 2);
+	exfat_cache_init_inode(inode);
 	return 0;
 }
 
@@ -544,7 +536,7 @@ static bool is_exfat(struct pbr *pbr)
 }
 
 static int exfat_load_upcase_table(struct super_block *sb,
-		unsigned long long sector, unsigned long long num_sectors,
+		sector_t sector, unsigned long long num_sectors,
 		unsigned int utbl_checksum)
 {
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
@@ -597,8 +589,8 @@ static int exfat_load_upcase_table(struct super_block *sb,
 
 				if (!upcase_table[col_index]) {
 					upcase_table[col_index] =
-						kmalloc((UTBL_ROW_COUNT *
-							sizeof(unsigned short)),
+						kmalloc_array(UTBL_ROW_COUNT,
+						sizeof(unsigned short),
 						GFP_KERNEL);
 					if (!upcase_table[col_index]) {
 						exfat_msg(sb, KERN_ERR,
@@ -649,7 +641,7 @@ static int exfat_load_default_upcase_table(struct super_block *sb)
 	unsigned short uni = 0;
 	unsigned short **upcase_table;
 
-	upcase_table = kmalloc((UTBL_COL_COUNT * sizeof(unsigned short *)),
+	upcase_table = kmalloc_array(UTBL_COL_COUNT, sizeof(unsigned short *),
 		GFP_KERNEL);
 	if (!upcase_table)
 		return -ENOMEM;
@@ -671,8 +663,8 @@ static int exfat_load_default_upcase_table(struct super_block *sb)
 
 			if (!upcase_table[col_index]) {
 				upcase_table[col_index] =
-					kmalloc((UTBL_ROW_COUNT *
-						sizeof(unsigned short)),
+					kmalloc_array(UTBL_ROW_COUNT,
+					sizeof(unsigned short),
 					GFP_KERNEL);
 				if (!upcase_table[col_index]) {
 					exfat_msg(sb, KERN_ERR,
@@ -706,10 +698,11 @@ static int load_upcase_table(struct super_block *sb)
 {
 	int i, ret;
 	unsigned int tbl_clu, type;
-	unsigned long long sector, tbl_size, num_sectors;
+	sector_t sector;
+	unsigned long long tbl_size, num_sectors;
 	unsigned char blksize_bits = sb->s_blocksize_bits;
 	struct exfat_chain clu;
-	struct exfat_case_dentry *ep;
+	struct exfat_dentry *ep;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 	struct buffer_head *bh;
 
@@ -718,13 +711,11 @@ static int load_upcase_table(struct super_block *sb)
 
 	while (!IS_CLUS_EOF(clu.dir)) {
 		for (i = 0; i < sbi->dentries_per_clu; i++) {
-			ep = (struct exfat_case_dentry *)exfat_get_dentry(sb,
-					&clu, i, &bh, NULL);
+			ep = exfat_get_dentry(sb, &clu, i, &bh, NULL);
 			if (!ep)
 				return -EIO;
 
-			type = exfat_get_entry_type((struct exfat_dentry *) ep);
-
+			type = exfat_get_entry_type(ep);
 			if (type == TYPE_UNUSED) {
 				brelse(bh);
 				break;
@@ -735,13 +726,13 @@ static int load_upcase_table(struct super_block *sb)
 				continue;
 			}
 
-			tbl_clu  = le32_to_cpu(ep->start_clu);
-			tbl_size = le64_to_cpu(ep->size);
-
-			sector = CLUS_TO_SECT(sbi, tbl_clu);
+			tbl_clu  = le32_to_cpu(ep->upcase_start_clu);
+			tbl_size = le64_to_cpu(ep->upcase_size);
+			
+			sector = clus_to_sect(sbi, tbl_clu);
 			num_sectors = ((tbl_size - 1) >> blksize_bits) + 1;
 			ret = exfat_load_upcase_table(sb, sector, num_sectors,
-					le32_to_cpu(ep->checksum));
+					le32_to_cpu(ep->upcase_checksum));
 
 			brelse(bh);
 			if (ret && (ret != -EIO))
@@ -758,7 +749,7 @@ static int load_upcase_table(struct super_block *sb)
 load_default:
 	/* load default upcase table */
 	return exfat_load_default_upcase_table(sb);
-} /* end of load_upcase_table */
+}
 
 static struct pbr *exfat_read_pbr_with_logical_sector(struct super_block *sb,
 		struct buffer_head **prev_bh)
@@ -838,17 +829,15 @@ static int __exfat_fill_super(struct super_block *sb)
 	/* check the validity of PBR */
 	if (le16_to_cpu((p_pbr->signature)) != PBR_SIGNATURE) {
 		exfat_msg(sb, KERN_ERR, "invalid boot record signature");
-		brelse(bh);
 		ret = -EINVAL;
-		goto out;
+		goto free_bh;
 	}
 
 	/* check logical sector size */
 	p_pbr = exfat_read_pbr_with_logical_sector(sb, &bh);
 	if (!p_pbr) {
-		brelse(bh);
 		ret = -EIO;
-		goto out;
+		goto free_bh;
 	}
 
 	if (!is_exfat(p_pbr)) {
@@ -914,12 +903,10 @@ static int __exfat_fill_super(struct super_block *sb)
 		goto free_upcase;
 	}
 
-	if (sbi->used_clusters == ~0) {
-		ret = exfat_count_used_clusters(sb, &sbi->used_clusters);
-		if (ret) {
-			exfat_msg(sb, KERN_ERR, "failed to scan clusters");
-			goto free_alloc_bmp;
-		}
+	ret = exfat_count_used_clusters(sb, &sbi->used_clusters);
+	if (ret) {
+		exfat_msg(sb, KERN_ERR, "failed to scan clusters");
+		goto free_alloc_bmp;
 	}
 
 	return 0;
@@ -968,7 +955,7 @@ static int exfat_fill_super(struct super_block *sb, void *data, int silent)
 
 	err = __exfat_fill_super(sb);
 	if (err) {
-		exfat_msg(sb, KERN_ERR, "failed to recognize fat type");
+		exfat_msg(sb, KERN_ERR, "failed to recognize exfat type");
 		goto failed_mount;
 	}
 
@@ -1026,7 +1013,9 @@ static int exfat_fill_super(struct super_block *sb, void *data, int silent)
 	return 0;
 
 failed_mount2:
-	__exfat_umount(sb);
+	free_upcase_table(sb);
+	exfat_free_alloc_bmp(sb);
+
 failed_mount:
 	if (root_inode)
 		iput(root_inode);
@@ -1049,7 +1038,7 @@ static struct dentry *exfat_fs_mount(struct file_system_type *fs_type,
 	return mount_bdev(fs_type, flags, dev_name, data, exfat_fill_super);
 }
 
-static void init_once(void *foo)
+static void exfat_inode_init_once(void *foo)
 {
 	struct exfat_inode_info *ei = (struct exfat_inode_info *)foo;
 
@@ -1077,7 +1066,6 @@ void exfat_destroy_inode(struct inode *inode)
 		EXFAT_I(inode)->target = NULL;
 	}
 
-	kfree(EXFAT_I(inode)->fid);
 	kmem_cache_free(exfat_inode_cachep, EXFAT_I(inode));
 }
 
@@ -1086,7 +1074,7 @@ static int __init exfat_init_inodecache(void)
 	exfat_inode_cachep = kmem_cache_create("exfat_inode_cache",
 			sizeof(struct exfat_inode_info),
 			0, (SLAB_RECLAIM_ACCOUNT|SLAB_MEM_SPREAD),
-			init_once);
+			exfat_inode_init_once);
 	if (!exfat_inode_cachep)
 		return -ENOMEM;
 	return 0;

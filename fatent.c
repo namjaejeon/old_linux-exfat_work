@@ -235,7 +235,7 @@ int exfat_clear_cluster(struct inode *inode, unsigned int clu)
 	struct buffer_head *bh = NULL;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 
-	s = CLUS_TO_SECT(sbi, clu);
+	s = clus_to_sect(sbi, clu);
 	n = s + sbi->sect_per_clus;
 
 	if (IS_DIRSYNC(inode)) {
@@ -249,15 +249,16 @@ int exfat_clear_cluster(struct inode *inode, unsigned int clu)
 	 */
 	for ( ; s < n; s++) {
 		bh = sb_getblk(sb, s);
-		if (!bh)
+		if (!bh) {
+			ret = -ENOMEM;
 			goto out;
-
+		}
 		memset(bh->b_data, 0x0, sb->s_blocksize);
 		set_buffer_uptodate(bh);
 		mark_buffer_dirty(bh);
+		brelse(bh);
 	}
 out:
-	brelse(bh);
 	return ret;
 }
 
@@ -382,6 +383,37 @@ error:
 	if (num_clusters)
 		exfat_free_cluster(sb, p_chain);
 	return ret;
+}
+
+int count_num_clusters(struct super_block *sb,
+		struct exfat_chain *p_chain, unsigned int *ret_count)
+{
+	unsigned int i, count;
+	unsigned int clu;
+	struct exfat_sb_info *sbi = EXFAT_SB(sb);
+
+	if (!p_chain->dir || IS_CLUS_EOF(p_chain->dir)) {
+		*ret_count = 0;
+		return 0;
+	}
+
+	if (p_chain->flags == 0x03) {
+		*ret_count = p_chain->size;
+		return 0;
+	}
+
+	clu = p_chain->dir;
+	count = 0;
+	for (i = CLUS_BASE; i < sbi->num_clusters; i++) {
+		count++;
+		if (exfat_ent_get_safe(sb, clu, &clu))
+			return -EIO;
+		if (IS_CLUS_EOF(clu))
+			break;
+	}
+
+	*ret_count = count;
+	return 0;
 }
 
 int exfat_mirror_bhs(struct super_block *sb, unsigned long long sec,

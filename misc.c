@@ -43,7 +43,6 @@ void __exfat_fs_error(struct super_block *sb, int report, const char *fmt, ...)
 		exfat_msg(sb, KERN_ERR, "Filesystem has been set read-only");
 	}
 }
-EXPORT_SYMBOL(__exfat_fs_error);
 
 /*
  * exfat_msg() - print preformated EXFAT specific messages.
@@ -182,7 +181,7 @@ void exfat_time_unix2fat(struct exfat_sb_info *sbi, struct timespec64 *ts,
 	tp->year = year;
 }
 
-struct exfat_timestamp *tm_now(struct exfat_sb_info *sbi,
+struct exfat_timestamp *exfat_tm_now(struct exfat_sb_info *sbi,
 		struct exfat_timestamp *tp)
 {
 	struct timespec64 ts;
@@ -201,18 +200,7 @@ struct exfat_timestamp *tm_now(struct exfat_sb_info *sbi,
 	return tp;
 }
 
-unsigned char calc_chksum_1byte(void *data, int len, unsigned char chksum)
-{
-	int i;
-	unsigned char *c = (unsigned char *)data;
-
-	for (i = 0; i < len; i++, c++)
-		chksum = (((chksum & 1) << 7) | ((chksum & 0xFE) >> 1)) + *c;
-
-	return chksum;
-}
-
-unsigned short calc_chksum_2byte(void *data, int len, unsigned short chksum,
+unsigned short exfat_calc_chksum_2byte(void *data, int len, unsigned short chksum,
 		int type)
 {
 	int i;

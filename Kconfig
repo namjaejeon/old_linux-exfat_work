@@ -6,7 +6,6 @@ config EXFAT_FS
 	select NLS
 	help
 	  If you want to use the exFAT file system, then you must say Y or M
-	  here to inlucde exFAT support.
 
 	  To compile this as a module, choose M here: the module will be called
 

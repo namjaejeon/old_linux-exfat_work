@@ -3,12 +3,15 @@
  * Copyright (C) 2012-2013 Samsung Electronics Co., Ltd.
  */
 
+#ifndef _EXFAT_RAW_H
+#define _EXFAT_RAW_H
+
 #include <linux/types.h>
 
 #define PBR_SIGNATURE		0xAA55
 
 #define VOL_CLEAN		0x0000
-#define VOL_DIRTY		0x0001
+#define VOL_DIRTY		0x0002
 
 #define DENTRY_SIZE		32 /* directory entry size */
 #define DENTRY_SIZE_BITS	5
@@ -39,7 +42,6 @@
 #define CS_DEFAULT		2
 
 /* file attributes */
-#define ATTR_NORMAL		0x0000
 #define ATTR_READONLY		0x0001
 #define ATTR_HIDDEN		0x0002
 #define ATTR_SYSTEM		0x0004
@@ -53,6 +55,16 @@
 #define ATTR_EXTEND_MASK	(ATTR_EXTEND | ATTR_SUBDIR | ATTR_ARCHIVE)
 #define ATTR_RWMASK		(ATTR_HIDDEN | ATTR_SYSTEM | ATTR_VOLUME | \
 				 ATTR_SUBDIR | ATTR_ARCHIVE | ATTR_SYMLINK) /* 0x007E */
+
+#define ATTR_READONLY_LE	cpu_to_le16(0x0001)
+#define ATTR_HIDDEN_LE		cpu_to_le16(0x0002)
+#define ATTR_SYSTEM_LE		cpu_to_le16(0x0004)
+#define ATTR_VOLUME_LE		cpu_to_le16(0x0008)
+#define ATTR_SUBDIR_LE		cpu_to_le16(0x0010)
+#define ATTR_ARCHIVE_LE		cpu_to_le16(0x0020)
+#define ATTR_SYMLINK_LE		cpu_to_le16(0x0040)
+
+#define DOS_NAME_LENGTH		11	/* DOS file name length excluding NULL */
 
 /* EXFAT BIOS parameter block (64 bytes) */
 struct bpb64 {
@@ -87,7 +99,6 @@ struct pbr64 {
 	struct bsx64 bsx;
 };
 
-
 /* Common PBR[Partition Boot Record] (512 bytes) */
 struct pbr {
 	union {
@@ -102,66 +113,81 @@ struct pbr {
 	__le16 signature;
 };
 
-/* FAT directory entry (32 bytes) */
 struct exfat_dentry {
-	__u8       dummy[32];
-};
-
-/* EXFAT stream extension directory entry (32 bytes) */
-struct exfat_strm_dentry {
 	__u8 type;
-	__u8 flags;
-	__u8 reserved1;
-	__u8 name_len;
-	__le16 name_hash;
-	__le16 reserved2;
-	__le64 valid_size;
-	__le32 reserved3;
-	__le32 start_clu;
-	__le64 size;
-};
+	union {
+		struct {
+			__u8 num_ext;
+			__le16 checksum;
+			__le16 attr;
+			__le16 reserved1;
+			__le16 create_time;
+			__le16 create_date;
+			__le16 modify_time;
+			__le16 modify_date;
+			__le16 access_time;
+			__le16 access_date;
+			__u8 create_time_ms;
+			__u8 modify_time_ms;
+			__u8 access_time_ms;
+			__u8 reserved2[9];
+		} __packed file; /* file directory entry */
+		struct {
+			__u8 flags;
+			__u8 reserved1;
+			__u8 name_len;
+			__le16 name_hash;
+			__le16 reserved2;
+			__le64 valid_size;
+			__le32 reserved3;
+			__le32 start_clu;
+			__le64 size;
+		} __packed stream; /* stream extension directory entry */
+		struct {
+			__u8 flags;
+			__le16 unicode_0_14[15];
+		} __packed name; /* file name directory entry */
+		struct {
+			__u8 flags;
+			__u8 reserved[18];
+			__le32 start_clu;
+			__le64 size;
+		} __packed bitmap; /* allocation bitmap directory entry */
+		struct {
+			__u8 reserved1[3];
+			__le32 checksum;
+			__u8 reserved2[12];
+			__le32 start_clu;
+			__le64 size;
+		} __packed upcase; /* up-case table directory entry */
+	} __packed dentry;
+} __packed;
 
-/* EXFAT file name directory entry (32 bytes) */
-struct exfat_name_dentry {
-	__u8 type;
-	__u8 flags;
-	__le16 unicode_0_14[15];
-};
+#define file_num_ext			dentry.file.num_ext
+#define file_checksum			dentry.file.checksum
+#define file_attr			dentry.file.attr
+#define file_create_time		dentry.file.create_time
+#define file_create_date		dentry.file.create_date
+#define file_modify_time		dentry.file.modify_time
+#define file_modify_date		dentry.file.modify_date
+#define file_access_time		dentry.file.access_time
+#define file_access_date		dentry.file.access_date
+#define file_create_time_ms		dentry.file.create_time_ms
+#define file_modify_time_ms		dentry.file.modify_time_ms
+#define file_access_time_ms		dentry.file.access_time_ms
+#define stream_flags			dentry.stream.flags
+#define stream_name_len			dentry.stream.name_len
+#define stream_name_hash		dentry.stream.name_hash
+#define stream_start_clu		dentry.stream.start_clu
+#define stream_valid_size		dentry.stream.valid_size
+#define stream_size			dentry.stream.size
+#define name_flags			dentry.name.flags
+#define name_unicode			dentry.name.unicode_0_14
+#define bitmap_flags			dentry.bitmap.flags
+#define bitmap_start_clu		dentry.bitmap.start_clu
+#define bitmap_size			dentry.bitmap.size
+#define upcase_start_clu		dentry.upcase.start_clu
+#define upcase_size			dentry.upcase.size
+#define upcase_checksum			dentry.upcase.checksum
 
-/* EXFAT allocation bitmap directory entry (32 bytes) */
-struct exfat_bmap_dentry {
-	__u8 type;
-	__u8 flags;
-	__u8 reserved[18];
-	__le32 start_clu;
-	__le64 size;
-};
-
-/* EXFAT file directory entry (32 bytes) */
-struct exfat_file_dentry {
-	__u8 type;
-	__u8 num_ext;
-	__le16 checksum;
-	__le16 attr;
-	__le16 reserved1;
-	__le16 create_time;
-	__le16 create_date;
-	__le16 modify_time;
-	__le16 modify_date;
-	__le16 access_time;
-	__le16 access_date;
-	__u8 create_time_ms;
-	__u8 modify_time_ms;
-	__u8 access_time_ms;
-	__u8 reserved2[9];
-};
-
-/* EXFAT up-case table directory entry (32 bytes) */
-struct exfat_case_dentry {
-	__u8 type;
-	__u8 reserved1[3];
-	__le32 checksum;
-	__u8 reserved2[12];
-	__le32 start_clu;
-	__le64 size;
-};
+#endif /* !_EXFAT_RAW_H */

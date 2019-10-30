@@ -10,13 +10,6 @@
 #include "exfat_fs.h"
 #include "upcase.h"
 
-static unsigned short bad_dos_chars[] = {
-	/* + , ; = [ ] */
-	0x002B, 0x002C, 0x003B, 0x003D, 0x005B, 0x005D,
-	0xFF0B, 0xFF0C, 0xFF1B, 0xFF1D, 0xFF3B, 0xFF3D,
-	0
-};
-
 /*
  * Allow full-width illegal characters :
  * "MS windows 7" supports full-width-invalid-name-characters.
@@ -33,7 +26,7 @@ static unsigned short bad_uni_chars[] = {
 	0
 };
 
-static int convert_ch_to_uni(struct nls_table *nls, unsigned char *ch,
+static int exfat_convert_ch_to_uni(struct nls_table *nls, unsigned char *ch,
 		unsigned short *uni, int *lossy)
 {
 	int len;
@@ -59,7 +52,7 @@ static int convert_ch_to_uni(struct nls_table *nls, unsigned char *ch,
 	return len;
 }
 
-static int convert_uni_to_ch(struct nls_table *nls, unsigned short uni,
+static int exfat_convert_uni_to_ch(struct nls_table *nls, unsigned short uni,
 		unsigned char *ch, int *lossy)
 {
 	int len;
@@ -83,7 +76,7 @@ static int convert_uni_to_ch(struct nls_table *nls, unsigned short uni,
 	return len;
 }
 
-static unsigned short nls_upper(struct super_block *sb, unsigned short a)
+static unsigned short exfat_nls_upper(struct super_block *sb, unsigned short a)
 {
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 
@@ -95,7 +88,7 @@ static unsigned short nls_upper(struct super_block *sb, unsigned short a)
 		return a;
 }
 
-unsigned short *nls_wstrchr(unsigned short *str, unsigned short wchar)
+static unsigned short *exfat_nls_wstrchr(unsigned short *str, unsigned short wchar)
 {
 	while (*str) {
 		if (*(str++) == wchar)
@@ -105,18 +98,13 @@ unsigned short *nls_wstrchr(unsigned short *str, unsigned short wchar)
 	return 0;
 }
 
-int nls_cmp_sfn(struct super_block *sb, unsigned char *a, unsigned char *b)
-{
-	return strncmp((void *)a, (void *)b, DOS_NAME_LENGTH);
-}
-
-int nls_cmp_uniname(struct super_block *sb, unsigned short *a,
+int exfat_nls_cmp_uniname(struct super_block *sb, unsigned short *a,
 		unsigned short *b)
 {
 	int i;
 
 	for (i = 0; i < MAX_NAME_LENGTH; i++, a++, b++) {
-		if (nls_upper(sb, *a) != nls_upper(sb, *b))
+		if (exfat_nls_upper(sb, *a) != exfat_nls_upper(sb, *b))
 			return 1;
 		if (*a == 0x0)
 			return 0;
@@ -124,171 +112,7 @@ int nls_cmp_uniname(struct super_block *sb, unsigned short *a,
 	return 0;
 }
 
-#define CASE_LOWER_BASE (0x08)	/* base is lower case */
-#define CASE_LOWER_EXT  (0x10)	/* extension is lower case */
-
-int nls_uni16s_to_sfn(struct super_block *sb, struct exfat_uni_name *p_uniname,
-		struct exfat_dos_name *p_dosname, int *p_lossy)
-{
-	int i, j, len, lossy = NLS_NAME_NO_LOSSY;
-	unsigned char buf[MAX_CHARSET_SIZE];
-	unsigned char lower = 0, upper = 0;
-	unsigned char *dosname = p_dosname->name;
-	unsigned short *uniname = p_uniname->name;
-	unsigned short *p, *last_period;
-	struct nls_table *nls = EXFAT_SB(sb)->nls_disk;
-
-	/* DOSNAME is filled with space */
-	for (i = 0; i < DOS_NAME_LENGTH; i++)
-		*(dosname+i) = ' ';
-
-	/* DOT and DOTDOT are handled by VFS layer */
-
-	/* search for the last embedded period */
-	last_period = NULL;
-	for (p = uniname; *p; p++) {
-		if (*p == (unsigned short) '.')
-			last_period = p;
-	}
-
-	i = 0;
-	while (i < DOS_NAME_LENGTH) {
-		if (i == 8) {
-			if (last_period == NULL)
-				break;
-
-			if (uniname <= last_period) {
-				if (uniname < last_period)
-					lossy |= NLS_NAME_OVERLEN;
-				uniname = last_period + 1;
-			}
-		}
-
-		if (*uniname == (unsigned short) '\0') {
-			break;
-		} else if (*uniname == (unsigned short) ' ') {
-			lossy |= NLS_NAME_LOSSY;
-		} else if (*uniname == (unsigned short) '.') {
-			if (uniname < last_period)
-				lossy |= NLS_NAME_LOSSY;
-			else
-				i = 8;
-		} else if (nls_wstrchr(bad_dos_chars, *uniname)) {
-			lossy |= NLS_NAME_LOSSY;
-			*(dosname+i) = '_';
-			i++;
-		} else {
-			len = convert_uni_to_ch(nls, *uniname, buf, &lossy);
-
-			if (len > 1) {
-				if ((i >= 8) && ((i+len) > DOS_NAME_LENGTH))
-					break;
-
-				if ((i <  8) && ((i+len) > 8)) {
-					i = 8;
-					continue;
-				}
-
-				lower = 0xFF;
-
-				for (j = 0; j < len; j++, i++)
-					*(dosname+i) = *(buf+j);
-			} else { /* len == 1 */
-				if ((*buf >= 'a') && (*buf <= 'z')) {
-					*(dosname+i) = *buf - ('a' - 'A');
-
-					lower |= (i < 8) ?
-						CASE_LOWER_BASE :
-						CASE_LOWER_EXT;
-				} else if ((*buf >= 'A') && (*buf <= 'Z')) {
-					*(dosname+i) = *buf;
-
-					upper |= (i < 8) ?
-						CASE_LOWER_BASE :
-						CASE_LOWER_EXT;
-				} else {
-					*(dosname+i) = *buf;
-				}
-				i++;
-			}
-		}
-
-		uniname++;
-	}
-
-	if (*dosname == 0xE5)
-		*dosname = 0x05;
-	if (*uniname != 0x0)
-		lossy |= NLS_NAME_OVERLEN;
-
-	if (upper & lower)
-		p_dosname->name_case = 0xFF;
-	else
-		p_dosname->name_case = lower;
-
-	if (p_lossy)
-		*p_lossy = lossy;
-	return i;
-}
-
-int nls_sfn_to_uni16s(struct super_block *sb, struct exfat_dos_name *p_dosname,
-		struct exfat_uni_name *p_uniname)
-{
-	int i = 0, j, n = 0;
-	unsigned char buf[MAX_DOSNAME_BUF_SIZE];
-	unsigned char *dosname = p_dosname->name;
-	unsigned short *uniname = p_uniname->name;
-	struct nls_table *nls = EXFAT_SB(sb)->nls_disk;
-
-	if (*dosname == 0x05) {
-		*buf = 0xE5;
-		i++;
-		n++;
-	}
-
-	for ( ; i < 8; i++, n++) {
-		if (*(dosname+i) == ' ')
-			break;
-
-		if ((*(dosname+i) >= 'A') && (*(dosname+i) <= 'Z') &&
-				(p_dosname->name_case & CASE_LOWER_BASE))
-			*(buf+n) = *(dosname+i) + ('a' - 'A');
-		else
-			*(buf+n) = *(dosname+i);
-	}
-	if (*(dosname+8) != ' ') {
-		*(buf+n) = '.';
-		n++;
-	}
-
-	for (i = 8; i < DOS_NAME_LENGTH; i++, n++) {
-		if (*(dosname+i) == ' ')
-			break;
-
-		if ((*(dosname+i) >= 'A') && (*(dosname+i) <= 'Z') &&
-			       (p_dosname->name_case & CASE_LOWER_EXT))
-			*(buf+n) = *(dosname+i) + ('a' - 'A');
-		else
-			*(buf+n) = *(dosname+i);
-	}
-	*(buf+n) = '\0';
-
-	i = j = 0;
-	while (j < MAX_NAME_LENGTH) {
-		if (*(buf+i) == '\0')
-			break;
-
-		i += convert_ch_to_uni(nls, (buf+i), uniname, NULL);
-
-		uniname++;
-		j++;
-	}
-
-	*uniname = (unsigned short) '\0';
-	return j;
-}
-
-static int __nls_utf16s_to_vfsname(struct super_block *sb,
+static int __exfat_nls_utf16s_to_vfsname(struct super_block *sb,
 		struct exfat_uni_name *p_uniname, unsigned char *p_cstring,
 		int buflen)
 {
@@ -302,7 +126,7 @@ static int __nls_utf16s_to_vfsname(struct super_block *sb,
 	return len;
 }
 
-static int __nls_vfsname_to_utf16s(struct super_block *sb,
+static int __exfat_nls_vfsname_to_utf16s(struct super_block *sb,
 		const unsigned char *p_cstring, const int len,
 		struct exfat_uni_name *p_uniname, int *p_lossy)
 {
@@ -331,16 +155,17 @@ static int __nls_vfsname_to_utf16s(struct super_block *sb,
 	p_uniname->name_len = (unsigned char)(unilen & 0xFF);
 
 	for (i = 0; i < unilen; i++) {
-		if ((*uniname < 0x0020) || nls_wstrchr(bad_uni_chars, *uniname))
+		if ((*uniname < 0x0020) ||
+				exfat_nls_wstrchr(bad_uni_chars, *uniname))
 			lossy |= NLS_NAME_LOSSY;
 
-		*(upname+i) = nls_upper(sb, *uniname);
+		*(upname+i) = exfat_nls_upper(sb, *uniname);
 		uniname++;
 	}
 
 	*uniname = (unsigned short)'\0';
 	p_uniname->name_len = unilen;
-	p_uniname->name_hash = calc_chksum_2byte((void *) upname,
+	p_uniname->name_hash = exfat_calc_chksum_2byte((void *) upname,
 				unilen << 1, 0, CS_DEFAULT);
 
 	if (p_lossy)
@@ -349,7 +174,7 @@ static int __nls_vfsname_to_utf16s(struct super_block *sb,
 	return unilen;
 }
 
-static int __nls_uni16s_to_vfsname(struct super_block *sb,
+static int __exfat_nls_uni16s_to_vfsname(struct super_block *sb,
 		struct exfat_uni_name *p_uniname, unsigned char *p_cstring,
 		int buflen)
 {
@@ -363,7 +188,7 @@ static int __nls_uni16s_to_vfsname(struct super_block *sb,
 		if (*uniname == (unsigned short)'\0')
 			break;
 
-		len = convert_uni_to_ch(nls, *uniname, buf, NULL);
+		len = exfat_convert_uni_to_ch(nls, *uniname, buf, NULL);
 
 		if (out_len + len >= buflen)
 			len = (buflen - 1) - out_len;
@@ -385,7 +210,7 @@ static int __nls_uni16s_to_vfsname(struct super_block *sb,
 	return out_len;
 }
 
-static int __nls_vfsname_to_uni16s(struct super_block *sb,
+static int __exfat_nls_vfsname_to_uni16s(struct super_block *sb,
 		const unsigned char *p_cstring, const int len,
 		struct exfat_uni_name *p_uniname, int *p_lossy)
 {
@@ -398,13 +223,14 @@ static int __nls_vfsname_to_uni16s(struct super_block *sb,
 
 	i = unilen = 0;
 	while ((unilen < MAX_NAME_LENGTH) && (i < len)) {
-		i += convert_ch_to_uni(nls, (unsigned char *)(p_cstring+i),
-			uniname, &lossy);
+		i += exfat_convert_ch_to_uni(nls,
+			(unsigned char *)(p_cstring+i), uniname, &lossy);
 
-		if ((*uniname < 0x0020) || nls_wstrchr(bad_uni_chars, *uniname))
+		if ((*uniname < 0x0020) ||
+				exfat_nls_wstrchr(bad_uni_chars, *uniname))
 			lossy |= NLS_NAME_LOSSY;
 
-		*(upname+unilen) = nls_upper(sb, *uniname);
+		*(upname+unilen) = exfat_nls_upper(sb, *uniname);
 
 		uniname++;
 		unilen++;
@@ -415,8 +241,8 @@ static int __nls_vfsname_to_uni16s(struct super_block *sb,
 
 	*uniname = (unsigned short)'\0';
 	p_uniname->name_len = unilen;
-	p_uniname->name_hash =
-		calc_chksum_2byte((void *) upname, unilen<<1, 0, CS_DEFAULT);
+	p_uniname->name_hash = exfat_calc_chksum_2byte((void *) upname,
+		unilen << 1, 0, CS_DEFAULT);
 
 	if (p_lossy)
 		*p_lossy = lossy;
@@ -424,22 +250,22 @@ static int __nls_vfsname_to_uni16s(struct super_block *sb,
 	return unilen;
 }
 
-int nls_uni16s_to_vfsname(struct super_block *sb,
+int exfat_nls_uni16s_to_vfsname(struct super_block *sb,
 		struct exfat_uni_name *uniname, unsigned char *p_cstring,
 		int buflen)
 {
 	if (EXFAT_SB(sb)->options.utf8)
-		return __nls_utf16s_to_vfsname(sb, uniname, p_cstring, buflen);
+		return __exfat_nls_utf16s_to_vfsname(sb, uniname, p_cstring, buflen);
 
-	return __nls_uni16s_to_vfsname(sb, uniname, p_cstring, buflen);
+	return __exfat_nls_uni16s_to_vfsname(sb, uniname, p_cstring, buflen);
 }
 
-int nls_vfsname_to_uni16s(struct super_block *sb,
+int exfat_nls_vfsname_to_uni16s(struct super_block *sb,
 		const unsigned char *p_cstring, const int len,
 		struct exfat_uni_name *uniname, int *p_lossy)
 {
 	if (EXFAT_SB(sb)->options.utf8)
-		return __nls_vfsname_to_utf16s(sb, p_cstring, len, uniname,
+		return __exfat_nls_vfsname_to_utf16s(sb, p_cstring, len, uniname,
 				p_lossy);
-	return __nls_vfsname_to_uni16s(sb, p_cstring, len, uniname, p_lossy);
+	return __exfat_nls_vfsname_to_uni16s(sb, p_cstring, len, uniname, p_lossy);
 }
