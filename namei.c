@@ -1079,7 +1079,7 @@ static int exfat_write_link(struct inode *inode, char *buffer,
 	struct exfat_timestamp tm;
 	struct exfat_dentry *ep, *ep2;
 	struct exfat_entry_set_cache *es = NULL;
-	struct buffer_head *bh = NULL;
+	struct buffer_head *bh;
 	struct super_block *sb = inode->i_sb;
 	unsigned int blksize = sb->s_blocksize;
 	unsigned int blksize_mask = sb->s_blocksize - 1;
@@ -1207,7 +1207,7 @@ static int exfat_write_link(struct inode *inode, char *buffer,
 			if ((offset > 0) ||
 				((ei->rwoffset+oneblkwrite) < size)) {
 				bh = sb_bread(sb, logsector);
-				if (bh)
+				if (!bh)
 					goto err_out;
 			} else {
 				bh = sb_getblk(sb, logsector);
@@ -1220,6 +1220,7 @@ static int exfat_write_link(struct inode *inode, char *buffer,
 		}
 		set_buffer_uptodate(bh);
 		mark_buffer_dirty(bh);
+		brelse(bh);
 
 		tsize -= oneblkwrite;
 		write_bytes += oneblkwrite;
@@ -1232,8 +1233,6 @@ static int exfat_write_link(struct inode *inode, char *buffer,
 			modified = true;
 		}
 	}
-
-	brelse(bh);
 
 	/* update the direcoty entry */
 	/* get_entry_(set_)in_dir shoulb be check DIR_DELETED flag. */
