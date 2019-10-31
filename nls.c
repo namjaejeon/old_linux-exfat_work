@@ -869,12 +869,11 @@ static int exfat_load_default_upcase_table(struct super_block *sb)
 	unsigned short **upcase_table;
 
 	upcase_table = kmalloc_array(UTBL_COL_COUNT, sizeof(unsigned short *),
-			GFP_KERNEL);
+			GFP_KERNEL | __GFP_ZERO);
 	if (!upcase_table)
 		return -ENOMEM;
 
 	sbi->vol_utbl = upcase_table;
-	memset(upcase_table, 0, UTBL_COL_COUNT * sizeof(unsigned short *));
 
 	for (i = 0; index <= 0xFFFF && i < EXFAT_NUM_UPCASE*2; i += 2) {
 		uni = get_unaligned_le16((unsigned char *)uni_def_upcase + i);
