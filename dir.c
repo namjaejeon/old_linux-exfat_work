@@ -1400,8 +1400,9 @@ int exfat_zeroed_cluster(struct super_block *sb,
 	int err, i, n;
 
 	if (((blknr + num_secs) > sbi->num_sectors) && (sbi->num_sectors > 0)) {
-		exfat_fs_error_ratelimit(sb, "%s: out of range(sect:%llu len:%u)",
-				__func__, blknr, num_secs);
+		exfat_fs_error_ratelimit(sb,
+			"%s: out of range(sect:%llu len:%u)",
+			__func__, blknr, num_secs);
 		return -EIO;
 	}
 
