@@ -200,8 +200,8 @@ struct exfat_timestamp *exfat_tm_now(struct exfat_sb_info *sbi,
 	return tp;
 }
 
-unsigned short exfat_calc_chksum_2byte(void *data, int len, unsigned short chksum,
-		int type)
+unsigned short exfat_calc_chksum_2byte(void *data, int len,
+		unsigned short chksum, int type)
 {
 	int i;
 	unsigned char *c = (unsigned char *)data;

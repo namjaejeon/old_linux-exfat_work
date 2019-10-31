@@ -15,7 +15,8 @@
 
 #define DENTRY_SIZE		32 /* directory entry size */
 #define DENTRY_SIZE_BITS	5
-#define MAX_EXFAT_DENTRIES	8388608	/* exFAT allows 8388608(256MB) directory entries */
+/* exFAT allows 8388608(256MB) directory entries */
+#define MAX_EXFAT_DENTRIES	8388608
 
 /* dentry types */
 #define MSDOS_DELETED		0xE5	/* deleted mark */
@@ -54,7 +55,7 @@
 
 #define ATTR_EXTEND_MASK	(ATTR_EXTEND | ATTR_SUBDIR | ATTR_ARCHIVE)
 #define ATTR_RWMASK		(ATTR_HIDDEN | ATTR_SYSTEM | ATTR_VOLUME | \
-				 ATTR_SUBDIR | ATTR_ARCHIVE | ATTR_SYMLINK) /* 0x007E */
+				 ATTR_SUBDIR | ATTR_ARCHIVE | ATTR_SYMLINK)
 
 #define ATTR_READONLY_LE	cpu_to_le16(0x0001)
 #define ATTR_HIDDEN_LE		cpu_to_le16(0x0002)
@@ -63,8 +64,6 @@
 #define ATTR_SUBDIR_LE		cpu_to_le16(0x0010)
 #define ATTR_ARCHIVE_LE		cpu_to_le16(0x0020)
 #define ATTR_SYMLINK_LE		cpu_to_le16(0x0040)
-
-#define DOS_NAME_LENGTH		11	/* DOS file name length excluding NULL */
 
 /* EXFAT BIOS parameter block (64 bytes) */
 struct bpb64 {
