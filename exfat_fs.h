@@ -83,6 +83,7 @@
 
 #define MAX_CHARSET_SIZE	6	/* max size of multi-byte character */
 #define MAX_NAME_LENGTH		255     /* max len of file name excluding NULL */
+#define DOS_NAME_LENGTH		11	/* DOS file name length excluding NULL */
 #define MAX_VFSNAME_BUF_SIZE	((MAX_NAME_LENGTH + 1) * MAX_CHARSET_SIZE)
 #define MAX_DOSNAME_BUF_SIZE	((DOS_NAME_LENGTH + 2) + 6)
 
@@ -369,7 +370,7 @@ static inline int sect_to_clus(struct exfat_sb_info *sbi, sector_t sec)
 
 /* super.c */
 int exfat_set_vol_flags(struct super_block *sb, unsigned short new_flag);
-inline void set_sb_dirty(struct super_block *sb);
+inline void exfat_set_sb_dirty(struct super_block *sb);
 
 /* fatent.c */
 #define get_next_clus(sb, pclu)		exfat_ent_get(sb, *(pclu), pclu)
@@ -477,8 +478,8 @@ extern const struct inode_operations exfat_file_inode_operations;
 void exfat_sync_inode(struct inode *inode);
 struct inode *exfat_build_inode(struct super_block *sb,
 		struct exfat_dir_entry *info, loff_t i_pos);
-void exfat_attach(struct inode *inode, loff_t i_pos);
-void exfat_detach(struct inode *inode);
+void exfat_hash_inode(struct inode *inode, loff_t i_pos);
+void exfat_unhash_inode(struct inode *inode);
 void exfat_truncate(struct inode *inode, loff_t size);
 struct inode *exfat_iget(struct super_block *sb, loff_t i_pos);
 int exfat_write_inode(struct inode *inode, struct writeback_control *wbc);
@@ -488,7 +489,26 @@ void exfat_evict_inode(struct inode *inode);
 int exfat_read_inode(struct inode *inode, struct exfat_dir_entry *info);
 
 /* exfat/nls.c */
-/* NLS management function */
+/* Upcase tabel macro */
+#define EXFAT_NUM_UPCASE	2918
+#define HIGH_INDEX_BIT		(8)
+#define HIGH_INDEX_MASK		(0xFF00)
+#define LOW_INDEX_BIT		(16 - HIGH_INDEX_BIT)
+#define UTBL_ROW_COUNT		(1 << LOW_INDEX_BIT)
+#define UTBL_COL_COUNT		(1 << HIGH_INDEX_BIT)
+
+extern const unsigned char uni_def_upcase[EXFAT_NUM_UPCASE<<1];
+
+static inline unsigned short get_col_index(unsigned short i)
+{
+	return i >> LOW_INDEX_BIT;
+}
+
+static inline unsigned short get_row_index(unsigned short i)
+{
+	return i & ~HIGH_INDEX_MASK;
+}
+
 int exfat_nls_cmp_uniname(struct super_block *sb, unsigned short *a,
 		unsigned short *b);
 int exfat_nls_uni16s_to_vfsname(struct super_block *sb,
@@ -497,6 +517,8 @@ int exfat_nls_uni16s_to_vfsname(struct super_block *sb,
 int exfat_nls_vfsname_to_uni16s(struct super_block *sb,
 		const unsigned char *p_cstring, const int len,
 		struct exfat_uni_name *uniname, int *p_lossy);
+int exfat_create_upcase_table(struct super_block *sb);
+void exfat_free_upcase_table(struct super_block *sb);
 
 /* exfat/misc.c */
 void __exfat_fs_error(struct super_block *sb, int report, const char *fmt, ...)
