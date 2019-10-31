@@ -12,6 +12,26 @@
 #include "exfat_raw.h"
 #include "exfat_fs.h"
 
+/* Upcase tabel macro */
+#define EXFAT_NUM_UPCASE	2918
+#define HIGH_INDEX_BIT		(8)
+#define HIGH_INDEX_MASK		(0xFF00)
+#define LOW_INDEX_BIT		(16 - HIGH_INDEX_BIT)
+#define UTBL_ROW_COUNT		(1 << LOW_INDEX_BIT)
+#define UTBL_COL_COUNT		(1 << HIGH_INDEX_BIT)
+
+extern const unsigned char uni_def_upcase[EXFAT_NUM_UPCASE<<1];
+
+static inline unsigned short get_col_index(unsigned short i)
+{
+	return i >> LOW_INDEX_BIT;
+}
+
+static inline unsigned short get_row_index(unsigned short i)
+{
+	return i & ~HIGH_INDEX_MASK;
+}
+
 const unsigned char uni_def_upcase[EXFAT_NUM_UPCASE<<1] = {
 	0x00, 0x00, 0x01, 0x00, 0x02, 0x00, 0x03, 0x00, 0x04, 0x00, 0x05, 0x00,
 	0x06, 0x00, 0x07, 0x00, 0x08, 0x00, 0x09, 0x00, 0x0A, 0x00, 0x0B, 0x00,
