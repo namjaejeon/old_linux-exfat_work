@@ -370,7 +370,7 @@ static inline int sect_to_clus(struct exfat_sb_info *sbi, sector_t sec)
 
 /* super.c */
 int exfat_set_vol_flags(struct super_block *sb, unsigned short new_flag);
-inline void set_sb_dirty(struct super_block *sb);
+inline void exfat_set_sb_dirty(struct super_block *sb);
 
 /* fatent.c */
 #define get_next_clus(sb, pclu)		exfat_ent_get(sb, *(pclu), pclu)

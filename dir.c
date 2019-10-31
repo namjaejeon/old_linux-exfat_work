@@ -12,7 +12,7 @@
 
 void exfat_update_bh(struct super_block *sb, struct buffer_head *bh, int sync)
 {
-	set_sb_dirty(sb);
+	exfat_set_sb_dirty(sb);
 	set_buffer_uptodate(bh);
 	mark_buffer_dirty(bh);
 
