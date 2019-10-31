@@ -20,8 +20,6 @@
 #define UTBL_ROW_COUNT		(1 << LOW_INDEX_BIT)
 #define UTBL_COL_COUNT		(1 << HIGH_INDEX_BIT)
 
-extern const unsigned char uni_def_upcase[EXFAT_NUM_UPCASE<<1];
-
 static inline unsigned short get_col_index(unsigned short i)
 {
 	return i >> LOW_INDEX_BIT;
