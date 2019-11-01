@@ -1335,7 +1335,7 @@ int exfat_count_dir_entries(struct super_block *sb, struct exfat_chain *p_dir)
 
 			if (entry_type == TYPE_UNUSED)
 				return count;
-			if (TYPE_DIR != entry_type)
+			if (entry_type != TYPE_DIR)
 				continue;
 			count++;
 		}
