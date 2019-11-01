@@ -668,12 +668,9 @@ static int exfat_load_upcase_table(struct super_block *sb,
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 	struct buffer_head *bh = NULL;
 	unsigned int sect_size = sb->s_blocksize;
+	unsigned int i, j, index = 0, checksum = 0;
 	int ret = -EIO;
-	unsigned int i, j;
-
 	unsigned char skip = false;
-	unsigned int index = 0;
-	unsigned int checksum = 0;
 	unsigned short **upcase_table =
 		kmalloc_array(UTBL_COL_COUNT, sizeof(unsigned short *),
 				GFP_KERNEL | __GFP_ZERO);
@@ -692,9 +689,9 @@ static int exfat_load_upcase_table(struct super_block *sb,
 			goto error;
 		}
 		sector++;
-
 		for (i = 0; i < sect_size && index <= 0xFFFF; i += 2) {
-			unsigned short uni = le16_to_cpu(((__le16 *)(bh->b_data))[i]);
+			unsigned short uni =
+				le16_to_cpu(*((__le16 *)(bh->b_data + i)));
 
 			checksum = ((checksum & 1) ? 0x80000000 : 0) +
 				(checksum >> 1) +
