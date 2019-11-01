@@ -467,7 +467,7 @@ static int exfat_read_root(struct inode *inode)
 		return -EIO;
 	i_size_write(inode, num_clu << sbi->cluster_size_bits);
 
-	num_subdirs = exfat_count_dos_name_entries(sb, &cdir, TYPE_DIR);
+	num_subdirs = exfat_count_dir_entries(sb, &cdir);
 	if (num_subdirs < 0)
 		return -EIO;
 	set_nlink(inode, num_subdirs + EXFAT_MIN_SUBDIR);

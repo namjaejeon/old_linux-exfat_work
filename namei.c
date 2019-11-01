@@ -570,8 +570,7 @@ static int exfat_add_entry(struct inode *inode, const char *path,
 		cdir.dir = info->start_clu;
 		cdir.flags = info->flags;
 		cdir.size = EXFAT_B_TO_CLU(info->size, sbi);
-		count = exfat_count_dos_name_entries(sb,
-				&cdir, TYPE_DIR);
+		count = exfat_count_dir_entries(sb, &cdir);
 		if (count < 0)
 			return -EIO;
 		info->num_subdirs = count + EXFAT_MIN_SUBDIR;
@@ -688,8 +687,7 @@ static int exfat_find(struct inode *dir, struct qstr *qname,
 		cdir.dir = sbi->root_dir;
 		cdir.flags = 0x01;
 		cdir.size = 0;
-		count = exfat_count_dos_name_entries(sb, &cdir,
-			TYPE_DIR);
+		count = exfat_count_dir_entries(sb, &cdir);
 		if (count < 0)
 			return -EIO;
 
@@ -744,8 +742,7 @@ static int exfat_find(struct inode *dir, struct qstr *qname,
 			cdir.dir = info->start_clu;
 			cdir.flags = info->flags;
 			cdir.size = EXFAT_B_TO_CLU(info->size, sbi);
-			count = exfat_count_dos_name_entries(sb,
-				&cdir, TYPE_DIR);
+			count = exfat_count_dir_entries(sb, &cdir);
 			if (count < 0)
 				return -EIO;
 

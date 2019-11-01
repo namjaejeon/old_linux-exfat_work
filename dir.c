@@ -1308,8 +1308,7 @@ out:
 	exfat_release_dentry_set(es);
 }
 
-int exfat_count_dos_name_entries(struct super_block *sb,
-		struct exfat_chain *p_dir, unsigned int type)
+int exfat_count_dir_entries(struct super_block *sb, struct exfat_chain *p_dir)
 {
 	int i, count = 0;
 	int dentries_per_clu;
@@ -1336,13 +1335,8 @@ int exfat_count_dos_name_entries(struct super_block *sb,
 
 			if (entry_type == TYPE_UNUSED)
 				return count;
-			if (!(type & TYPE_CRITICAL_PRI) &&
-					!(type & TYPE_BENIGN_PRI))
+			if (TYPE_DIR != entry_type)
 				continue;
-
-			if ((type != TYPE_ALL) && (type != entry_type))
-				continue;
-
 			count++;
 		}
 
