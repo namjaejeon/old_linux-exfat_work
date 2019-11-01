@@ -308,7 +308,7 @@ static int exfat_search_empty_slot(struct super_block *sb,
 
 static int exfat_check_max_dentries(struct inode *inode)
 {
-	if ((i_size_read(inode) >> DENTRY_SIZE_BITS) >= MAX_EXFAT_DENTRIES) {
+	if (EXFAT_B_TO_DEN(i_size_read(inode)) >= MAX_EXFAT_DENTRIES) {
 		/*
 		 * exFAT spec allows a dir to grow upto 8388608(256MB)
 		 * dentries
@@ -388,8 +388,7 @@ int exfat_find_empty_entry(struct inode *inode, struct exfat_chain *p_dir,
 			/* the special case that new dentry
 			 * should be allocated from the start of new cluster
 			 */
-			hint_femp.eidx = p_dir->size <<
-				(sbi->cluster_size_bits - DENTRY_SIZE_BITS);
+			hint_femp.eidx = EXFAT_B_TO_DEN_IDX(p_dir->size, sbi);
 			hint_femp.count = sbi->dentries_per_clu;
 
 			hint_femp.cur.dir = clu.dir;
@@ -398,7 +397,7 @@ int exfat_find_empty_entry(struct inode *inode, struct exfat_chain *p_dir,
 		}
 		hint_femp.cur.size++;
 		p_dir->size++;
-		size = (p_dir->size << sbi->cluster_size_bits);
+		size = EXFAT_CLU_TO_B(p_dir->size, sbi);
 
 		/* update the directory entry */
 		if (p_dir->dir != sbi->root_dir) {
@@ -423,8 +422,7 @@ int exfat_find_empty_entry(struct inode *inode, struct exfat_chain *p_dir,
 		EXFAT_I(inode)->i_size_ondisk += sbi->cluster_size;
 		EXFAT_I(inode)->i_size_aligned += sbi->cluster_size;
 		EXFAT_I(inode)->flags = p_dir->flags;
-		inode->i_blocks += 1 << (sbi->cluster_size_bits -
-				sb->s_blocksize_bits);
+		inode->i_blocks += 1 << sbi->sect_per_clus_bits;
 	}
 
 	return dentry;
@@ -476,7 +474,7 @@ static int __exfat_resolve_path(struct inode *inode, const unsigned char *path,
 		return -EINVAL;
 
 	p_dir->dir = ei->start_clu;
-	p_dir->size = i_size_read(inode) >> sbi->cluster_size_bits;
+	p_dir->size = EXFAT_B_TO_CLU(i_size_read(inode), sbi);
 	p_dir->flags = ei->flags;
 
 	return 0;
@@ -572,7 +570,7 @@ static int exfat_add_entry(struct inode *inode, const char *path,
 
 		cdir.dir = info->start_clu;
 		cdir.flags = info->flags;
-		cdir.size = info->size >> sbi->cluster_size_bits;
+		cdir.size = EXFAT_B_TO_CLU(info->size, sbi);
 		count = exfat_count_dos_name_entries(sb,
 				&cdir, TYPE_DIR);
 		if (count < 0)
@@ -748,7 +746,7 @@ static int exfat_find(struct inode *dir, struct qstr *qname,
 		if (info->type == TYPE_DIR) {
 			cdir.dir = info->start_clu;
 			cdir.flags = info->flags;
-			cdir.size = info->size >> sbi->cluster_size_bits;
+			cdir.size = EXFAT_B_TO_CLU(info->size, sbi);
 			count = exfat_count_dos_name_entries(sb,
 				&cdir, TYPE_DIR);
 			if (count < 0)
@@ -794,7 +792,7 @@ static int exfat_read_link(struct inode *inode, char *buffer)
 	read_bytes = 0;
 
 	while (size > 0) {
-		clu_offset = ei->rwoffset >> sbi->cluster_size_bits;
+		clu_offset = EXFAT_B_TO_CLU(ei->rwoffset, sbi);
 		clu = ei->start_clu;
 
 		if (ei->flags == 0x03) {
@@ -819,12 +817,12 @@ static int exfat_read_link(struct inode *inode, char *buffer)
 		}
 
 		/* hint information */
-		ei->hint_bmap.off = ei->rwoffset >> sbi->cluster_size_bits;
+		ei->hint_bmap.off = EXFAT_B_TO_CLU(ei->rwoffset, sbi);
 		ei->hint_bmap.clu = clu;
 
-		offset = ei->rwoffset & (sbi->cluster_size - 1);
-		sec_offset = offset >> sb->s_blocksize_bits;
-		offset &= (sb->s_blocksize - 1);
+		offset = EXFAT_CLU_OFFSET(ei->rwoffset, sbi);
+		sec_offset = EXFAT_B_TO_BLK(offset, sb);
+		offset = EXFAT_BLK_OFFSET(offset, sb);
 
 		logsector = clus_to_sect(sbi, clu) + sec_offset;
 
@@ -1044,8 +1042,7 @@ static int __exfat_remove(struct inode *inode, struct exfat_inode_info *ei)
 		goto out;
 
 	clu_to_free.dir = ei->start_clu;
-	clu_to_free.size =
-		((i_size_read(inode) - 1) >> sbi->cluster_size_bits) + 1;
+	clu_to_free.size = EXFAT_B_TO_CLU_ROUND_UP(i_size_read(inode), sbi);
 	clu_to_free.flags = ei->flags;
 
 	/* invalidate exfat cache and free the clusters
@@ -1103,12 +1100,12 @@ static int exfat_write_link(struct inode *inode, char *buffer,
 	if (size == 0)
 		num_clusters = 0;
 	else
-		num_clusters = ((size - 1) >> sbi->cluster_size_bits) + 1;
+		num_clusters = EXFAT_B_TO_CLU_ROUND_UP(size, sbi);
 
 	write_bytes = 0;
 
 	while (tsize > 0) {
-		clu_offset = (ei->rwoffset >> sbi->cluster_size_bits);
+		clu_offset = EXFAT_B_TO_CLU(ei->rwoffset, sbi);
 		clu = last_clu = ei->start_clu;
 
 		if (ei->flags == 0x03) {
@@ -1141,7 +1138,7 @@ static int exfat_write_link(struct inode *inode, char *buffer,
 		}
 
 		if (IS_CLUS_EOF(clu)) {
-			num_alloc = ((tsize - 1) >> sbi->cluster_size_bits) + 1;
+			num_alloc = EXFAT_B_TO_CLU_ROUND_UP(tsize, sbi);
 			new_clu.dir =
 				IS_CLUS_EOF(last_clu) ? CLUS_EOF : last_clu + 1;
 			new_clu.size = 0;
@@ -1182,11 +1179,11 @@ static int exfat_write_link(struct inode *inode, char *buffer,
 		}
 
 		/* hint information */
-		ei->hint_bmap.off = ei->rwoffset >> sbi->cluster_size_bits;
+		ei->hint_bmap.off = EXFAT_B_TO_CLU(ei->rwoffset, sbi);
 		ei->hint_bmap.clu = clu;
 
 		/* byte offset in cluster   */
-		offset = ei->rwoffset & (sbi->cluster_size - 1);
+		offset = EXFAT_CLU_OFFSET(ei->rwoffset, sbi);
 		/* sector offset in cluster */
 		sec_offset = offset >> blksize_bits;
 		/* byte offset in sector    */
@@ -1449,8 +1446,7 @@ static int exfat_rmdir(struct inode *dir, struct dentry *dentry)
 
 	exfat_set_vol_flags(sb, VOL_DIRTY);
 	clu_to_free.dir = ei->start_clu;
-	clu_to_free.size =
-		((i_size_read(inode) - 1) >> sbi->cluster_size_bits) + 1;
+	clu_to_free.size = EXFAT_B_TO_CLU_ROUND_UP(i_size_read(inode), sbi);
 	clu_to_free.flags = ei->flags;
 
 	err = exfat_check_dir_empty(sb, &clu_to_free);
@@ -1675,13 +1671,12 @@ static void exfat_update_parent_info(struct exfat_inode_info *ei,
 	 * there is abnormal traversing cluster chain.
 	 */
 	if (unlikely((parent_ei->flags != ei->dir.flags)
-		|| (parent_isize != (ei->dir.size<<sbi->cluster_size_bits))
+		|| (parent_isize != EXFAT_CLU_TO_B(ei->dir.size, sbi))
 		|| (parent_ei->start_clu != ei->dir.dir))) {
 
 		ei->dir.dir = parent_ei->start_clu;
 		ei->dir.flags = parent_ei->flags;
-		ei->dir.size = ((parent_isize + (sbi->cluster_size - 1))
-				>> sbi->cluster_size_bits);
+		ei->dir.size = EXFAT_B_TO_CLU_ROUND_UP(parent_isize, sbi);
 	}
 }
 
@@ -1756,8 +1751,9 @@ static int __exfat_rename(struct inode *old_parent_inode,
 			struct exfat_chain new_clu;
 
 			new_clu.dir = new_ei->start_clu;
-			new_clu.size = ((i_size_read(new_inode) - 1) >>
-					sbi->cluster_size_bits) + 1;
+			new_clu.size =
+				EXFAT_B_TO_CLU_ROUND_UP(i_size_read(new_inode),
+				sbi);
 			new_clu.flags = new_ei->flags;
 
 			ret = exfat_check_dir_empty(sb, &new_clu);
@@ -1808,8 +1804,9 @@ static int __exfat_rename(struct inode *old_parent_inode,
 			struct exfat_chain new_clu_to_free;
 
 			new_clu_to_free.dir = new_ei->start_clu;
-			new_clu_to_free.size = ((i_size_read(new_inode) - 1) >>
-					sbi->cluster_size_bits) + 1;
+			new_clu_to_free.size =
+				EXFAT_B_TO_CLU_ROUND_UP(i_size_read(new_inode),
+				sbi);
 			new_clu_to_free.flags = new_ei->flags;
 
 			if (exfat_free_cluster(sb, &new_clu_to_free)) {

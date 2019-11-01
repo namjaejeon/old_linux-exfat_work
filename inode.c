@@ -22,11 +22,6 @@
 #define BMAP_ADD_CLUSTER			2
 #define BLOCK_ADDED(bmap_ops)	(bmap_ops)
 
-static inline unsigned int num_clusters(struct exfat_sb_info *sbi, loff_t size)
-{
-	return size ? ((size - 1) >> sbi->cluster_size_bits) + 1 : 0;
-}
-
 /* resize the file length */
 static int __exfat_truncate(struct inode *inode, loff_t new_size)
 {
@@ -48,9 +43,11 @@ static int __exfat_truncate(struct inode *inode, loff_t new_size)
 	exfat_set_vol_flags(sb, VOL_DIRTY);
 
 	/* Reserved count update */
-	num_clusters_da = num_clusters(sbi, EXFAT_I(inode)->i_size_aligned);
-	num_clusters_new = num_clusters(sbi, i_size_read(inode));
-	num_clusters_phys = num_clusters(sbi, EXFAT_I(inode)->i_size_ondisk);
+	num_clusters_da =
+		EXFAT_B_TO_CLU_ROUND_UP(EXFAT_I(inode)->i_size_aligned, sbi);
+	num_clusters_new = EXFAT_B_TO_CLU_ROUND_UP(i_size_read(inode), sbi);
+	num_clusters_phys =
+		EXFAT_B_TO_CLU_ROUND_UP(EXFAT_I(inode)->i_size_ondisk, sbi);
 
 	if ((num_clusters_da != num_clusters_phys) &&
 			(num_clusters_new < num_clusters_da)) {
@@ -333,11 +330,12 @@ static int __exfat_map_clus(struct inode *inode, unsigned int clu_offset,
 	int reserved_clusters = sbi->reserved_clusters;
 	unsigned int num_to_be_allocated = 0, num_clusters = 0;
 
-	ei->rwoffset = clu_offset << sbi->cluster_size_bits;
+	ei->rwoffset = EXFAT_CLU_TO_B(clu_offset, sbi);
 
 	if (EXFAT_I(inode)->i_size_ondisk > 0)
-		num_clusters = ((EXFAT_I(inode)->i_size_ondisk - 1) >>
-				sbi->cluster_size_bits) + 1;
+		num_clusters =
+			EXFAT_B_TO_CLU_ROUND_UP(EXFAT_I(inode)->i_size_ondisk,
+			sbi);
 
 	if (clu_offset >= num_clusters)
 		num_to_be_allocated = clu_offset - num_clusters + 1;
@@ -468,8 +466,8 @@ static int __exfat_map_clus(struct inode *inode, unsigned int clu_offset,
 
 		} /* end of if != DIR_DELETED */
 
-		inode->i_blocks += num_to_be_allocated <<
-			(sbi->cluster_size_bits - sb->s_blocksize_bits);
+		inode->i_blocks +=
+			num_to_be_allocated << sbi->sect_per_clus_bits;
 
 		/* Move *clu pointer along FAT chains (hole care)
 		 * because the caller of this function expect *clu to be
@@ -505,8 +503,6 @@ static int exfat_bmap(struct inode *inode, sector_t sector, sector_t *phys,
 {
 	struct super_block *sb = inode->i_sb;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
-	const unsigned long blocksize = sb->s_blocksize;
-	const unsigned char blocksize_bits = sb->s_blocksize_bits;
 	sector_t last_block;
 	unsigned int cluster, clu_offset, sec_offset;
 	int err = 0;
@@ -514,7 +510,7 @@ static int exfat_bmap(struct inode *inode, sector_t sector, sector_t *phys,
 	*phys = 0;
 	*mapped_blocks = 0;
 
-	last_block = (i_size_read(inode) + (blocksize - 1)) >> blocksize_bits;
+	last_block = EXFAT_B_TO_BLK_ROUND_UP(i_size_read(inode), sb);
 	if ((sector >= last_block) && (*create == BMAP_NOT_CREATE))
 		return 0;
 
@@ -570,7 +566,7 @@ static int exfat_get_block(struct inode *inode, sector_t iblock,
 		if (BLOCK_ADDED(bmap_create) || buffer_delay(bh_result)) {
 
 			/* Update i_size_ondisk */
-			pos = (iblock + 1) << sb->s_blocksize_bits;
+			pos = EXFAT_BLK_TO_B((iblock + 1), sb);
 			if (EXFAT_I(inode)->i_size_ondisk < pos)
 				EXFAT_I(inode)->i_size_ondisk = pos;
 
@@ -603,7 +599,7 @@ static int exfat_get_block(struct inode *inode, sector_t iblock,
 		map_bh(bh_result, sb, phys);
 	}
 
-	bh_result->b_size = max_blocks << sb->s_blocksize_bits;
+	bh_result->b_size = EXFAT_BLK_TO_B(max_blocks, sb);
 unlock_ret:
 	mutex_unlock(&EXFAT_SB(sb)->s_lock);
 	return err;

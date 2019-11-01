@@ -30,7 +30,7 @@ static inline unsigned short get_row_index(unsigned short i)
 	return i & ~HIGH_INDEX_MASK;
 }
 
-const unsigned short uni_def_upcase[EXFAT_NUM_UPCASE] = {
+static const unsigned short uni_def_upcase[EXFAT_NUM_UPCASE] = {
 	0x0000, 0x0001, 0x0002, 0x0003, 0x0004, 0x0005, 0x0006, 0x0007,
 	0x0008, 0x0009, 0x000a, 0x000b, 0x000c, 0x000d, 0x000e, 0x000f,
 	0x0010, 0x0011, 0x0012, 0x0013, 0x0014, 0x0015, 0x0016, 0x0017,
@@ -668,12 +668,9 @@ static int exfat_load_upcase_table(struct super_block *sb,
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 	struct buffer_head *bh = NULL;
 	unsigned int sect_size = sb->s_blocksize;
+	unsigned int i, j, index = 0, checksum = 0;
 	int ret = -EIO;
-	unsigned int i, j;
-
 	unsigned char skip = false;
-	unsigned int index = 0;
-	unsigned int checksum = 0;
 	unsigned short **upcase_table =
 		kmalloc_array(UTBL_COL_COUNT, sizeof(unsigned short *),
 				GFP_KERNEL | __GFP_ZERO);
@@ -692,9 +689,9 @@ static int exfat_load_upcase_table(struct super_block *sb,
 			goto error;
 		}
 		sector++;
-
 		for (i = 0; i < sect_size && index <= 0xFFFF; i += 2) {
-			unsigned short uni = le16_to_cpu(((__le16 *)(bh->b_data))[i]);
+			unsigned short uni =
+				le16_to_cpu(*((__le16 *)(bh->b_data + i)));
 
 			checksum = ((checksum & 1) ? 0x80000000 : 0) +
 				(checksum >> 1) +
