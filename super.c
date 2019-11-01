@@ -313,7 +313,7 @@ static int parse_options(struct super_block *sb, char *options, int silent,
 	opts->allow_utime = -1;
 	opts->codepage = exfat_default_codepage;
 	opts->iocharset = exfat_default_iocharset;
-	opts->casesensitive = 0;
+	opts->casesensitive = 1;
 	opts->utf8 = 0;
 	opts->tz_utc = 0;
 	opts->symlink = 0;

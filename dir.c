@@ -323,23 +323,17 @@ static int exfat_calc_num_entries(struct exfat_uni_name *p_uniname)
 }
 
 /* input  : dir, uni_name
- * output : num_of_entry, dos_name(format : aaaaaa~1.bbb)
+ * output : num_of_entry
  */
-int exfat_get_num_entries_and_dos_name(struct super_block *sb,
-		struct exfat_chain *p_dir, struct exfat_uni_name *p_uniname,
-		int *entries, struct exfat_dos_name *p_dosname, int lookup)
+int exfat_get_num_entries(struct exfat_uni_name *p_uniname)
 {
 	int num_entries;
-
-	/* Init null char. */
-	p_dosname->name[0] = '\0';
 
 	num_entries = exfat_calc_num_entries(p_uniname);
 	if (num_entries == 0)
 		return -EINVAL;
 
-	*entries = num_entries;
-	return 0;
+	return num_entries;
 }
 
 unsigned int exfat_get_entry_type(struct exfat_dentry *ep)
@@ -578,8 +572,7 @@ out_unlock:
 }
 
 int exfat_init_ext_entry(struct super_block *sb, struct exfat_chain *p_dir,
-		int entry, int num_entries, struct exfat_uni_name *p_uniname,
-		struct exfat_dos_name *p_dosname)
+		int entry, int num_entries, struct exfat_uni_name *p_uniname)
 {
 	int i;
 	sector_t sector;
@@ -1048,8 +1041,7 @@ static int exfat_extract_uni_name(struct exfat_dentry *ep,
  */
 int exfat_find_dir_entry(struct super_block *sb, struct exfat_inode_info *ei,
 		struct exfat_chain *p_dir, struct exfat_uni_name *p_uniname,
-		int num_entries, struct exfat_dos_name *unused,
-		unsigned int type)
+		int num_entries, unsigned int type)
 {
 	int i, rewind = 0, dentry = 0, end_eidx = 0, num_ext = 0, len;
 	int order, step, name_len;

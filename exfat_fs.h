@@ -150,12 +150,6 @@ struct exfat_dentry_namebuf {
 	int lfnbuf_len; /* usally MAX_UNINAME_BUF_SIZE */
 };
 
-/* DOS name structure */
-struct exfat_dos_name {
-	unsigned char name[DOS_NAME_LENGTH];
-	unsigned char name_case;
-};
-
 /* unicode name structure */
 struct exfat_uni_name {
 	/* +3 for null and for converting */
@@ -508,8 +502,7 @@ int exfat_init_dir_entry(struct super_block *sb, struct exfat_chain *p_dir,
 		int entry, unsigned int type, unsigned int start_clu,
 		unsigned long long size);
 int exfat_init_ext_entry(struct super_block *sb, struct exfat_chain *p_dir,
-		int entry, int num_entries, struct exfat_uni_name *p_uniname,
-		struct exfat_dos_name *p_dosname);
+		int entry, int num_entries, struct exfat_uni_name *p_uniname);
 int exfat_remove_entries(struct super_block *sb, struct exfat_chain *p_dir,
 		int entry, int order, int num_entries);
 int update_dir_chksum(struct super_block *sb, struct exfat_chain *p_dir,
@@ -517,13 +510,10 @@ int update_dir_chksum(struct super_block *sb, struct exfat_chain *p_dir,
 int exfat_update_dir_chksum_with_entry_set(struct super_block *sb,
 		struct exfat_entry_set_cache *es);
 void exfat_release_dentry_set(struct exfat_entry_set_cache *es);
-int exfat_get_num_entries_and_dos_name(struct super_block *sb,
-		struct exfat_chain *p_dir, struct exfat_uni_name *p_uniname,
-		int *entries, struct exfat_dos_name *p_dosname, int lookup);
+int exfat_get_num_entries(struct exfat_uni_name *p_uniname);
 int exfat_find_dir_entry(struct super_block *sb, struct exfat_inode_info *ei,
 		struct exfat_chain *p_dir, struct exfat_uni_name *p_uniname,
-		int num_entries, struct exfat_dos_name *unused,
-		unsigned int type);
+		int num_entries, unsigned int type);
 int exfat_zeroed_cluster(struct super_block *sb, sector_t blknr,
 		unsigned int num_secs);
 int exfat_alloc_new_dir(struct inode *inode, struct exfat_chain *clu);
