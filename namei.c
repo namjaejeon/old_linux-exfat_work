@@ -423,8 +423,7 @@ int exfat_find_empty_entry(struct inode *inode, struct exfat_chain *p_dir,
 		EXFAT_I(inode)->i_size_ondisk += sbi->cluster_size;
 		EXFAT_I(inode)->i_size_aligned += sbi->cluster_size;
 		EXFAT_I(inode)->flags = p_dir->flags;
-		inode->i_blocks += 1 << (sbi->cluster_size_bits -
-				sb->s_blocksize_bits);
+		inode->i_blocks += 1 << sbi->sect_per_clus_bits;
 	}
 
 	return dentry;
