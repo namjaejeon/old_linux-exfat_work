@@ -35,13 +35,10 @@
  * exfat common MACRO
  */
 #define CLUSTER_32(x)	((unsigned int)((x) & 0xFFFFFFFFU))
-#define CLUS_EOF	CLUSTER_32(~0)
-#define CLUS_BAD	(0xFFFFFFF7U)
-#define CLUS_FREE	(0)
-#define CLUS_BASE	(2)
-#define IS_CLUS_EOF(x)	((x) == CLUS_EOF)
-#define IS_CLUS_BAD(x)	((x) == CLUS_BAD)
-#define IS_CLUS_FREE(x)	((x) == CLUS_FREE)
+#define EOF_CLUSTER	CLUSTER_32(~0)
+#define BAD_CLUSTER	(0xFFFFFFF7U)
+#define FREE_CLUSTER	(0)
+#define BASE_CLUSTER	(2)
 
 #define EXFAT_HASH_BITS		8
 #define EXFAT_HASH_SIZE		(1UL << EXFAT_HASH_BITS)
@@ -409,7 +406,7 @@ static inline bool exfat_is_last_sector_in_cluster(struct exfat_sb_info *sbi,
 static inline sector_t exfat_cluster_to_sector(struct exfat_sb_info *sbi,
 		unsigned int clus)
 {
-	return ((clus - CLUS_BASE) << sbi->sect_per_clus_bits)
+	return ((clus - BASE_CLUSTER) << sbi->sect_per_clus_bits)
 			+ sbi->data_start_sector;
 }
 
@@ -417,7 +414,7 @@ static inline int exfat_sector_to_cluster(struct exfat_sb_info *sbi,
 		sector_t sec)
 {
 	return ((sec - sbi->data_start_sector) >> sbi->sect_per_clus_bits) +
-			CLUS_BASE;
+			BASE_CLUSTER;
 }
 
 /* super.c */

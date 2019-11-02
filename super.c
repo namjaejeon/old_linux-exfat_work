@@ -454,7 +454,7 @@ static int exfat_read_root(struct inode *inode)
 	ei->type = TYPE_DIR;
 	ei->version = 0;
 	ei->rwoffset = 0;
-	ei->hint_bmap.off = CLUS_EOF;
+	ei->hint_bmap.off = EOF_CLUSTER;
 	ei->hint_stat.eidx = 0;
 	ei->hint_stat.clu = sbi->root_dir;
 	ei->hint_femp.eidx = EXFAT_HINT_NONE;
@@ -641,7 +641,7 @@ static int __exfat_fill_super(struct super_block *sb)
 		(sbi->cluster_size_bits - DENTRY_SIZE_BITS);
 
 	sbi->vol_flag = le16_to_cpu(p_bpb->bsx.vol_flags);
-	sbi->clu_srch_ptr = CLUS_BASE;
+	sbi->clu_srch_ptr = BASE_CLUSTER;
 	sbi->used_clusters = ~0u;
 
 	if (p_bpb->bsx.vol_flags & VOL_DIRTY) {

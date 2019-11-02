@@ -825,7 +825,7 @@ int exfat_create_upcase_table(struct super_block *sb)
 	clu.dir = sbi->root_dir;
 	clu.flags = 0x01;
 
-	while (!IS_CLUS_EOF(clu.dir)) {
+	while (clu.dir != EOF_CLUSTER) {
 		for (i = 0; i < sbi->dentries_per_clu; i++) {
 			ep = exfat_get_dentry(sb, &clu, i, &bh, NULL);
 			if (!ep)

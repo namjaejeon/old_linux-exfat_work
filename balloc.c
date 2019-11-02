@@ -57,7 +57,7 @@ int exfat_load_alloc_bmp(struct super_block *sb)
 	clu.dir = sbi->root_dir;
 	clu.flags = 0x01;
 
-	while (!IS_CLUS_EOF(clu.dir)) {
+	while (clu.dir != EOF_CLUSTER) {
 		for (i = 0; i < sbi->dentries_per_clu; i++) {
 			ep = exfat_get_dentry(sb, &clu, i, &bh, NULL);
 			if (!ep)
@@ -83,7 +83,7 @@ int exfat_load_alloc_bmp(struct super_block *sb)
 alloc:
 	sbi->map_clu = le32_to_cpu(ep->bitmap_start_clu);
 	map_size = (unsigned int)le64_to_cpu(ep->bitmap_size);
-	need_map_size = (((sbi->num_clusters - CLUS_BASE) - 1) >> 3) + 1;
+	need_map_size = (((sbi->num_clusters - BASE_CLUSTER) - 1) >> 3) + 1;
 	if (need_map_size != map_size) {
 		exfat_msg(sb, KERN_ERR,
 				"bogus allocation bitmap size(need : %u, cur : %u)",
@@ -246,7 +246,7 @@ unsigned int exfat_test_alloc_bitmap(struct super_block *sb, unsigned int clu)
 		}
 	}
 
-	return CLUS_EOF;
+	return EOF_CLUSTER;
 }
 
 int exfat_count_used_clusters(struct super_block *sb, unsigned int *ret_count)
