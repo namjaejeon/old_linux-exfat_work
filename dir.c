@@ -1109,7 +1109,7 @@ rewind:
 							 ei->hint_femp.eidx)) {
 						memcpy(&ei->hint_femp,
 							&candi_empty,
-							sizeof(struct exfat_hint_femp));
+							sizeof(candi_empty));
 					}
 				}
 
