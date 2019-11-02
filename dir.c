@@ -72,7 +72,7 @@ static int exfat_readdir(struct inode *inode, struct exfat_dir_entry *dir_entry)
 		}
 
 		while (clu_offset > 0) {
-			if (get_next_clus_safe(sb, &(clu.dir)))
+			if (exfat_get_next_cluster(sb, &(clu.dir)))
 				return -EIO;
 
 			clu_offset--;
@@ -149,7 +149,7 @@ static int exfat_readdir(struct inode *inode, struct exfat_dir_entry *dir_entry)
 			else
 				clu.dir = CLUS_EOF;
 		} else {
-			if (get_next_clus_safe(sb, &(clu.dir)))
+			if (exfat_get_next_cluster(sb, &(clu.dir)))
 				return -EIO;
 		}
 	}
@@ -666,13 +666,13 @@ static int exfat_write_partial_entries_in_entry_set(struct super_block *sb,
 
 		if (num_entries) {
 			// get next sector
-			if (is_last_sect_in_clus(sbi, sec)) {
-				clu = sect_to_clus(sbi, sec);
+			if (exfat_is_last_sector_in_cluster(sbi, sec)) {
+				clu = exfat_sector_to_cluster(sbi, sec);
 				if (es->alloc_flag == 0x03)
 					clu++;
-				else if (get_next_clus_safe(sb, &clu))
+				else if (exfat_get_next_cluster(sb, &clu))
 					goto err_out;
-				sec = clus_to_sect(sbi, clu);
+				sec = exfat_cluster_to_sector(sbi, clu);
 			} else {
 				sec++;
 			}
@@ -722,7 +722,7 @@ static int exfat_walk_fat_chain(struct super_block *sb,
 		cur_clu += clu_offset;
 	} else {
 		while (clu_offset > 0) {
-			if (get_next_clus_safe(sb, &cur_clu))
+			if (exfat_get_next_cluster(sb, &cur_clu))
 				return -EIO;
 			if (IS_CLUS_EOF(cur_clu)) {
 				exfat_fs_error(sb,
@@ -760,7 +760,7 @@ int exfat_find_location(struct super_block *sb, struct exfat_chain *p_dir,
 
 	/* sector offset in cluster */
 	*sector = EXFAT_B_TO_BLK(off, sb);
-	*sector += clus_to_sect(sbi, clu);
+	*sector += exfat_cluster_to_sector(sbi, clu);
 	return 0;
 }
 
@@ -881,7 +881,7 @@ struct exfat_entry_set_cache *exfat_get_dentry_set(struct super_block *sb,
 
 	/* sector offset in cluster */
 	sec = EXFAT_B_TO_BLK(byte_offset, sb);
-	sec += clus_to_sect(sbi, clu);
+	sec += exfat_cluster_to_sector(sbi, clu);
 
 	bh = sb_bread(sb, sec);
 	if (!bh)
@@ -971,12 +971,12 @@ struct exfat_entry_set_cache *exfat_get_dentry_set(struct super_block *sb,
 			(sb->s_blocksize - 1)) <
 			(off & (sb->s_blocksize - 1))) {
 			// get the next sector
-			if (is_last_sect_in_clus(sbi, sec)) {
+			if (exfat_is_last_sector_in_cluster(sbi, sec)) {
 				if (es->alloc_flag == 0x03)
 					clu++;
-				else if (get_next_clus_safe(sb, &clu))
+				else if (exfat_get_next_cluster(sb, &clu))
 					goto err_out;
-				sec = clus_to_sect(sbi, clu);
+				sec = exfat_cluster_to_sector(sbi, clu);
 			} else {
 				sec++;
 			}
@@ -1197,7 +1197,7 @@ rewind:
 			else
 				clu.dir = CLUS_EOF;
 		} else {
-			if (get_next_clus_safe(sb, &clu.dir))
+			if (exfat_get_next_cluster(sb, &clu.dir))
 				return -EIO;
 		}
 	}
@@ -1232,7 +1232,7 @@ found:
 			else
 				clu.dir = CLUS_EOF;
 		} else {
-			ret = get_next_clus_safe(sb, &clu.dir);
+			ret = exfat_get_next_cluster(sb, &clu.dir);
 		}
 
 		if (ret || IS_CLUS_EOF(clu.dir)) {
@@ -1346,7 +1346,7 @@ int exfat_count_dir_entries(struct super_block *sb, struct exfat_chain *p_dir)
 			else
 				clu.dir = CLUS_EOF;
 		} else {
-			if (get_next_clus_safe(sb, &(clu.dir)))
+			if (exfat_get_next_cluster(sb, &(clu.dir)))
 				return -EIO;
 		}
 	}

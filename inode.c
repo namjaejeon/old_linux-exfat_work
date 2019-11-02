@@ -83,7 +83,7 @@ static int __exfat_truncate(struct inode *inode, loff_t new_size)
 		} else {
 			while (num_clusters > 0) {
 				last_clu = clu.dir;
-				if (get_next_clus_safe(sb, &(clu.dir)))
+				if (exfat_get_next_cluster(sb, &(clu.dir)))
 					return -EIO;
 
 				num_clusters--;
@@ -315,7 +315,7 @@ out:
  * Output: errcode, cluster number
  * *clu = (~0), if it's unable to allocate a new cluster
  */
-static int __exfat_map_clus(struct inode *inode, unsigned int clu_offset,
+static int __exfat_map_cluster(struct inode *inode, unsigned int clu_offset,
 		unsigned int *clu, int create)
 {
 	int ret, modified = false;
@@ -381,7 +381,7 @@ static int __exfat_map_clus(struct inode *inode, unsigned int clu_offset,
 
 		while ((clu_offset > 0) && (!IS_CLUS_EOF(*clu))) {
 			last_clu = *clu;
-			if (get_next_clus_safe(sb, clu))
+			if (exfat_get_next_cluster(sb, clu))
 				return -EIO;
 			clu_offset--;
 		}
@@ -480,7 +480,7 @@ static int __exfat_map_clus(struct inode *inode, unsigned int clu_offset,
 			*clu += num_to_be_allocated - 1;
 		} else {
 			while (num_to_be_allocated > 1) {
-				if (get_next_clus_safe(sb, clu))
+				if (exfat_get_next_cluster(sb, clu))
 					return -EIO;
 				num_to_be_allocated--;
 			}
@@ -517,7 +517,7 @@ static int exfat_bmap(struct inode *inode, sector_t sector, sector_t *phys,
 	/* Is this block already allocated? */
 	clu_offset = sector >> sbi->sect_per_clus_bits;  /* cluster offset */
 
-	err = __exfat_map_clus(inode, clu_offset, &cluster,
+	err = __exfat_map_cluster(inode, clu_offset, &cluster,
 		*create & BMAP_ADD_CLUSTER);
 	if (err) {
 		if (err != -ENOSPC)
@@ -529,7 +529,7 @@ static int exfat_bmap(struct inode *inode, sector_t sector, sector_t *phys,
 		/* sector offset in cluster */
 		sec_offset = sector & (sbi->sect_per_clus - 1);
 
-		*phys = clus_to_sect(sbi, cluster) + sec_offset;
+		*phys = exfat_cluster_to_sector(sbi, cluster) + sec_offset;
 		*mapped_blocks = sbi->sect_per_clus - sec_offset;
 	}
 

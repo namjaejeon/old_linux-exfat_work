@@ -73,7 +73,7 @@ int exfat_load_alloc_bmp(struct super_block *sb)
 				goto alloc;
 		}
 
-		if (get_next_clus_safe(sb, &clu.dir))
+		if (exfat_get_next_cluster(sb, &clu.dir))
 			return -EIO;
 	}
 
@@ -102,7 +102,7 @@ alloc:
 	if (!sbi->vol_amap)
 		return -ENOMEM;
 
-	sector = clus_to_sect(sbi, sbi->map_clu);
+	sector = exfat_cluster_to_sector(sbi, sbi->map_clu);
 	for (j = 0; j < sbi->map_sectors; j++) {
 		sbi->vol_amap[j] = sb_bread(sb, sector+j);
 		if (!sbi->vol_amap[j]) {
@@ -161,7 +161,7 @@ int exfat_set_alloc_bitmap(struct super_block *sb, unsigned int clu)
 	i = clu >> (sb->s_blocksize_bits + 3);
 	b = clu & ((sb->s_blocksize << 3) - 1);
 
-	sector = clus_to_sect(sbi, sbi->map_clu) + i;
+	sector = exfat_cluster_to_sector(sbi, sbi->map_clu) + i;
 	bitmap_set((unsigned long *)(sbi->vol_amap[i]->b_data), b, 1);
 
 	set_buffer_uptodate(sbi->vol_amap[i]);
@@ -184,7 +184,7 @@ void exfat_clr_alloc_bitmap(struct super_block *sb, unsigned int clu)
 	i = clu >> (sb->s_blocksize_bits + 3);
 	b = clu & ((sb->s_blocksize << 3) - 1);
 
-	sector = clus_to_sect(sbi, sbi->map_clu) + i;
+	sector = exfat_cluster_to_sector(sbi, sbi->map_clu) + i;
 
 	bitmap_clear((unsigned long *)(sbi->vol_amap[i]->b_data), b, 1);
 
@@ -194,7 +194,8 @@ void exfat_clr_alloc_bitmap(struct super_block *sb, unsigned int clu)
 	if (opts->discard) {
 		int ret_discard;
 
-		ret_discard = sb_issue_discard(sb, clus_to_sect(sbi, clu + 2),
+		ret_discard = sb_issue_discard(sb,
+				exfat_cluster_to_sector(sbi, clu + 2),
 				(1 << sbi->sect_per_clus_bits), GFP_NOFS, 0);
 
 		if (ret_discard == -EOPNOTSUPP) {

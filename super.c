@@ -463,7 +463,7 @@ static int exfat_read_root(struct inode *inode)
 	cdir.dir = sbi->root_dir;
 	cdir.flags = 0x01;
 	cdir.size = 0; /* UNUSED */
-	if (count_num_clusters(sb, &cdir, &num_clu))
+	if (exfat_count_num_clusters(sb, &cdir, &num_clu))
 		return -EIO;
 	i_size_write(inode, num_clu << sbi->cluster_size_bits);
 

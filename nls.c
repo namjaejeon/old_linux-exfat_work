@@ -845,7 +845,7 @@ int exfat_create_upcase_table(struct super_block *sb)
 			tbl_clu  = le32_to_cpu(ep->upcase_start_clu);
 			tbl_size = le64_to_cpu(ep->upcase_size);
 
-			sector = clus_to_sect(sbi, tbl_clu);
+			sector = exfat_cluster_to_sector(sbi, tbl_clu);
 			num_sectors = ((tbl_size - 1) >> blksize_bits) + 1;
 			ret = exfat_load_upcase_table(sb, sector, num_sectors,
 					le32_to_cpu(ep->upcase_checksum));
@@ -858,7 +858,7 @@ int exfat_create_upcase_table(struct super_block *sb)
 			return ret;
 		}
 
-		if (get_next_clus_safe(sb, &(clu.dir)))
+		if (exfat_get_next_cluster(sb, &(clu.dir)))
 			return -EIO;
 	}
 

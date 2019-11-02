@@ -59,7 +59,7 @@ int exfat_ent_set(struct super_block *sb, unsigned int loc,
 	return 0;
 }
 
-static inline bool is_reserved_clus(unsigned int clus)
+static inline bool is_reserved_cluster(unsigned int clus)
 {
 	if (IS_CLUS_FREE(clus))
 		return true;
@@ -70,7 +70,8 @@ static inline bool is_reserved_clus(unsigned int clus)
 	return false;
 }
 
-static inline bool is_valid_clus(struct exfat_sb_info *sbi, unsigned int clus)
+static inline bool is_valid_cluster(struct exfat_sb_info *sbi,
+		unsigned int clus)
 {
 	if (clus < CLUS_BASE || sbi->num_clusters <= clus)
 		return false;
@@ -83,7 +84,7 @@ int exfat_ent_get(struct super_block *sb, unsigned int loc,
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 	int err;
 
-	if (!is_valid_clus(sbi, loc)) {
+	if (!is_valid_cluster(sbi, loc)) {
 		exfat_fs_error(sb, "invalid access to FAT (entry 0x%08x)",
 			loc);
 		return -EIO;
@@ -97,23 +98,13 @@ int exfat_ent_get(struct super_block *sb, unsigned int loc,
 		return err;
 	}
 
-	if (!is_reserved_clus(*content) && !is_valid_clus(sbi, *content)) {
+	if (!is_reserved_cluster(*content) &&
+			!is_valid_cluster(sbi, *content)) {
 		exfat_fs_error(sb,
 			"invalid access to FAT (entry 0x%08x) bogus content (0x%08x)",
 			loc, *content);
 		return -EIO;
 	}
-
-	return 0;
-}
-
-int exfat_ent_get_safe(struct super_block *sb, unsigned int loc,
-		unsigned int *content)
-{
-	int err = exfat_ent_get(sb, loc, content);
-
-	if (err)
-		return err;
 
 	if (IS_CLUS_FREE(*content)) {
 		exfat_fs_error(sb,
@@ -185,7 +176,7 @@ int exfat_free_cluster(struct super_block *sb, struct exfat_chain *p_chain)
 		do {
 			exfat_clr_alloc_bitmap(sb, (clu - CLUS_BASE));
 
-			if (get_next_clus_safe(sb, &clu))
+			if (exfat_get_next_cluster(sb, &clu))
 				goto out;
 
 			num_clusters++;
@@ -212,7 +203,7 @@ int exfat_find_last_cluster(struct super_block *sb, struct exfat_chain *p_chain,
 	do {
 		count++;
 		clu = next;
-		if (exfat_ent_get_safe(sb, clu, &next))
+		if (exfat_ent_get(sb, clu, &next))
 			return -EIO;
 	} while (!IS_CLUS_EOF(next));
 
@@ -235,7 +226,7 @@ int exfat_clear_cluster(struct inode *inode, unsigned int clu)
 	struct buffer_head *bh = NULL;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 
-	s = clus_to_sect(sbi, clu);
+	s = exfat_cluster_to_sector(sbi, clu);
 	n = s + sbi->sect_per_clus;
 
 	if (IS_DIRSYNC(inode)) {
@@ -385,7 +376,7 @@ error:
 	return ret;
 }
 
-int count_num_clusters(struct super_block *sb,
+int exfat_count_num_clusters(struct super_block *sb,
 		struct exfat_chain *p_chain, unsigned int *ret_count)
 {
 	unsigned int i, count;
@@ -406,7 +397,7 @@ int count_num_clusters(struct super_block *sb,
 	count = 0;
 	for (i = CLUS_BASE; i < sbi->num_clusters; i++) {
 		count++;
-		if (exfat_ent_get_safe(sb, clu, &clu))
+		if (exfat_ent_get(sb, clu, &clu))
 			return -EIO;
 		if (IS_CLUS_EOF(clu))
 			break;

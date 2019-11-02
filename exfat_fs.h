@@ -399,20 +399,22 @@ static inline void exfat_save_attr(struct inode *inode, unsigned short attr)
 		EXFAT_I(inode)->attr = attr & ATTR_RWMASK;
 }
 
-static inline bool is_last_sect_in_clus(struct exfat_sb_info *sbi, sector_t sec)
+static inline bool exfat_is_last_sector_in_cluster(struct exfat_sb_info *sbi,
+		sector_t sec)
 {
 	return ((sec - sbi->data_start_sector + 1) &
 			((1 << sbi->sect_per_clus_bits) - 1)) == 0;
 }
 
-static inline sector_t clus_to_sect(struct exfat_sb_info *sbi,
+static inline sector_t exfat_cluster_to_sector(struct exfat_sb_info *sbi,
 		unsigned int clus)
 {
 	return ((clus - CLUS_BASE) << sbi->sect_per_clus_bits)
 			+ sbi->data_start_sector;
 }
 
-static inline int sect_to_clus(struct exfat_sb_info *sbi, sector_t sec)
+static inline int exfat_sector_to_cluster(struct exfat_sb_info *sbi,
+		sector_t sec)
 {
 	return ((sec - sbi->data_start_sector) >> sbi->sect_per_clus_bits) +
 			CLUS_BASE;
@@ -423,8 +425,7 @@ int exfat_set_vol_flags(struct super_block *sb, unsigned short new_flag);
 inline void exfat_set_sb_dirty(struct super_block *sb);
 
 /* fatent.c */
-#define get_next_clus(sb, pclu)		exfat_ent_get(sb, *(pclu), pclu)
-#define get_next_clus_safe(sb, pclu)	exfat_ent_get_safe(sb, *(pclu), pclu)
+#define exfat_get_next_cluster(sb, pclu) exfat_ent_get(sb, *(pclu), pclu)
 
 int exfat_alloc_cluster(struct super_block *sb, unsigned int num_alloc,
 		struct exfat_chain *p_chain);
@@ -433,8 +434,6 @@ int exfat_ent_get(struct super_block *sb, unsigned int loc,
 		unsigned int *content);
 int exfat_ent_set(struct super_block *sb, unsigned int loc,
 		unsigned int content);
-int exfat_ent_get_safe(struct super_block *sb, unsigned int loc,
-		unsigned int *content);
 int exfat_count_ext_entries(struct super_block *sb, struct exfat_chain *p_dir,
 		int entry, struct exfat_dentry *p_entry);
 int exfat_chain_cont_cluster(struct super_block *sb, unsigned int chain,
@@ -452,8 +451,8 @@ int exfat_find_last_cluster(struct super_block *sb, struct exfat_chain *p_chain,
 		unsigned int *ret_clu);
 int exfat_mirror_bhs(struct super_block *sb, sector_t sec,
 		struct buffer_head *bh);
-int count_num_clusters(struct super_block *sb, struct exfat_chain *p_chain,
-		unsigned int *ret_count);
+int exfat_count_num_clusters(struct super_block *sb,
+		struct exfat_chain *p_chain, unsigned int *ret_count);
 int exfat_count_dir_entries(struct super_block *sb, struct exfat_chain *p_dir);
 
 /* balloc.c */
@@ -462,6 +461,7 @@ void exfat_free_alloc_bmp(struct super_block *sb);
 int exfat_set_alloc_bitmap(struct super_block *sb, unsigned int clu);
 void exfat_clr_alloc_bitmap(struct super_block *sb, unsigned int clu);
 unsigned int exfat_test_alloc_bitmap(struct super_block *sb, unsigned int clu);
+int exfat_count_used_clusters(struct super_block *sb, unsigned int *ret_count);
 
 /* file.c */
 extern const struct file_operations exfat_file_operations;
@@ -491,7 +491,6 @@ extern const struct file_operations exfat_dir_operations;
 void exfat_update_bh(struct super_block *sb, struct buffer_head *bh, int sync);
 void exfat_get_uniname_from_ext_entry(struct super_block *sb,
 		struct exfat_chain *p_dir, int entry, unsigned short *uniname);
-int exfat_count_used_clusters(struct super_block *sb, unsigned int *ret_count);
 unsigned int exfat_get_entry_type(struct exfat_dentry *p_entry);
 void exfat_get_entry_time(struct exfat_dentry *p_entry,
 		struct exfat_timestamp *tp, unsigned char mode);

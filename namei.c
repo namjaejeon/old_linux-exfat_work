@@ -298,7 +298,7 @@ static int exfat_search_empty_slot(struct super_block *sb,
 			else
 				clu.dir = CLUS_EOF;
 		} else {
-			if (get_next_clus_safe(sb, &(clu.dir)))
+			if (exfat_get_next_cluster(sb, &(clu.dir)))
 				return -EIO;
 		}
 	}
@@ -802,7 +802,7 @@ static int exfat_read_link(struct inode *inode, char *buffer)
 			}
 
 			while (clu_offset > 0) {
-				ret = get_next_clus_safe(sb, &clu);
+				ret = exfat_get_next_cluster(sb, &clu);
 				if (ret)
 					goto err_out;
 
@@ -818,7 +818,7 @@ static int exfat_read_link(struct inode *inode, char *buffer)
 		sec_offset = EXFAT_B_TO_BLK(offset, sb);
 		offset = EXFAT_BLK_OFFSET(offset, sb);
 
-		logsector = clus_to_sect(sbi, clu) + sec_offset;
+		logsector = exfat_cluster_to_sector(sbi, clu) + sec_offset;
 
 		oneblkread = sb->s_blocksize - offset;
 		if (oneblkread > size)
@@ -1123,7 +1123,7 @@ static int exfat_write_link(struct inode *inode, char *buffer,
 
 			while ((clu_offset > 0) && (!IS_CLUS_EOF(clu))) {
 				last_clu = clu;
-				ret = get_next_clus_safe(sb, &clu);
+				ret = exfat_get_next_cluster(sb, &clu);
 				if (ret)
 					goto err_out;
 
@@ -1182,7 +1182,7 @@ static int exfat_write_link(struct inode *inode, char *buffer,
 		sec_offset = offset >> blksize_bits;
 		/* byte offset in sector    */
 		offset &= blksize_mask;
-		logsector = clus_to_sect(sbi, clu) + sec_offset;
+		logsector = exfat_cluster_to_sector(sbi, clu) + sec_offset;
 
 		oneblkwrite = blksize - offset;
 		if (oneblkwrite > tsize)
@@ -1405,7 +1405,7 @@ int exfat_check_dir_empty(struct super_block *sb, struct exfat_chain *p_dir)
 			else
 				clu.dir = CLUS_EOF;
 		} else {
-			if (get_next_clus_safe(sb, &(clu.dir)))
+			if (exfat_get_next_cluster(sb, &(clu.dir)))
 				return -EIO;
 		}
 	}

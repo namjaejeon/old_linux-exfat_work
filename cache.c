@@ -298,7 +298,7 @@ int exfat_get_cluster(struct inode *inode, unsigned int cluster,
 			return -EIO;
 		}
 
-		if (exfat_ent_get_safe(sb, *dclus, &content))
+		if (exfat_ent_get(sb, *dclus, &content))
 			return -EIO;
 
 		*last_dclus = *dclus;
