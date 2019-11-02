@@ -263,6 +263,7 @@ int exfat_write_inode(struct inode *inode, struct writeback_control *wbc)
 
 void exfat_sync_inode(struct inode *inode)
 {
+	lockdep_assert_held(&EXFAT_SB(inode->i_sb)->s_lock);
 	__exfat_write_inode(inode, 1);
 }
 
