@@ -30,6 +30,10 @@ static inline unsigned short get_row_index(unsigned short i)
 	return i & ~HIGH_INDEX_MASK;
 }
 
+/*
+ * Upcase table in compressed format (7.2.5.1 Recommended Up-case Table
+ * in exfat specification).
+ */
 static const unsigned short uni_def_upcase[EXFAT_NUM_UPCASE] = {
 	0x0000, 0x0001, 0x0002, 0x0003, 0x0004, 0x0005, 0x0006, 0x0007,
 	0x0008, 0x0009, 0x000a, 0x000b, 0x000c, 0x000d, 0x000e, 0x000f,
