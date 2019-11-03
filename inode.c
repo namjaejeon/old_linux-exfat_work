@@ -26,7 +26,7 @@
 static int __exfat_truncate(struct inode *inode, loff_t new_size)
 {
 	unsigned int num_clusters_new, num_clusters_da, num_clusters_phys;
-	unsigned int last_clu = CLUS_FREE;
+	unsigned int last_clu = FREE_CLUSTER;
 	struct exfat_chain clu;
 	struct exfat_timestamp tm;
 	struct exfat_dentry *ep, *ep2;
@@ -83,7 +83,7 @@ static int __exfat_truncate(struct inode *inode, loff_t new_size)
 		} else {
 			while (num_clusters > 0) {
 				last_clu = clu.dir;
-				if (get_next_clus_safe(sb, &(clu.dir)))
+				if (exfat_get_next_cluster(sb, &(clu.dir)))
 					return -EIO;
 
 				num_clusters--;
@@ -92,7 +92,7 @@ static int __exfat_truncate(struct inode *inode, loff_t new_size)
 		}
 	} else if (new_size == 0) {
 		ei->flags = 0x03;
-		ei->start_clu = CLUS_EOF;
+		ei->start_clu = EOF_CLUSTER;
 	}
 
 	i_size_write(inode, new_size);
@@ -119,7 +119,7 @@ static int __exfat_truncate(struct inode *inode, loff_t new_size)
 		ep->file_attr = cpu_to_le16(ei->attr);
 
 		/* File size should be zero if there is no cluster allocated */
-		if (IS_CLUS_EOF(ei->start_clu))
+		if (ei->start_clu == EOF_CLUSTER)
 			ep->stream_valid_size = ep->stream_size = 0;
 		else {
 			ep->stream_valid_size = cpu_to_le64(new_size);
@@ -131,7 +131,7 @@ static int __exfat_truncate(struct inode *inode, loff_t new_size)
 			WARN_ON(ei->type != TYPE_FILE);
 
 			ep2->stream_flags = 0x01;
-			ep2->stream_start_clu = CLUS_FREE;
+			ep2->stream_start_clu = FREE_CLUSTER;
 		}
 
 		if (exfat_update_dir_chksum_with_entry_set(sb, es))
@@ -141,9 +141,9 @@ static int __exfat_truncate(struct inode *inode, loff_t new_size)
 	}
 
 	/* cut off from the FAT chain */
-	if ((ei->flags == 0x01) &&
-			(!IS_CLUS_FREE(last_clu)) && (!IS_CLUS_EOF(last_clu))) {
-		if (exfat_ent_set(sb, last_clu, CLUS_EOF))
+	if ((ei->flags == 0x01) && (last_clu != FREE_CLUSTER) &&
+			(last_clu != EOF_CLUSTER)) {
+		if (exfat_ent_set(sb, last_clu, EOF_CLUSTER))
 			return -EIO;
 	}
 
@@ -152,8 +152,8 @@ static int __exfat_truncate(struct inode *inode, loff_t new_size)
 	exfat_cache_inval_inode(inode);
 
 	/* hint information */
-	ei->hint_bmap.off = CLUS_EOF;
-	ei->hint_bmap.clu = CLUS_EOF;
+	ei->hint_bmap.off = EOF_CLUSTER;
+	ei->hint_bmap.clu = EOF_CLUSTER;
 	if (ei->rwoffset > new_size)
 		ei->rwoffset = new_size;
 
@@ -238,7 +238,7 @@ static int __exfat_write_inode(struct inode *inode, int sync)
 	/* File size should be zero if there is no cluster allocated */
 	on_disk_size = info.size;
 
-	if (IS_CLUS_EOF(ei->start_clu))
+	if (ei->start_clu == EOF_CLUSTER)
 		on_disk_size = 0;
 
 	ep2->stream_valid_size = cpu_to_le64(on_disk_size);
@@ -263,6 +263,7 @@ int exfat_write_inode(struct inode *inode, struct writeback_control *wbc)
 
 void exfat_sync_inode(struct inode *inode)
 {
+	lockdep_assert_held(&EXFAT_SB(inode->i_sb)->s_lock);
 	__exfat_write_inode(inode, 1);
 }
 
@@ -315,7 +316,7 @@ out:
  * Output: errcode, cluster number
  * *clu = (~0), if it's unable to allocate a new cluster
  */
-static int __exfat_map_clus(struct inode *inode, unsigned int clu_offset,
+static int __exfat_map_cluster(struct inode *inode, unsigned int clu_offset,
 		unsigned int *clu, int create)
 {
 	int ret, modified = false;
@@ -341,7 +342,7 @@ static int __exfat_map_clus(struct inode *inode, unsigned int clu_offset,
 		num_to_be_allocated = clu_offset - num_clusters + 1;
 
 	if (!create && (num_to_be_allocated > 0)) {
-		*clu = CLUS_EOF;
+		*clu = EOF_CLUSTER;
 		return 0;
 	}
 
@@ -351,11 +352,11 @@ static int __exfat_map_clus(struct inode *inode, unsigned int clu_offset,
 	 * what if i_size_ondisk != # of allocated clusters
 	 */
 	if (ei->flags == 0x03) {
-		if ((clu_offset > 0) && (!IS_CLUS_EOF(*clu))) {
+		if ((clu_offset > 0) && (*clu != EOF_CLUSTER)) {
 			last_clu += clu_offset - 1;
 
 			if (clu_offset == num_clusters)
-				*clu = CLUS_EOF;
+				*clu = EOF_CLUSTER;
 			else
 				*clu += clu_offset;
 		}
@@ -370,7 +371,7 @@ static int __exfat_map_clus(struct inode *inode, unsigned int clu_offset,
 	} else {
 		/* hint information */
 		if ((clu_offset > 0) &&
-			((ei->hint_bmap.off != CLUS_EOF) &&
+			((ei->hint_bmap.off != EOF_CLUSTER) &&
 			(ei->hint_bmap.off > 0)) &&
 			(clu_offset >= ei->hint_bmap.off)) {
 			clu_offset -= ei->hint_bmap.off;
@@ -379,19 +380,19 @@ static int __exfat_map_clus(struct inode *inode, unsigned int clu_offset,
 			*clu = ei->hint_bmap.clu;
 		}
 
-		while ((clu_offset > 0) && (!IS_CLUS_EOF(*clu))) {
+		while ((clu_offset > 0) && (*clu != EOF_CLUSTER)) {
 			last_clu = *clu;
-			if (get_next_clus_safe(sb, clu))
+			if (exfat_get_next_cluster(sb, clu))
 				return -EIO;
 			clu_offset--;
 		}
 	}
 
-	if (IS_CLUS_EOF(*clu)) {
+	if (*clu == EOF_CLUSTER) {
 		exfat_set_vol_flags(sb, VOL_DIRTY);
 
-		new_clu.dir = (IS_CLUS_EOF(last_clu)) ?
-				CLUS_EOF : last_clu + 1;
+		new_clu.dir = (last_clu == EOF_CLUSTER) ?
+				EOF_CLUSTER : last_clu + 1;
 		new_clu.size = 0;
 		new_clu.flags = ei->flags;
 
@@ -406,7 +407,7 @@ static int __exfat_map_clus(struct inode *inode, unsigned int clu_offset,
 		if (ret)
 			return ret;
 
-		if (IS_CLUS_EOF(new_clu.dir) || IS_CLUS_FREE(new_clu.dir)) {
+		if (new_clu.dir == EOF_CLUSTER || new_clu.dir == FREE_CLUSTER) {
 			exfat_fs_error(sb,
 				"bogus cluster new allocated (last_clu : %u, new_clu : %u)",
 				last_clu, new_clu.dir);
@@ -414,7 +415,7 @@ static int __exfat_map_clus(struct inode *inode, unsigned int clu_offset,
 		}
 
 		/* append to the FAT chain */
-		if (IS_CLUS_EOF(last_clu)) {
+		if (last_clu == EOF_CLUSTER) {
 			if (new_clu.flags == 0x01)
 				ei->flags = 0x01;
 			ei->start_clu = new_clu.dir;
@@ -480,7 +481,7 @@ static int __exfat_map_clus(struct inode *inode, unsigned int clu_offset,
 			*clu += num_to_be_allocated - 1;
 		} else {
 			while (num_to_be_allocated > 1) {
-				if (get_next_clus_safe(sb, clu))
+				if (exfat_get_next_cluster(sb, clu))
 					return -EIO;
 				num_to_be_allocated--;
 			}
@@ -517,7 +518,7 @@ static int exfat_bmap(struct inode *inode, sector_t sector, sector_t *phys,
 	/* Is this block already allocated? */
 	clu_offset = sector >> sbi->sect_per_clus_bits;  /* cluster offset */
 
-	err = __exfat_map_clus(inode, clu_offset, &cluster,
+	err = __exfat_map_cluster(inode, clu_offset, &cluster,
 		*create & BMAP_ADD_CLUSTER);
 	if (err) {
 		if (err != -ENOSPC)
@@ -525,11 +526,11 @@ static int exfat_bmap(struct inode *inode, sector_t sector, sector_t *phys,
 		return err;
 	}
 
-	if (!IS_CLUS_EOF(cluster)) {
+	if (cluster != EOF_CLUSTER) {
 		/* sector offset in cluster */
 		sec_offset = sector & (sbi->sect_per_clus - 1);
 
-		*phys = clus_to_sect(sbi, cluster) + sec_offset;
+		*phys = exfat_cluster_to_sector(sbi, cluster) + sec_offset;
 		*mapped_blocks = sbi->sect_per_clus - sec_offset;
 	}
 
@@ -827,9 +828,8 @@ static int exfat_fill_inode(struct inode *inode, struct exfat_dir_entry *info)
 	ei->hint_stat.clu = info->start_clu;
 	ei->hint_femp.eidx = EXFAT_HINT_NONE;
 	ei->rwoffset = 0;
-	ei->hint_bmap.off = CLUS_EOF;
+	ei->hint_bmap.off = EOF_CLUSTER;
 	ei->i_pos = 0;
-	ei->target = NULL;
 
 	inode->i_uid = sbi->options.fs_uid;
 	inode->i_gid = sbi->options.fs_gid;
@@ -842,10 +842,6 @@ static int exfat_fill_inode(struct inode *inode, struct exfat_dir_entry *info)
 		inode->i_op = &exfat_dir_inode_operations;
 		inode->i_fop = &exfat_dir_operations;
 		set_nlink(inode, info->num_subdirs);
-	} else if (info->attr & ATTR_SYMLINK) { /* symbolic link */
-		inode->i_op = &exfat_symlink_inode_operations;
-		inode->i_generation |= 1;
-		inode->i_mode = exfat_make_mode(sbi, info->attr, 0777);
 	} else { /* regular file */
 		inode->i_generation |= 1;
 		inode->i_mode = exfat_make_mode(sbi, info->attr, 0777);

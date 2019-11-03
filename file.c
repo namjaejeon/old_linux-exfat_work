@@ -25,18 +25,6 @@ const struct file_operations exfat_file_operations = {
 	.splice_read = generic_file_splice_read,
 };
 
-static const char *exfat_follow_link(struct dentry *dentry, struct inode *inode,
-		struct delayed_call *done)
-{
-	struct exfat_inode_info *ei = EXFAT_I(inode);
-
-	return ei->target;
-}
-
-const struct inode_operations exfat_symlink_inode_operations = {
-	.get_link = exfat_follow_link,
-};
-
 const struct inode_operations exfat_file_inode_operations = {
 	.setattr     = exfat_setattr,
 	.getattr     = exfat_getattr,

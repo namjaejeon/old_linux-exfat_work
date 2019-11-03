@@ -30,6 +30,10 @@ static inline unsigned short get_row_index(unsigned short i)
 	return i & ~HIGH_INDEX_MASK;
 }
 
+/*
+ * Upcase table in compressed format (7.2.5.1 Recommended Up-case Table
+ * in exfat specification).
+ */
 static const unsigned short uni_def_upcase[EXFAT_NUM_UPCASE] = {
 	0x0000, 0x0001, 0x0002, 0x0003, 0x0004, 0x0005, 0x0006, 0x0007,
 	0x0008, 0x0009, 0x000a, 0x000b, 0x000c, 0x000d, 0x000e, 0x000f,
@@ -661,6 +665,37 @@ int exfat_nls_vfsname_to_uni16s(struct super_block *sb,
 			p_lossy);
 }
 
+static int exfat_record_upcase_table(struct super_block *sb,
+		unsigned short **upcase_table, unsigned int index,
+		unsigned short uni)
+{
+	int ret = 0, i;
+	unsigned short col_index = get_col_index(index);
+
+	if (!upcase_table[col_index]) {
+		upcase_table[col_index] =
+			kmalloc_array(UTBL_ROW_COUNT,
+					sizeof(unsigned short),
+					GFP_KERNEL);
+		if (!upcase_table[col_index]) {
+			exfat_msg(sb, KERN_ERR,
+					"failed to allocate memory for column 0x%X\n",
+					col_index);
+			ret = -ENOMEM;
+			goto out;
+		}
+
+		for (i = 0; i < UTBL_ROW_COUNT; i++)
+			upcase_table[col_index][i] =
+				(col_index << LOW_INDEX_BIT) | i;
+	}
+
+	upcase_table[col_index][get_row_index(index)] = uni;
+out:
+	return ret;
+}
+
+
 static int exfat_load_upcase_table(struct super_block *sb,
 		sector_t sector, unsigned long long num_sectors,
 		unsigned int utbl_checksum)
@@ -668,7 +703,7 @@ static int exfat_load_upcase_table(struct super_block *sb,
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 	struct buffer_head *bh = NULL;
 	unsigned int sect_size = sb->s_blocksize;
-	unsigned int i, j, index = 0, checksum = 0;
+	unsigned int i, index = 0, checksum = 0;
 	int ret = -EIO;
 	unsigned char skip = false;
 	unsigned short **upcase_table =
@@ -708,28 +743,10 @@ static int exfat_load_upcase_table(struct super_block *sb,
 			} else if (uni == 0xFFFF) {
 				skip = true;
 			} else { /* uni != index , uni != 0xFFFF */
-				unsigned short col_index = get_col_index(index);
-
-				if (!upcase_table[col_index]) {
-					upcase_table[col_index] =
-						kmalloc_array(UTBL_ROW_COUNT,
-							sizeof(unsigned short),
-							GFP_KERNEL);
-					if (!upcase_table[col_index]) {
-						exfat_msg(sb, KERN_ERR,
-								"failed to allocate memory for column 0x%X\n",
-								col_index);
-						ret = -ENOMEM;
-						goto error;
-					}
-
-					for (j = 0; j < UTBL_ROW_COUNT; j++)
-						upcase_table[col_index][j] =
-							(col_index << LOW_INDEX_BIT) | j;
-				}
-
-				upcase_table[col_index][get_row_index(index)] =
-					uni;
+				ret = exfat_record_upcase_table(sb,
+						upcase_table, index, uni);
+				if (ret)
+					goto error;
 				index++;
 			}
 		}
@@ -756,7 +773,6 @@ error:
 static int exfat_load_default_upcase_table(struct super_block *sb)
 {
 	int i, ret = -EIO;
-	unsigned int j;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 
 	unsigned char skip = false;
@@ -781,28 +797,10 @@ static int exfat_load_default_upcase_table(struct super_block *sb)
 		} else if (uni == 0xFFFF) {
 			skip = true;
 		} else {
-			unsigned short col_index = get_col_index(index);
-
-			if (!upcase_table[col_index]) {
-				upcase_table[col_index] =
-					kmalloc_array(UTBL_ROW_COUNT,
-							sizeof(unsigned short),
-							GFP_KERNEL);
-				if (!upcase_table[col_index]) {
-					exfat_msg(sb, KERN_ERR,
-							"failed to allocate memory for new column 0x%x\n",
-							col_index);
-					ret = -ENOMEM;
-					goto error;
-				}
-
-				for (j = 0; j < UTBL_ROW_COUNT; j++)
-					upcase_table[col_index][j] =
-						(col_index << LOW_INDEX_BIT) |
-						j;
-			}
-
-			upcase_table[col_index][get_row_index(index)] = uni;
+			ret = exfat_record_upcase_table(sb,
+					upcase_table, index, uni);
+			if (ret)
+				goto error;
 			index++;
 		}
 	}
@@ -831,7 +829,7 @@ int exfat_create_upcase_table(struct super_block *sb)
 	clu.dir = sbi->root_dir;
 	clu.flags = 0x01;
 
-	while (!IS_CLUS_EOF(clu.dir)) {
+	while (clu.dir != EOF_CLUSTER) {
 		for (i = 0; i < sbi->dentries_per_clu; i++) {
 			ep = exfat_get_dentry(sb, &clu, i, &bh, NULL);
 			if (!ep)
@@ -851,7 +849,7 @@ int exfat_create_upcase_table(struct super_block *sb)
 			tbl_clu  = le32_to_cpu(ep->upcase_start_clu);
 			tbl_size = le64_to_cpu(ep->upcase_size);
 
-			sector = clus_to_sect(sbi, tbl_clu);
+			sector = exfat_cluster_to_sector(sbi, tbl_clu);
 			num_sectors = ((tbl_size - 1) >> blksize_bits) + 1;
 			ret = exfat_load_upcase_table(sb, sector, num_sectors,
 					le32_to_cpu(ep->upcase_checksum));
@@ -864,7 +862,7 @@ int exfat_create_upcase_table(struct super_block *sb)
 			return ret;
 		}
 
-		if (get_next_clus_safe(sb, &(clu.dir)))
+		if (exfat_get_next_cluster(sb, &(clu.dir)))
 			return -EIO;
 	}
 

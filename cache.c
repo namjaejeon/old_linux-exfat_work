@@ -98,7 +98,7 @@ static unsigned int exfat_cache_lookup(struct inode *inode,
 	struct exfat_inode_info *ei = EXFAT_I(inode);
 	static struct exfat_cache nohit = { .fcluster = 0, };
 	struct exfat_cache *hit = &nohit, *p;
-	unsigned int offset = CLUS_EOF;
+	unsigned int offset = EOF_CLUSTER;
 
 	spin_lock(&ei->cache_lru_lock);
 	list_for_each_entry(p, &ei->cache_lru, cache_list) {
@@ -151,7 +151,7 @@ static void exfat_cache_add(struct inode *inode,
 	struct exfat_inode_info *ei = EXFAT_I(inode);
 	struct exfat_cache *cache, *tmp;
 
-	if (new->fcluster == CLUS_EOF) /* dummy cache */
+	if (new->fcluster == EOF_CLUSTER) /* dummy cache */
 		return;
 
 	spin_lock(&ei->cache_lru_lock);
@@ -255,7 +255,7 @@ int exfat_get_cluster(struct inode *inode, unsigned int cluster,
 	struct exfat_cache_id cid;
 	unsigned int content;
 
-	if (IS_CLUS_FREE(ei->start_clu)) {
+	if (ei->start_clu == FREE_CLUSTER) {
 		exfat_fs_error(sb,
 			"invalid access to exfat cache (entry 0x%08x)",
 			ei->start_clu);
@@ -269,20 +269,20 @@ int exfat_get_cluster(struct inode *inode, unsigned int cluster,
 	/*
 	 * Don`t use exfat_cache if zero offset or non-cluster allocation
 	 */
-	if ((cluster == 0) || IS_CLUS_EOF(*dclus))
+	if ((cluster == 0) || *dclus == EOF_CLUSTER)
 		return 0;
 
-	cache_init(&cid, CLUS_EOF, CLUS_EOF);
+	cache_init(&cid, EOF_CLUSTER, EOF_CLUSTER);
 
 	if (exfat_cache_lookup(inode, cluster, &cid, fclus, dclus) ==
-			CLUS_EOF) {
+			EOF_CLUSTER) {
 		/*
 		 * dummy, always not contiguous
 		 * This is reinitialized by cache_init(), later.
 		 */
 		WARN_ON((cid.id != EXTENT_CACHE_VALID) ||
-			(cid.fcluster != CLUS_EOF) ||
-			(cid.dcluster != CLUS_EOF) ||
+			(cid.fcluster != EOF_CLUSTER) ||
+			(cid.dcluster != EOF_CLUSTER) ||
 			(cid.nr_contig != 0));
 	}
 
@@ -298,14 +298,14 @@ int exfat_get_cluster(struct inode *inode, unsigned int cluster,
 			return -EIO;
 		}
 
-		if (exfat_ent_get_safe(sb, *dclus, &content))
+		if (exfat_ent_get(sb, *dclus, &content))
 			return -EIO;
 
 		*last_dclus = *dclus;
 		*dclus = content;
 		(*fclus)++;
 
-		if (IS_CLUS_EOF(content)) {
+		if (content == EOF_CLUSTER) {
 			if (!allow_eof) {
 				exfat_fs_error(sb,
 				       "invalid cluster chain (i_pos %u, last_clus 0x%08x is EOF)",

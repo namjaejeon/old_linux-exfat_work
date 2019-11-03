@@ -226,7 +226,6 @@ static int __exfat_show_options(struct seq_file *m, struct super_block *sb)
 	seq_printf(m, ",namecase=%u", opts->casesensitive);
 	if (opts->tz_utc)
 		seq_puts(m, ",tz=UTC");
-	seq_printf(m, ",symlink=%u", opts->symlink);
 	seq_printf(m, ",bps=%ld", sb->s_blocksize);
 	if (opts->errors == EXFAT_ERRORS_CONT)
 		seq_puts(m, ",errors=continue");
@@ -269,7 +268,6 @@ enum {
 	Opt_utf8,
 	Opt_namecase,
 	Opt_tz_utc,
-	Opt_symlink,
 	Opt_debug,
 	Opt_err_cont,
 	Opt_err_panic,
@@ -291,7 +289,6 @@ static const match_table_t exfat_tokens = {
 	{Opt_utf8, "utf8"},
 	{Opt_namecase, "namecase=%u"},
 	{Opt_tz_utc, "tz=UTC"},
-	{Opt_symlink, "symlink=%u"},
 	{Opt_err_cont, "errors=continue"},
 	{Opt_err_panic, "errors=panic"},
 	{Opt_err_ro, "errors=remount-ro"},
@@ -316,7 +313,6 @@ static int parse_options(struct super_block *sb, char *options, int silent,
 	opts->casesensitive = 0;
 	opts->utf8 = 0;
 	opts->tz_utc = 0;
-	opts->symlink = 0;
 	opts->errors = EXFAT_ERRORS_RO;
 	opts->discard = 0;
 
@@ -378,11 +374,6 @@ static int parse_options(struct super_block *sb, char *options, int silent,
 			break;
 		case Opt_tz_utc:
 			opts->tz_utc = 1;
-			break;
-		case Opt_symlink:
-			if (match_int(&args[0], &option))
-				return 0;
-			opts->symlink = option > 0 ? 1 : 0;
 			break;
 		case Opt_err_cont:
 			opts->errors = EXFAT_ERRORS_CONT;
@@ -454,20 +445,19 @@ static int exfat_read_root(struct inode *inode)
 	ei->type = TYPE_DIR;
 	ei->version = 0;
 	ei->rwoffset = 0;
-	ei->hint_bmap.off = CLUS_EOF;
+	ei->hint_bmap.off = EOF_CLUSTER;
 	ei->hint_stat.eidx = 0;
 	ei->hint_stat.clu = sbi->root_dir;
 	ei->hint_femp.eidx = EXFAT_HINT_NONE;
-	ei->target = NULL;
 
 	cdir.dir = sbi->root_dir;
 	cdir.flags = 0x01;
 	cdir.size = 0; /* UNUSED */
-	if (count_num_clusters(sb, &cdir, &num_clu))
+	if (exfat_count_num_clusters(sb, &cdir, &num_clu))
 		return -EIO;
 	i_size_write(inode, num_clu << sbi->cluster_size_bits);
 
-	num_subdirs = exfat_count_dos_name_entries(sb, &cdir, TYPE_DIR);
+	num_subdirs = exfat_count_dir_entries(sb, &cdir);
 	if (num_subdirs < 0)
 		return -EIO;
 	set_nlink(inode, num_subdirs + EXFAT_MIN_SUBDIR);
@@ -641,7 +631,7 @@ static int __exfat_fill_super(struct super_block *sb)
 		(sbi->cluster_size_bits - DENTRY_SIZE_BITS);
 
 	sbi->vol_flag = le16_to_cpu(p_bpb->bsx.vol_flags);
-	sbi->clu_srch_ptr = CLUS_BASE;
+	sbi->clu_srch_ptr = BASE_CLUSTER;
 	sbi->used_clusters = ~0u;
 
 	if (p_bpb->bsx.vol_flags & VOL_DIRTY) {
@@ -821,11 +811,6 @@ struct inode *exfat_alloc_inode(struct super_block *sb)
 
 void exfat_destroy_inode(struct inode *inode)
 {
-	if (EXFAT_I(inode)->target) {
-		kfree(EXFAT_I(inode)->target);
-		EXFAT_I(inode)->target = NULL;
-	}
-
 	kmem_cache_free(exfat_inode_cachep, EXFAT_I(inode));
 }
 
