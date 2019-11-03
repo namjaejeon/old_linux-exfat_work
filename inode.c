@@ -830,7 +830,6 @@ static int exfat_fill_inode(struct inode *inode, struct exfat_dir_entry *info)
 	ei->rwoffset = 0;
 	ei->hint_bmap.off = EOF_CLUSTER;
 	ei->i_pos = 0;
-	ei->target = NULL;
 
 	inode->i_uid = sbi->options.fs_uid;
 	inode->i_gid = sbi->options.fs_gid;
@@ -843,10 +842,6 @@ static int exfat_fill_inode(struct inode *inode, struct exfat_dir_entry *info)
 		inode->i_op = &exfat_dir_inode_operations;
 		inode->i_fop = &exfat_dir_operations;
 		set_nlink(inode, info->num_subdirs);
-	} else if (info->attr & ATTR_SYMLINK) { /* symbolic link */
-		inode->i_op = &exfat_symlink_inode_operations;
-		inode->i_generation |= 1;
-		inode->i_mode = exfat_make_mode(sbi, info->attr, 0777);
 	} else { /* regular file */
 		inode->i_generation |= 1;
 		inode->i_mode = exfat_make_mode(sbi, info->attr, 0777);

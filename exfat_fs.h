@@ -312,7 +312,6 @@ struct exfat_inode_info {
 	/* for avoiding the race between alloc and free */
 	unsigned int cache_valid_id;
 
-	char *target;
 	/*
 	 * NOTE: i_size_ondisk is 64bits, so must hold ->inode_lock to access.
 	 * physically allocated size.
