@@ -174,11 +174,6 @@ int exfat_set_vol_flags(struct super_block *sb, unsigned short new_flag)
 	return __exfat_set_vol_flags(sb, new_flag, 0);
 }
 
-int exfat_set_vol_flags_sync(struct super_block *sb, unsigned short new_flag)
-{
-	return __exfat_set_vol_flags(sb, new_flag, 1);
-}
-
 static int exfat_remount(struct super_block *sb, int *flags, char *data)
 {
 	unsigned long prev_sb_flags;
@@ -188,7 +183,7 @@ static int exfat_remount(struct super_block *sb, int *flags, char *data)
 
 	prev_sb_flags = sb->s_flags;
 	sync_filesystem(sb);
-	exfat_set_vol_flags_sync(sb, VOL_CLEAN);
+	__exfat_set_vol_flags(sb, VOL_CLEAN, 1);
 	kfree(orig_data);
 	return 0;
 }
