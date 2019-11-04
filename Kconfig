@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-config EXFAT_FS
+config EXFAT
 	tristate "exfat filesystem support"
 	default y
 	select NLS
@@ -12,14 +12,14 @@ config EXFAT_FS
 config EXFAT_DEFAULT_CODEPAGE
 	int "Default codepage for exFAT"
 	default 437
-	depends on EXFAT_FS
+	depends on EXFAT
 	help
 	  This option should be set to the codepage of your exFAT filesystems.
 
 config EXFAT_DEFAULT_IOCHARSET
 	string "Default iocharset for exFAT"
 	default "utf8"
-	depends on EXFAT_FS
+	depends on EXFAT
 	help
 	  Set this to the default input/output character set you'd
 	  like exFAT to use. It should probably match the character set
