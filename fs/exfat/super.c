@@ -154,20 +154,6 @@ int exfat_set_vol_flags(struct super_block *sb, unsigned short new_flag)
 	return __exfat_set_vol_flags(sb, new_flag, 0);
 }
 
-static int exfat_remount(struct super_block *sb, int *flags, char *data)
-{
-	unsigned long prev_sb_flags;
-	char *orig_data = kstrdup(data, GFP_KERNEL);
-
-	*flags |= SB_NODIRATIME;
-
-	prev_sb_flags = sb->s_flags;
-	sync_filesystem(sb);
-	__exfat_set_vol_flags(sb, VOL_CLEAN, 1);
-	kfree(orig_data);
-	return 0;
-}
-
 static int __exfat_show_options(struct seq_file *m, struct super_block *sb)
 {
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
@@ -236,7 +222,6 @@ static const struct super_operations exfat_sops = {
 	.put_super     = exfat_put_super,
 	.sync_fs       = exfat_sync_fs,
 	.statfs        = exfat_statfs,
-	.remount_fs    = exfat_remount,
 	.show_options  = exfat_show_options,
 };
 
