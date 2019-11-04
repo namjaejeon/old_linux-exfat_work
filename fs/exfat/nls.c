@@ -475,6 +475,8 @@ static unsigned short exfat_nls_upper(struct super_block *sb, unsigned short a)
 
 	if (EXFAT_SB(sb)->options.casesensitive)
 		return a;
+
+	/* XXX: multi-index array lookups don't actually work properly in C */
 	if ((sbi->vol_utbl)[get_col_index(a)] != NULL)
 		return (sbi->vol_utbl)[get_col_index(a)][get_row_index(a)];
 	else
