@@ -24,6 +24,7 @@
 static int exfat_default_codepage = CONFIG_EXFAT_DEFAULT_CODEPAGE;
 static char exfat_default_iocharset[] = CONFIG_EXFAT_DEFAULT_IOCHARSET;
 static const char exfat_iocharset_with_utf8[] = "iso8859-1";
+static struct kmem_cache *exfat_inode_cachep;
 
 static void exfat_put_super(struct super_block *sb)
 {
@@ -208,6 +209,23 @@ static int __exfat_show_options(struct seq_file *m, struct super_block *sb)
 static int exfat_show_options(struct seq_file *m, struct dentry *root)
 {
 	return __exfat_show_options(m, root->d_sb);
+}
+
+static struct inode *exfat_alloc_inode(struct super_block *sb)
+{
+	struct exfat_inode_info *ei;
+
+	ei = kmem_cache_alloc(exfat_inode_cachep, GFP_NOFS);
+	if (!ei)
+		return NULL;
+
+	init_rwsem(&ei->truncate_lock);
+	return &ei->vfs_inode;
+}
+
+static void exfat_destroy_inode(struct inode *inode)
+{
+	kmem_cache_free(exfat_inode_cachep, EXFAT_I(inode));
 }
 
 static const struct super_operations exfat_sops = {
@@ -760,24 +778,6 @@ static void exfat_inode_init_once(void *foo)
 
 	INIT_HLIST_NODE(&ei->i_hash_fat);
 	inode_init_once(&ei->vfs_inode);
-}
-
-static struct kmem_cache *exfat_inode_cachep;
-struct inode *exfat_alloc_inode(struct super_block *sb)
-{
-	struct exfat_inode_info *ei;
-
-	ei = kmem_cache_alloc(exfat_inode_cachep, GFP_NOFS);
-	if (!ei)
-		return NULL;
-
-	init_rwsem(&ei->truncate_lock);
-	return &ei->vfs_inode;
-}
-
-void exfat_destroy_inode(struct inode *inode)
-{
-	kmem_cache_free(exfat_inode_cachep, EXFAT_I(inode));
 }
 
 static struct file_system_type exfat_fs_type = {

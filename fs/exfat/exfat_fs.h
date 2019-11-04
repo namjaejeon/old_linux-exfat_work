@@ -509,8 +509,6 @@ void exfat_unhash_inode(struct inode *inode);
 void exfat_truncate(struct inode *inode, loff_t size);
 struct inode *exfat_iget(struct super_block *sb, loff_t i_pos);
 int exfat_write_inode(struct inode *inode, struct writeback_control *wbc);
-struct inode *exfat_alloc_inode(struct super_block *sb);
-void exfat_destroy_inode(struct inode *inode);
 void exfat_evict_inode(struct inode *inode);
 int exfat_read_inode(struct inode *inode, struct exfat_dir_entry *info);
 
