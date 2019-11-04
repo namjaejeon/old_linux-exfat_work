@@ -826,6 +826,57 @@ struct exfat_dentry *exfat_get_dentry(struct super_block *sb,
 	return (struct exfat_dentry *)((*bh)->b_data + off);
 }
 
+enum exfat_validate_dentry_mode {
+	ES_MODE_STARTED,
+	ES_MODE_GET_FILE_ENTRY,
+	ES_MODE_GET_STRM_ENTRY,
+	ES_MODE_GET_NAME_ENTRY,
+	ES_MODE_GET_CRITICAL_SEC_ENTRY,
+};
+
+static bool exfat_validate_entry(unsigned int type,
+		enum exfat_validate_dentry_mode *mode)
+{
+	if (type == TYPE_UNUSED || type == TYPE_DELETED)
+		return false;
+
+	switch (*mode) {
+	case ES_MODE_STARTED:
+		if  (type != TYPE_FILE && type != TYPE_DIR)
+			return false;
+		*mode = ES_MODE_GET_FILE_ENTRY;
+		return true;
+	case ES_MODE_GET_FILE_ENTRY:
+		if (type != TYPE_STREAM)
+			return false;
+		*mode = ES_MODE_GET_STRM_ENTRY;
+		return true;
+	case ES_MODE_GET_STRM_ENTRY:
+		if (type != TYPE_EXTEND)
+			return false;
+		*mode = ES_MODE_GET_NAME_ENTRY;
+		return true;
+	case ES_MODE_GET_NAME_ENTRY:
+		if (type == TYPE_STREAM)
+			return false;
+		if (type != TYPE_EXTEND) {
+			if (!(type & TYPE_CRITICAL_SEC))
+				return false;
+			*mode = ES_MODE_GET_CRITICAL_SEC_ENTRY;
+		}
+		return true;
+	case ES_MODE_GET_CRITICAL_SEC_ENTRY:
+		if (type == TYPE_EXTEND || type == TYPE_STREAM)
+			return false;
+		if ((type & TYPE_CRITICAL_SEC) != TYPE_CRITICAL_SEC)
+			return false;
+		return true;
+	default:
+		WARN_ON_ONCE(1);
+		return false;
+	}
+}
+
 /* returns a set of dentries for a file or dir.
  * Note that this is a copy (dump) of dentries so that user should
  * call write_entry_set() to apply changes made in this entry set
@@ -839,11 +890,6 @@ struct exfat_dentry *exfat_get_dentry(struct super_block *sb,
  *   pointer of entry set on success,
  *   NULL on failure.
  */
-#define ES_MODE_STARTED				0
-#define ES_MODE_GET_FILE_ENTRY			1
-#define ES_MODE_GET_STRM_ENTRY			2
-#define ES_MODE_GET_NAME_ENTRY			3
-#define ES_MODE_GET_CRITICAL_SEC_ENTRY		4
 struct exfat_entry_set_cache *exfat_get_dentry_set(struct super_block *sb,
 		struct exfat_chain *p_dir, int entry, unsigned int type,
 		struct exfat_dentry **file_ep)
@@ -856,7 +902,7 @@ struct exfat_entry_set_cache *exfat_get_dentry_set(struct super_block *sb,
 	struct exfat_entry_set_cache *es = NULL;
 	struct exfat_dentry *ep, *pos;
 	unsigned char num_entries;
-	int mode = ES_MODE_STARTED;
+	enum exfat_validate_dentry_mode mode = ES_MODE_STARTED;
 	struct buffer_head *bh;
 
 	/* FIXME : is available in error case? */
@@ -910,53 +956,8 @@ struct exfat_entry_set_cache *exfat_get_dentry_set(struct super_block *sb,
 	pos = (struct exfat_dentry *)&(es->__buf);
 
 	while (num_entries) {
-		// instead of copying whole sector, we will check every entry.
-		// this will provide minimum stablity and consistency.
-		entry_type = exfat_get_entry_type(ep);
-
-		if ((entry_type == TYPE_UNUSED) ||
-				(entry_type == TYPE_DELETED))
+		if (!(exfat_validate_entry(exfat_get_entry_type(ep), &mode)))
 			goto err_out;
-
-		switch (mode) {
-		case ES_MODE_STARTED:
-			if  ((entry_type == TYPE_FILE) ||
-					(entry_type == TYPE_DIR))
-				mode = ES_MODE_GET_FILE_ENTRY;
-			else
-				goto err_out;
-			break;
-		case ES_MODE_GET_FILE_ENTRY:
-			if (entry_type == TYPE_STREAM)
-				mode = ES_MODE_GET_STRM_ENTRY;
-			else
-				goto err_out;
-			break;
-		case ES_MODE_GET_STRM_ENTRY:
-			if (entry_type == TYPE_EXTEND)
-				mode = ES_MODE_GET_NAME_ENTRY;
-			else
-				goto err_out;
-			break;
-		case ES_MODE_GET_NAME_ENTRY:
-			if (entry_type == TYPE_EXTEND)
-				break;
-			else if (entry_type == TYPE_STREAM)
-				goto err_out;
-			else if (entry_type & TYPE_CRITICAL_SEC)
-				mode = ES_MODE_GET_CRITICAL_SEC_ENTRY;
-			else
-				goto err_out;
-			break;
-		case ES_MODE_GET_CRITICAL_SEC_ENTRY:
-			if ((entry_type == TYPE_EXTEND) ||
-					(entry_type == TYPE_STREAM))
-				goto err_out;
-			else if ((entry_type & TYPE_CRITICAL_SEC) !=
-					TYPE_CRITICAL_SEC)
-				goto err_out;
-			break;
-		}
 
 		/* copy dentry */
 		memcpy(pos, ep, sizeof(struct exfat_dentry));
