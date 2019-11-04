@@ -25,41 +25,19 @@ static int exfat_default_codepage = CONFIG_EXFAT_DEFAULT_CODEPAGE;
 static char exfat_default_iocharset[] = CONFIG_EXFAT_DEFAULT_IOCHARSET;
 static const char exfat_iocharset_with_utf8[] = "iso8859-1";
 
-static inline int exfat_is_sb_dirty(struct super_block *sb)
-{
-	return EXFAT_SB(sb)->s_dirt;
-}
-
-inline void exfat_set_sb_dirty(struct super_block *sb)
-{
-	struct exfat_sb_info *sbi = EXFAT_SB(sb);
-
-	sbi->s_dirt = 1;
-}
-
-static inline void exfat_set_sb_clean(struct super_block *sb)
-{
-	EXFAT_SB(sb)->s_dirt = 0;
-}
-
-static void exfat_write_super(struct super_block *sb)
-{
-	exfat_set_sb_clean(sb);
-	sync_blockdev(sb->s_bdev);
-}
-
 static void exfat_put_super(struct super_block *sb)
 {
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 
-	mutex_lock(&EXFAT_SB(sb)->s_lock);
-	if (exfat_is_sb_dirty(sb))
-		exfat_write_super(sb);
-
+	mutex_lock(&sbi->s_lock);
+	if (READ_ONCE(sbi->s_dirt)) {
+		WRITE_ONCE(sbi->s_dirt, true);
+		sync_blockdev(sb->s_bdev);
+	}
 	exfat_set_vol_flags(sb, VOL_CLEAN);
 	exfat_free_upcase_table(sb);
 	exfat_free_alloc_bmp(sb);
-	mutex_unlock(&EXFAT_SB(sb)->s_lock);
+	mutex_unlock(&sbi->s_lock);
 
 	if (sbi->nls_disk) {
 		unload_nls(sbi->nls_disk);
@@ -81,17 +59,18 @@ static void exfat_put_super(struct super_block *sb)
 
 static int exfat_sync_fs(struct super_block *sb, int wait)
 {
+	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 	int err = 0;
 
 	/* If there are some dirty buffers in the bdev inode */
-	mutex_lock(&EXFAT_SB(sb)->s_lock);
-	if (exfat_is_sb_dirty(sb)) {
-		exfat_set_sb_clean(sb);
+	mutex_lock(&sbi->s_lock);
+	if (READ_ONCE(sbi->s_dirt)) {
+		WRITE_ONCE(sbi->s_dirt, true);
 		sync_blockdev(sb->s_bdev);
 		if (exfat_set_vol_flags(sb, VOL_CLEAN))
 			err = -EIO;
 	}
-	mutex_unlock(&EXFAT_SB(sb)->s_lock);
+	mutex_unlock(&sbi->s_lock);
 
 	return err;
 }

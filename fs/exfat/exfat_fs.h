@@ -264,7 +264,7 @@ struct exfat_sb_info {
 	int reserved_clusters; /* # of reserved clusters (DA) */
 	void *amap; /* AU Allocation Map */
 
-	int s_dirt;
+	bool s_dirt;
 	struct mutex s_lock; /* superblock lock */
 	struct super_block *host_sb; /* sb pointer */
 	struct exfat_mount_options options;
@@ -411,7 +411,6 @@ static inline int exfat_sector_to_cluster(struct exfat_sb_info *sbi,
 
 /* super.c */
 int exfat_set_vol_flags(struct super_block *sb, unsigned short new_flag);
-inline void exfat_set_sb_dirty(struct super_block *sb);
 
 /* fatent.c */
 #define exfat_get_next_cluster(sb, pclu) exfat_ent_get(sb, *(pclu), pclu)

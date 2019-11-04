@@ -158,7 +158,7 @@ int exfat_free_cluster(struct super_block *sb, struct exfat_chain *p_chain)
 		return -EIO;
 	}
 
-	exfat_set_sb_dirty(sb);
+	WRITE_ONCE(sbi->s_dirt, true);
 	clu = p_chain->dir;
 
 	if (p_chain->flags == 0x03) {
@@ -303,7 +303,7 @@ int exfat_alloc_cluster(struct super_block *sb, unsigned int num_alloc,
 		}
 	}
 
-	exfat_set_sb_dirty(sb);
+	WRITE_ONCE(sbi->s_dirt, true);
 
 	p_chain->dir = EOF_CLUSTER;
 
