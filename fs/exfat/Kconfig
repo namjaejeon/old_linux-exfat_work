@@ -1,12 +1,14 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 config EXFAT
-	tristate "exfat filesystem support"
+	tristate "exFAT filesystem support"
 	select NLS
 	help
-	  If you want to use the exFAT file system, then you must say Y or M
+	  This allows you to mount devices formatted with the exFAT file system.
+	  exFAT is typically used on SD-Cards or USB sticks.
 
 	  To compile this as a module, choose M here: the module will be called
+	  exfat.
 
 config EXFAT_DEFAULT_CODEPAGE
 	int "Default codepage for exFAT"
