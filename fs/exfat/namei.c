@@ -706,7 +706,7 @@ static int exfat_find(struct inode *dir, struct qstr *qname,
 			info->start_clu = EOF_CLUSTER;
 		} else {
 			info->flags = ep2->stream_flags;
-			info->start_clu = ep2->stream_start_clu;
+			info->start_clu = le32_to_cpu(ep2->stream_start_clu);
 		}
 
 		if (ei->start_clu == FREE_CLUSTER) {
@@ -1166,7 +1166,7 @@ static int exfat_move_file(struct inode *inode, struct exfat_chain *p_olddir,
 
 	/* check if the source and target directory is the same */
 	if (exfat_get_entry_type(epmov) == TYPE_DIR &&
-			epmov->stream_start_clu == p_newdir->dir)
+	    le32_to_cpu(epmov->stream_start_clu) == p_newdir->dir)
 		return -EINVAL;
 
 	num_old_entries = exfat_count_ext_entries(sb, p_olddir, oldentry,

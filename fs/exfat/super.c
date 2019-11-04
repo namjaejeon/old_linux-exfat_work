@@ -626,7 +626,7 @@ static int __exfat_fill_super(struct super_block *sb)
 	sbi->clu_srch_ptr = BASE_CLUSTER;
 	sbi->used_clusters = ~0u;
 
-	if (p_bpb->bsx.vol_flags & VOL_DIRTY) {
+	if (le16_to_cpu(p_bpb->bsx.vol_flags) & VOL_DIRTY) {
 		sbi->vol_flag |= VOL_DIRTY;
 		exfat_msg(sb, KERN_WARNING,
 			"Volume was not properly unmounted. Some data may be corrupt. Please run fsck.");
