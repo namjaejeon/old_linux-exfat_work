@@ -21,14 +21,6 @@
 #include "exfat_raw.h"
 #include "exfat_fs.h"
 
-#ifndef CONFIG_EXFAT_DEFAULT_CODEPAGE /* if Kconfig lacked codepage */
-#define CONFIG_EXFAT_DEFAULT_CODEPAGE   437
-#endif
-
-#ifndef CONFIG_EXFAT_DEFAULT_IOCHARSET /* if Kconfig lacked iocharset */
-#define CONFIG_EXFAT_DEFAULT_IOCHARSET  "utf8"
-#endif
-
 static int exfat_default_codepage = CONFIG_EXFAT_DEFAULT_CODEPAGE;
 static char exfat_default_iocharset[] = CONFIG_EXFAT_DEFAULT_IOCHARSET;
 static const char exfat_iocharset_with_utf8[] = "iso8859-1";
