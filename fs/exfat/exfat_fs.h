@@ -20,9 +20,11 @@
 /*
  * exfat error flags
  */
-#define EXFAT_ERRORS_CONT	(1) /* ignore error and continue */
-#define EXFAT_ERRORS_PANIC	(2) /* panic on error */
-#define EXFAT_ERRORS_RO		(3) /* remount r/o on error */
+enum exfat_error_mode {
+	EXFAT_ERRORS_CONT,	/* ignore error and continue */
+	EXFAT_ERRORS_PANIC,	/* panic on error */
+	EXFAT_ERRORS_RO,	/* remount r/o on error */
+};
 
 /*
  * exfat nls lossy flag
@@ -221,7 +223,7 @@ struct exfat_mount_options {
 	unsigned char case_sensitive;
 	unsigned char tz_utc;
 	/* on error: continue, panic, remount-ro */
-	unsigned char errors;
+	enum exfat_error_mode errors;
 	/* flag on if -o dicard specified and device support discard() */
 	unsigned char discard;
 };
