@@ -448,7 +448,6 @@ int exfat_count_used_clusters(struct super_block *sb, unsigned int *ret_count);
 
 /* file.c */
 extern const struct file_operations exfat_file_operations;
-int exfat_file_fsync(struct file *filp, loff_t start, loff_t end, int datasync);
 
 /* namei.c */
 extern const struct dentry_operations exfat_dentry_ops;
