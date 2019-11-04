@@ -640,7 +640,6 @@ static int exfat_write_partial_entries_in_entry_set(struct super_block *sb,
 	unsigned int remaining_byte_in_sector, copy_entries;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 	unsigned int clu;
-	unsigned char *esbuf = (unsigned char *)&(es->__buf);
 	int sync = es->sync;
 	struct buffer_head *bh;
 
@@ -655,8 +654,9 @@ static int exfat_write_partial_entries_in_entry_set(struct super_block *sb,
 		bh = sb_bread(sb, sec);
 		if (!bh)
 			goto err_out;
-		memcpy(bh->b_data + off, esbuf + buf_off,
-				EXFAT_DEN_TO_B(copy_entries));
+		memcpy(bh->b_data + off,
+			(unsigned char *)&es->entries[0] + buf_off,
+			EXFAT_DEN_TO_B(copy_entries));
 		exfat_update_bh(sb, bh, sync);
 		brelse(bh);
 		num_entries -= copy_entries;
@@ -686,20 +686,16 @@ err_out:
 int exfat_update_dir_chksum_with_entry_set(struct super_block *sb,
 		struct exfat_entry_set_cache *es)
 {
-	struct exfat_dentry *ep;
 	unsigned short chksum = 0;
 	int chksum_type = CS_DIR_ENTRY, i;
 
-	ep = (struct exfat_dentry *)&(es->__buf);
 	for (i = 0; i < es->num_entries; i++) {
-		chksum = exfat_calc_chksum_2byte((void *) ep, DENTRY_SIZE,
+		chksum = exfat_calc_chksum_2byte(&es->entries[i], DENTRY_SIZE,
 			chksum, chksum_type);
-		ep++;
 		chksum_type = CS_DEFAULT;
 	}
 
-	ep = (struct exfat_dentry *)&(es->__buf);
-	ep->file_checksum = cpu_to_le16(chksum);
+	es->entries[0].file_checksum = cpu_to_le16(chksum);
 	return exfat_write_partial_entries_in_entry_set(sb, es, es->sector,
 			es->offset, es->num_entries);
 }
@@ -942,8 +938,7 @@ struct exfat_entry_set_cache *exfat_get_dentry_set(struct super_block *sb,
 	else
 		num_entries = type;
 
-	es = kmalloc((offsetof(struct exfat_entry_set_cache, __buf) +
-		(num_entries) * sizeof(struct exfat_dentry)), GFP_KERNEL);
+	es = kmalloc(struct_size(es, entries, num_entries), GFP_KERNEL);
 	if (!es)
 		goto err_out;
 
@@ -953,7 +948,7 @@ struct exfat_entry_set_cache *exfat_get_dentry_set(struct super_block *sb,
 	es->alloc_flag = p_dir->flags;
 	es->sync = 0;
 
-	pos = (struct exfat_dentry *)&(es->__buf);
+	pos = &es->entries[0];
 
 	while (num_entries) {
 		if (!(exfat_validate_entry(exfat_get_entry_type(ep), &mode)))
@@ -993,7 +988,7 @@ struct exfat_entry_set_cache *exfat_get_dentry_set(struct super_block *sb,
 	}
 
 	if (file_ep)
-		*file_ep = (struct exfat_dentry *)&(es->__buf);
+		*file_ep = &es->entries[0];
 	brelse(bh);
 
 	return es;

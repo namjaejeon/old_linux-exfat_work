@@ -185,8 +185,7 @@ struct exfat_entry_set_cache {
 	int alloc_flag;
 	unsigned int num_entries;
 	int sync;
-	/* __buf should be the last member */
-	void *__buf;
+	struct exfat_dentry entries[];
 };
 
 struct exfat_dir_entry {
