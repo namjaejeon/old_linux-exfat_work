@@ -401,9 +401,6 @@ static void exfat_set_entry_type(struct exfat_dentry *ep, unsigned int type)
 	} else if (type == TYPE_FILE) {
 		ep->type = EXFAT_FILE;
 		ep->file_attr = ATTR_ARCHIVE_LE;
-	} else if (type == TYPE_SYMLINK) {
-		ep->type = EXFAT_FILE;
-		ep->file_attr = ATTR_ARCHIVE_LE | ATTR_SYMLINK_LE;
 	}
 }
 

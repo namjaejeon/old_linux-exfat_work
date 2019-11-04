@@ -708,8 +708,8 @@ static int exfat_load_upcase_table(struct super_block *sb,
 	int ret = -EIO;
 	unsigned char skip = false;
 	unsigned short **upcase_table =
-		kmalloc_array(UTBL_COL_COUNT, sizeof(unsigned short *),
-				GFP_KERNEL | __GFP_ZERO);
+		kzalloc(UTBL_COL_COUNT * sizeof(unsigned short *),
+				GFP_KERNEL);
 
 	if (!upcase_table)
 		return -ENOMEM;
@@ -726,8 +726,7 @@ static int exfat_load_upcase_table(struct super_block *sb,
 		}
 		sector++;
 		for (i = 0; i < sect_size && index <= 0xFFFF; i += 2) {
-			unsigned short uni =
-				le16_to_cpu(*((__le16 *)(bh->b_data + i)));
+			unsigned short uni = get_unaligned_le16(bh->b_data + i);
 
 			checksum = ((checksum & 1) ? 0x80000000 : 0) +
 				(checksum >> 1) +
@@ -781,8 +780,8 @@ static int exfat_load_default_upcase_table(struct super_block *sb)
 	unsigned short uni = 0;
 	unsigned short **upcase_table;
 
-	upcase_table = kmalloc_array(UTBL_COL_COUNT, sizeof(unsigned short *),
-			GFP_KERNEL | __GFP_ZERO);
+	upcase_table = kzalloc(UTBL_COL_COUNT * sizeof(unsigned short *),
+			GFP_KERNEL);
 	if (!upcase_table)
 		return -ENOMEM;
 
