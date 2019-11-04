@@ -814,22 +814,6 @@ void exfat_destroy_inode(struct inode *inode)
 	kmem_cache_free(exfat_inode_cachep, EXFAT_I(inode));
 }
 
-static int __init exfat_init_inodecache(void)
-{
-	exfat_inode_cachep = kmem_cache_create("exfat_inode_cache",
-			sizeof(struct exfat_inode_info),
-			0, (SLAB_RECLAIM_ACCOUNT|SLAB_MEM_SPREAD),
-			exfat_inode_init_once);
-	if (!exfat_inode_cachep)
-		return -ENOMEM;
-	return 0;
-}
-
-static void exfat_destroy_inodecache(void)
-{
-	kmem_cache_destroy(exfat_inode_cachep);
-}
-
 static struct file_system_type exfat_fs_type = {
 	.owner		= THIS_MODULE,
 	.name		= "exfat",
@@ -846,8 +830,12 @@ static int __init init_exfat_fs(void)
 	if (err)
 		goto error;
 
-	err = exfat_init_inodecache();
-	if (err)
+	err = -ENOMEM;
+	exfat_inode_cachep = kmem_cache_create("exfat_inode_cache",
+			sizeof(struct exfat_inode_info),
+			0, SLAB_RECLAIM_ACCOUNT | SLAB_MEM_SPREAD,
+			exfat_inode_init_once);
+	if (!exfat_inode_cachep)
 		goto error;
 
 	err = register_filesystem(&exfat_fs_type);
@@ -856,7 +844,7 @@ static int __init init_exfat_fs(void)
 
 	return 0;
 error:
-	exfat_destroy_inodecache();
+	kmem_cache_destroy(exfat_inode_cachep);
 	exfat_cache_shutdown();
 
 	return err;
@@ -864,7 +852,7 @@ error:
 
 static void __exit exit_exfat_fs(void)
 {
-	exfat_destroy_inodecache();
+	kmem_cache_destroy(exfat_inode_cachep);
 	unregister_filesystem(&exfat_fs_type);
 	exfat_cache_shutdown();
 }
