@@ -943,7 +943,8 @@ out:
 	return err;
 }
 
-int exfat_check_dir_empty(struct super_block *sb, struct exfat_chain *p_dir)
+static int exfat_check_dir_empty(struct super_block *sb,
+		struct exfat_chain *p_dir)
 {
 	int i;
 	int dentries_per_clu;
