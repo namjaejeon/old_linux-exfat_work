@@ -136,18 +136,6 @@ void exfat_free_alloc_bmp(struct super_block *sb)
 	sbi->vol_amap = NULL;
 }
 
-void exfat_sync_alloc_bmp(struct super_block *sb)
-{
-	int i;
-	struct exfat_sb_info *sbi = EXFAT_SB(sb);
-
-	if (sbi->vol_amap == NULL)
-		return;
-
-	for (i = 0; i < sbi->map_sectors; i++)
-		sync_dirty_buffer(sbi->vol_amap[i]);
-}
-
 /* WARN :
  * If the value of "clu" is 0, it means cluster 2 which is
  * the first cluster of cluster heap.
