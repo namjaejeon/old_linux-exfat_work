@@ -221,8 +221,6 @@ struct exfat_mount_options {
 	unsigned char utf8;
 	unsigned char casesensitive;
 	unsigned char tz_utc;
-	/* support symlink operation */
-	unsigned char symlink;
 	/* on error: continue, panic, remount-ro */
 	unsigned char errors;
 	/* flag on if -o dicard specified and device support discard() */
@@ -352,9 +350,6 @@ static inline int exfat_mode_can_hold_ro(struct inode *inode)
 	return 0;
 }
 
-/*
- * FIXME : needs to check symlink option.
- */
 /* Convert attribute bits and a mask to the UNIX mode. */
 static inline mode_t exfat_make_mode(struct exfat_sb_info *sbi,
 		unsigned short attr, mode_t mode)
@@ -505,7 +500,6 @@ int exfat_zeroed_cluster(struct super_block *sb, sector_t blknr,
 int exfat_alloc_new_dir(struct inode *inode, struct exfat_chain *clu);
 
 /* inode.c */
-extern const struct inode_operations exfat_symlink_inode_operations;
 extern const struct inode_operations exfat_file_inode_operations;
 void exfat_sync_inode(struct inode *inode);
 struct inode *exfat_build_inode(struct super_block *sb,
