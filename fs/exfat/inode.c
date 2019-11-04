@@ -619,7 +619,7 @@ static int exfat_readpages(struct file *file, struct address_space *mapping,
 
 static int exfat_writepage(struct page *page, struct writeback_control *wbc)
 {
-	return block_write_full_page(page, exfat_get_block, wbc);
+	return mpage_writepage(page, exfat_get_block, wbc);
 }
 
 static int exfat_writepages(struct address_space *mapping,
