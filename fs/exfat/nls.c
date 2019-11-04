@@ -473,14 +473,12 @@ static unsigned short exfat_nls_upper(struct super_block *sb, unsigned short a)
 {
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 
-	if (EXFAT_SB(sb)->options.casesensitive)
-		return a;
-
 	/* XXX: multi-index array lookups don't actually work properly in C */
-	if ((sbi->vol_utbl)[get_col_index(a)] != NULL)
-		return (sbi->vol_utbl)[get_col_index(a)][get_row_index(a)];
-	else
-		return a;
+	if (!sbi->options.case_sensitive &&
+	    sbi->vol_utbl[get_col_index(a)])
+		return sbi->vol_utbl[get_col_index(a)][get_row_index(a)];
+
+	return a;
 }
 
 static unsigned short *exfat_nls_wstrchr(unsigned short *str,

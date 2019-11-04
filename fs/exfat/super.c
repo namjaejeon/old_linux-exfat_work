@@ -177,7 +177,7 @@ static int exfat_show_options(struct seq_file *m, struct dentry *root)
 		seq_printf(m, ",iocharset=%s", sbi->nls_io->charset);
 	if (opts->utf8)
 		seq_puts(m, ",utf8");
-	seq_printf(m, ",namecase=%u", opts->casesensitive);
+	seq_printf(m, ",case_sensitive=%u", opts->case_sensitive);
 	if (opts->tz_utc)
 		seq_puts(m, ",tz=UTC");
 	seq_printf(m, ",bps=%ld", sb->s_blocksize);
@@ -231,7 +231,7 @@ enum {
 	Opt_codepage,
 	Opt_charset,
 	Opt_utf8,
-	Opt_namecase,
+	Opt_case_sensitive,
 	Opt_tz_utc,
 	Opt_debug,
 	Opt_err_cont,
@@ -252,7 +252,7 @@ static const match_table_t exfat_tokens = {
 	{Opt_codepage, "codepage=%u"},
 	{Opt_charset, "iocharset=%s"},
 	{Opt_utf8, "utf8"},
-	{Opt_namecase, "namecase=%u"},
+	{Opt_case_sensitive, "case_sensitive"},
 	{Opt_tz_utc, "tz=UTC"},
 	{Opt_err_cont, "errors=continue"},
 	{Opt_err_panic, "errors=panic"},
@@ -275,7 +275,7 @@ static int parse_options(struct super_block *sb, char *options, int silent,
 	opts->allow_utime = -1;
 	opts->codepage = exfat_default_codepage;
 	opts->iocharset = exfat_default_iocharset;
-	opts->casesensitive = 0;
+	opts->case_sensitive = 0;
 	opts->utf8 = 0;
 	opts->tz_utc = 0;
 	opts->errors = EXFAT_ERRORS_RO;
@@ -329,10 +329,8 @@ static int parse_options(struct super_block *sb, char *options, int silent,
 				return -ENOMEM;
 			opts->iocharset = tmpstr;
 			break;
-		case Opt_namecase:
-			if (match_int(&args[0], &option))
-				return 0;
-			opts->casesensitive = (option > 0) ? 1:0;
+		case Opt_case_sensitive:
+			opts->case_sensitive = 1;
 			break;
 		case Opt_utf8:
 			opts->utf8 = 1;
@@ -445,14 +443,6 @@ static int exfat_read_root(struct inode *inode)
 	inode->i_mtime = inode->i_atime = inode->i_ctime = current_time(inode);
 	exfat_cache_init_inode(inode);
 	return 0;
-}
-
-static void exfat_setup_dops(struct super_block *sb)
-{
-	if (EXFAT_SB(sb)->options.casesensitive == 0)
-		sb->s_d_op = &exfat_ci_dentry_ops;
-	else
-		sb->s_d_op = &exfat_dentry_ops;
 }
 
 static bool is_exfat(struct pbr *pbr)
@@ -666,7 +656,10 @@ static int exfat_fill_super(struct super_block *sb, void *data, int silent)
 		goto failed_mount;
 	}
 
-	exfat_setup_dops(sb);
+	if (EXFAT_SB(sb)->options.case_sensitive)
+		sb->s_d_op = &exfat_dentry_ops;
+	else
+		sb->s_d_op = &exfat_ci_dentry_ops;
 
 	err = __exfat_fill_super(sb);
 	if (err) {

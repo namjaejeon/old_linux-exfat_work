@@ -218,7 +218,7 @@ struct exfat_mount_options {
 	/* charset for filename input/display */
 	char *iocharset;
 	unsigned char utf8;
-	unsigned char casesensitive;
+	unsigned char case_sensitive;
 	unsigned char tz_utc;
 	/* on error: continue, panic, remount-ro */
 	unsigned char errors;
