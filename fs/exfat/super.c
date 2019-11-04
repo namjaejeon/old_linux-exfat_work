@@ -154,8 +154,9 @@ int exfat_set_vol_flags(struct super_block *sb, unsigned short new_flag)
 	return __exfat_set_vol_flags(sb, new_flag, 0);
 }
 
-static int __exfat_show_options(struct seq_file *m, struct super_block *sb)
+static int exfat_show_options(struct seq_file *m, struct dentry *root)
 {
+	struct super_block *sb = root->d_sb;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 	struct exfat_mount_options *opts = &sbi->options;
 
@@ -190,11 +191,6 @@ static int __exfat_show_options(struct seq_file *m, struct super_block *sb)
 		seq_puts(m, ",discard");
 
 	return 0;
-}
-
-static int exfat_show_options(struct seq_file *m, struct dentry *root)
-{
-	return __exfat_show_options(m, root->d_sb);
 }
 
 static struct inode *exfat_alloc_inode(struct super_block *sb)
