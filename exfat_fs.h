@@ -66,7 +66,6 @@
 #define TYPE_VOLUME		0x0103
 #define TYPE_DIR		0x0104
 #define TYPE_FILE		0x011F
-#define TYPE_SYMLINK		0x015F
 #define TYPE_CRITICAL_SEC	0x0200
 #define TYPE_STREAM		0x0201
 #define TYPE_EXTEND		0x0202
@@ -83,10 +82,6 @@
 #define DOS_NAME_LENGTH		11 /* DOS file name length excluding NULL */
 #define MAX_VFSNAME_BUF_SIZE	((MAX_NAME_LENGTH + 1) * MAX_CHARSET_SIZE)
 #define MAX_DOSNAME_BUF_SIZE	((DOS_NAME_LENGTH + 2) + 6)
-
-/* file creation modes */
-#define FM_REGULAR	0x00
-#define FM_SYMLINK	0x40
 
 #define FAT_CACHE_SIZE		128
 #define FAT_CACHE_HASH_SIZE	64
@@ -369,8 +364,6 @@ static inline mode_t exfat_make_mode(struct exfat_sb_info *sbi,
 
 	if (attr & ATTR_SUBDIR)
 		return (mode & ~sbi->options.fs_dmask) | S_IFDIR;
-	else if (attr & ATTR_SYMLINK)
-		return (mode & ~sbi->options.fs_dmask) | S_IFLNK;
 
 	return (mode & ~sbi->options.fs_fmask) | S_IFREG;
 }

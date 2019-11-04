@@ -501,7 +501,7 @@ static inline loff_t exfat_make_i_pos(struct exfat_dir_entry *info)
 
 static int exfat_add_entry(struct inode *inode, const char *path,
 		struct exfat_chain *p_dir, unsigned int type,
-		unsigned char mode, struct exfat_dir_entry *info)
+		struct exfat_dir_entry *info)
 {
 	int ret, dentry, num_entries;
 	struct super_block *sb = inode->i_sb;
@@ -540,7 +540,7 @@ static int exfat_add_entry(struct inode *inode, const char *path,
 	/* fill the dos name directory entry information of the created file.
 	 * the first cluster is not determined yet. (0)
 	 */
-	ret = exfat_init_dir_entry(sb, p_dir, dentry, type | mode,
+	ret = exfat_init_dir_entry(sb, p_dir, dentry, type,
 		start_clu, clu_size);
 	if (ret)
 		goto out;
@@ -555,7 +555,7 @@ static int exfat_add_entry(struct inode *inode, const char *path,
 	info->type = type;
 
 	if (type == TYPE_FILE) {
-		info->attr = ATTR_ARCHIVE | mode;
+		info->attr = ATTR_ARCHIVE;
 		info->start_clu = EOF_CLUSTER;
 		info->size = 0;
 		info->num_subdirs = 0;
@@ -563,7 +563,7 @@ static int exfat_add_entry(struct inode *inode, const char *path,
 		int count;
 		struct exfat_chain cdir;
 
-		info->attr = ATTR_SUBDIR | mode;
+		info->attr = ATTR_SUBDIR;
 		info->start_clu = start_clu;
 		info->size = clu_size;
 
@@ -598,7 +598,7 @@ static int exfat_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 	mutex_lock(&EXFAT_SB(sb)->s_lock);
 	exfat_set_vol_flags(sb, VOL_DIRTY);
 	err = exfat_add_entry(dir, dentry->d_name.name, &cdir, TYPE_FILE,
-		FM_REGULAR, &info);
+		&info);
 	exfat_set_vol_flags(sb, VOL_CLEAN);
 	if (err)
 		goto out;
@@ -912,7 +912,7 @@ static int exfat_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 	mutex_lock(&EXFAT_SB(sb)->s_lock);
 	exfat_set_vol_flags(sb, VOL_DIRTY);
 	err = exfat_add_entry(dir, dentry->d_name.name, &cdir, TYPE_DIR,
-		FM_REGULAR, &info);
+		&info);
 	exfat_set_vol_flags(sb, VOL_CLEAN);
 	if (err)
 		goto out;

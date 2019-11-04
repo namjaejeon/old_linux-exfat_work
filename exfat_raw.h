@@ -49,13 +49,12 @@
 #define ATTR_VOLUME		0x0008
 #define ATTR_SUBDIR		0x0010
 #define ATTR_ARCHIVE		0x0020
-#define ATTR_SYMLINK		0x0040
 #define ATTR_EXTEND		(ATTR_READONLY | ATTR_HIDDEN | ATTR_SYSTEM | \
 				 ATTR_VOLUME) /* 0x000F */
 
 #define ATTR_EXTEND_MASK	(ATTR_EXTEND | ATTR_SUBDIR | ATTR_ARCHIVE)
 #define ATTR_RWMASK		(ATTR_HIDDEN | ATTR_SYSTEM | ATTR_VOLUME | \
-				 ATTR_SUBDIR | ATTR_ARCHIVE | ATTR_SYMLINK)
+				 ATTR_SUBDIR | ATTR_ARCHIVE)
 
 #define ATTR_READONLY_LE	cpu_to_le16(0x0001)
 #define ATTR_HIDDEN_LE		cpu_to_le16(0x0002)
@@ -63,7 +62,6 @@
 #define ATTR_VOLUME_LE		cpu_to_le16(0x0008)
 #define ATTR_SUBDIR_LE		cpu_to_le16(0x0010)
 #define ATTR_ARCHIVE_LE		cpu_to_le16(0x0020)
-#define ATTR_SYMLINK_LE		cpu_to_le16(0x0040)
 
 /* EXFAT BIOS parameter block (64 bytes) */
 struct bpb64 {
