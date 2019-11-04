@@ -489,7 +489,7 @@ static unsigned short *exfat_nls_wstrchr(unsigned short *str,
 			return str;
 	}
 
-	return 0;
+	return NULL;
 }
 
 int exfat_nls_cmp_uniname(struct super_block *sb, unsigned short *a,
