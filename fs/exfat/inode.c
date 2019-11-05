@@ -619,7 +619,7 @@ static int exfat_readpages(struct file *file, struct address_space *mapping,
 
 static int exfat_writepage(struct page *page, struct writeback_control *wbc)
 {
-	return block_write_full_page(page, exfat_get_block, wbc);
+	return mpage_writepage(page, exfat_get_block, wbc);
 }
 
 static int exfat_writepages(struct address_space *mapping,
@@ -693,13 +693,12 @@ static int exfat_write_end(struct file *file, struct address_space *mapping,
 	return err;
 }
 
-static inline ssize_t __exfat_direct_IO(int rw, struct kiocb *iocb,
-		struct inode *inode, void *iov_u, loff_t offset,
-		loff_t count, unsigned long nr_segs)
+static ssize_t exfat_direct_IO(struct kiocb *iocb, struct iov_iter *iter)
 {
-	struct address_space *mapping = inode->i_mapping;
-	struct iov_iter *iter = (struct iov_iter *)iov_u;
-	loff_t size = offset + count;
+	struct address_space *mapping = iocb->ki_filp->f_mapping;
+	struct inode *inode = mapping->host;
+	loff_t size = iocb->ki_pos + iov_iter_count(iter);
+	int rw = iov_iter_rw(iter);
 	ssize_t ret;
 
 	if (rw == WRITE) {
@@ -723,21 +722,7 @@ static inline ssize_t __exfat_direct_IO(int rw, struct kiocb *iocb,
 	ret = blockdev_direct_IO(iocb, inode, iter, exfat_get_block);
 	if (ret < 0 && (rw & WRITE))
 		exfat_write_failed(mapping, size);
-
 	return ret;
-}
-
-static ssize_t exfat_direct_IO(struct kiocb *iocb, struct iov_iter *iter)
-{
-	struct file *file = iocb->ki_filp;
-	struct address_space *mapping = file->f_mapping;
-	struct inode *inode = mapping->host;
-	size_t count = iov_iter_count(iter);
-	int rw = iov_iter_rw(iter);
-	loff_t offset = iocb->ki_pos;
-
-	return __exfat_direct_IO(rw, iocb, inode,
-			(void *)iter, offset, count, 0 /* UNUSED */);
 }
 
 static sector_t exfat_aop_bmap(struct address_space *mapping, sector_t block)

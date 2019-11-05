@@ -20,9 +20,11 @@
 /*
  * exfat error flags
  */
-#define EXFAT_ERRORS_CONT	(1) /* ignore error and continue */
-#define EXFAT_ERRORS_PANIC	(2) /* panic on error */
-#define EXFAT_ERRORS_RO		(3) /* remount r/o on error */
+enum exfat_error_mode {
+	EXFAT_ERRORS_CONT,	/* ignore error and continue */
+	EXFAT_ERRORS_PANIC,	/* panic on error */
+	EXFAT_ERRORS_RO,	/* remount r/o on error */
+};
 
 /*
  * exfat nls lossy flag
@@ -185,8 +187,7 @@ struct exfat_entry_set_cache {
 	int alloc_flag;
 	unsigned int num_entries;
 	int sync;
-	/* __buf should be the last member */
-	void *__buf;
+	struct exfat_dentry entries[];
 };
 
 struct exfat_dir_entry {
@@ -219,12 +220,10 @@ struct exfat_mount_options {
 	/* charset for filename input/display */
 	char *iocharset;
 	unsigned char utf8;
-	unsigned char casesensitive;
+	unsigned char case_sensitive;
 	unsigned char tz_utc;
-	/* support symlink operation */
-	unsigned char symlink;
 	/* on error: continue, panic, remount-ro */
-	unsigned char errors;
+	enum exfat_error_mode errors;
 	/* flag on if -o dicard specified and device support discard() */
 	unsigned char discard;
 };
@@ -264,7 +263,7 @@ struct exfat_sb_info {
 	int reserved_clusters; /* # of reserved clusters (DA) */
 	void *amap; /* AU Allocation Map */
 
-	int s_dirt;
+	bool s_dirt;
 	struct mutex s_lock; /* superblock lock */
 	struct super_block *host_sb; /* sb pointer */
 	struct exfat_mount_options options;
@@ -352,9 +351,6 @@ static inline int exfat_mode_can_hold_ro(struct inode *inode)
 	return 0;
 }
 
-/*
- * FIXME : needs to check symlink option.
- */
 /* Convert attribute bits and a mask to the UNIX mode. */
 static inline mode_t exfat_make_mode(struct exfat_sb_info *sbi,
 		unsigned short attr, mode_t mode)
@@ -411,7 +407,6 @@ static inline int exfat_sector_to_cluster(struct exfat_sb_info *sbi,
 
 /* super.c */
 int exfat_set_vol_flags(struct super_block *sb, unsigned short new_flag);
-inline void exfat_set_sb_dirty(struct super_block *sb);
 
 /* fatent.c */
 #define exfat_get_next_cluster(sb, pclu) exfat_ent_get(sb, *(pclu), pclu)
@@ -454,7 +449,6 @@ int exfat_count_used_clusters(struct super_block *sb, unsigned int *ret_count);
 
 /* file.c */
 extern const struct file_operations exfat_file_operations;
-int exfat_file_fsync(struct file *filp, loff_t start, loff_t end, int datasync);
 
 /* namei.c */
 extern const struct dentry_operations exfat_dentry_ops;
@@ -506,7 +500,6 @@ int exfat_zeroed_cluster(struct super_block *sb, sector_t blknr,
 int exfat_alloc_new_dir(struct inode *inode, struct exfat_chain *clu);
 
 /* inode.c */
-extern const struct inode_operations exfat_symlink_inode_operations;
 extern const struct inode_operations exfat_file_inode_operations;
 void exfat_sync_inode(struct inode *inode);
 struct inode *exfat_build_inode(struct super_block *sb,
@@ -516,8 +509,6 @@ void exfat_unhash_inode(struct inode *inode);
 void exfat_truncate(struct inode *inode, loff_t size);
 struct inode *exfat_iget(struct super_block *sb, loff_t i_pos);
 int exfat_write_inode(struct inode *inode, struct writeback_control *wbc);
-struct inode *exfat_alloc_inode(struct super_block *sb);
-void exfat_destroy_inode(struct inode *inode);
 void exfat_evict_inode(struct inode *inode);
 int exfat_read_inode(struct inode *inode, struct exfat_dir_entry *info);
 
