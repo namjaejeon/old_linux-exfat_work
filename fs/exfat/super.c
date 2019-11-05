@@ -721,6 +721,7 @@ static int exfat_init_fs_context(struct fs_context *fc)
 	sbi->options.fs_dmask = current->fs->umask;
 	sbi->options.allow_utime = -1;
 	sbi->options.codepage = exfat_default_codepage;
+	sbi->options.iocharset = exfat_default_iocharset;
 	sbi->options.errors = EXFAT_ERRORS_RO;
 
 	fc->s_fs_info = sbi;
