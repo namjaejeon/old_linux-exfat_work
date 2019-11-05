@@ -26,6 +26,12 @@ static char exfat_default_iocharset[] = CONFIG_EXFAT_DEFAULT_IOCHARSET;
 static const char exfat_iocharset_with_utf8[] = "iso8859-1";
 static struct kmem_cache *exfat_inode_cachep;
 
+static void exfat_free_iocharset(struct exfat_sb_info *sbi)
+{
+	if (sbi->options.iocharset != exfat_default_iocharset)
+		kfree(sbi->options.iocharset);
+}
+
 static void exfat_put_super(struct super_block *sb)
 {
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
@@ -49,11 +55,7 @@ static void exfat_put_super(struct super_block *sb)
 		unload_nls(sbi->nls_io);
 		sbi->nls_io = NULL;
 	}
-	if (sbi->options.iocharset != exfat_default_iocharset) {
-		kfree(sbi->options.iocharset);
-		sbi->options.iocharset = exfat_default_iocharset;
-	}
-
+	exfat_free_iocharset(sbi);
 	sb->s_fs_info = NULL;
 	kfree(sbi);
 }
@@ -302,7 +304,7 @@ static int exfat_parse_param(struct fs_context *fc, struct fs_parameter *param)
 		opts->codepage = result.uint_32;
 		break;
 	case Opt_charset:
-		kfree(opts->iocharset);
+		exfat_free_iocharset(sbi);
 		opts->iocharset = kstrdup(param->string, GFP_KERNEL);
 		if (!opts->iocharset)
 			return -ENOMEM;
@@ -681,8 +683,7 @@ failed_mount:
 		unload_nls(sbi->nls_io);
 	if (sbi->nls_disk)
 		unload_nls(sbi->nls_disk);
-	if (sbi->options.iocharset != exfat_default_iocharset)
-		kfree(sbi->options.iocharset);
+	exfat_free_iocharset(sbi);
 	sb->s_fs_info = NULL;
 	kfree(sbi);
 	return err;
