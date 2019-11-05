@@ -252,12 +252,14 @@ static const struct fs_parameter_spec exfat_param_specs[] = {
 	fsparam_string("tz",			Opt_tz),
 	fsparam_enum("errors",			Opt_errors),
 	fsparam_flag("discard",			Opt_discard),
+	{}
 };
 
 static const struct fs_parameter_enum exfat_param_enums[] = {
 	{ Opt_errors,	"continue",		EXFAT_ERRORS_CONT },
 	{ Opt_errors,	"panic",		EXFAT_ERRORS_PANIC },
 	{ Opt_errors,	"remount-ro",		EXFAT_ERRORS_RO },
+	{}
 };
 
 static const struct fs_parameter_description exfat_parameters = {
