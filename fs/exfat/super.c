@@ -575,7 +575,7 @@ out:
 
 static int exfat_fill_super(struct super_block *sb, struct fs_context *fc)
 {
-	struct exfat_sb_info *sbi = fc->s_fs_info;
+	struct exfat_sb_info *sbi = sb->s_fs_info;
 	struct exfat_mount_options *opts = &sbi->options;
 	struct inode *root_inode = NULL;
 	int err;
