@@ -233,7 +233,6 @@ enum {
 	Opt_utf8,
 	Opt_case_sensitive,
 	Opt_tz,
-	Opt_debug,
 	Opt_errors,
 	Opt_discard,
 };
