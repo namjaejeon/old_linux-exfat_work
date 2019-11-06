@@ -21,7 +21,6 @@
 #include "exfat_raw.h"
 #include "exfat_fs.h"
 
-static int exfat_default_codepage = CONFIG_EXFAT_DEFAULT_CODEPAGE;
 static char exfat_default_iocharset[] = CONFIG_EXFAT_DEFAULT_IOCHARSET;
 static const char exfat_iocharset_with_utf8[] = "iso8859-1";
 static struct kmem_cache *exfat_inode_cachep;
@@ -46,11 +45,6 @@ static void exfat_put_super(struct super_block *sb)
 	exfat_free_alloc_bmp(sb);
 	mutex_unlock(&sbi->s_lock);
 
-	if (sbi->nls_disk) {
-		unload_nls(sbi->nls_disk);
-		sbi->nls_disk = NULL;
-		sbi->options.codepage = exfat_default_codepage;
-	}
 	if (sbi->nls_io) {
 		unload_nls(sbi->nls_io);
 		sbi->nls_io = NULL;
@@ -173,8 +167,6 @@ static int exfat_show_options(struct seq_file *m, struct dentry *root)
 	seq_printf(m, ",dmask=%04o", opts->fs_dmask);
 	if (opts->allow_utime)
 		seq_printf(m, ",allow_utime=%04o", opts->allow_utime);
-	if (sbi->nls_disk)
-		seq_printf(m, ",codepage=%s", sbi->nls_disk->charset);
 	if (sbi->nls_io)
 		seq_printf(m, ",iocharset=%s", sbi->nls_io->charset);
 	if (opts->utf8)
@@ -230,7 +222,6 @@ enum {
 	Opt_dmask,
 	Opt_fmask,
 	Opt_allow_utime,
-	Opt_codepage,
 	Opt_charset,
 	Opt_utf8,
 	Opt_case_sensitive,
@@ -246,7 +237,6 @@ static const struct fs_parameter_spec exfat_param_specs[] = {
 	fsparam_u32oct("dmask",			Opt_dmask),
 	fsparam_u32oct("fmask",			Opt_fmask),
 	fsparam_u32oct("allow_utime",		Opt_allow_utime),
-	fsparam_u32("codepage",			Opt_codepage),
 	fsparam_string("iocharset",		Opt_charset),
 	fsparam_flag("utf8",			Opt_utf8),
 	fsparam_flag("case_sensitive",		Opt_case_sensitive),
@@ -299,9 +289,6 @@ static int exfat_parse_param(struct fs_context *fc, struct fs_parameter *param)
 		break;
 	case Opt_allow_utime:
 		opts->allow_utime = result.uint_32 & 0022;
-		break;
-	case Opt_codepage:
-		opts->codepage = result.uint_32;
 		break;
 	case Opt_charset:
 		exfat_free_iocharset(sbi);
@@ -579,7 +566,6 @@ static int exfat_fill_super(struct super_block *sb, struct fs_context *fc)
 	struct exfat_mount_options *opts = &sbi->options;
 	struct inode *root_inode = NULL;
 	int err;
-	char buf[50];
 
 	if (opts->allow_utime == -1)
 		opts->allow_utime = ~opts->fs_dmask & 0022;
@@ -617,21 +603,7 @@ static int exfat_fill_super(struct super_block *sb, struct fs_context *fc)
 	/* set up enough so that it can read an inode */
 	exfat_hash_init(sb);
 
-	/*
-	 * The low byte of FAT's first entry must have same value with
-	 * media-field.  But in real world, too many devices is
-	 * writing wrong value.  So, removed that validity check.
-	 *
-	 * if (FAT_FIRST_ENT(sb, media) != first)
-	 */
-
 	err = -EINVAL;
-	sprintf(buf, "cp%d", sbi->options.codepage);
-	sbi->nls_disk = load_nls(buf);
-	if (!sbi->nls_disk) {
-		exfat_msg(sb, KERN_ERR, "codepage %s not found", buf);
-		goto failed_mount2;
-	}
 
 	sbi->nls_io = load_nls(sbi->options.iocharset);
 	if (!sbi->nls_io) {
@@ -678,8 +650,6 @@ failed_mount:
 
 	if (sbi->nls_io)
 		unload_nls(sbi->nls_io);
-	if (sbi->nls_disk)
-		unload_nls(sbi->nls_disk);
 	exfat_free_iocharset(sbi);
 	sb->s_fs_info = NULL;
 	kfree(sbi);
@@ -719,7 +689,6 @@ static int exfat_init_fs_context(struct fs_context *fc)
 	sbi->options.fs_fmask = current->fs->umask;
 	sbi->options.fs_dmask = current->fs->umask;
 	sbi->options.allow_utime = -1;
-	sbi->options.codepage = exfat_default_codepage;
 	sbi->options.iocharset = exfat_default_iocharset;
 	sbi->options.errors = EXFAT_ERRORS_RO;
 

@@ -267,7 +267,6 @@ struct exfat_sb_info {
 	struct mutex s_lock; /* superblock lock */
 	struct super_block *host_sb; /* sb pointer */
 	struct exfat_mount_options options;
-	struct nls_table *nls_disk; /* Codepage used on disk */
 	struct nls_table *nls_io; /* Charset used for input and display */
 	struct ratelimit_state ratelimit;
 
