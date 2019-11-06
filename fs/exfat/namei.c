@@ -1494,9 +1494,11 @@ static int exfat_cont_expand(struct inode *inode, loff_t size)
 
 	err = filemap_fdatawrite_range(mapping, start, start + count - 1);
 	err2 = sync_mapping_buffers(mapping);
-	err = (err)?(err):(err2);
+	if (!err)
+		err = err2;
 	err2 = write_inode_now(inode, 1);
-	err = (err)?(err):(err2);
+	if (!err)
+		err = err2;
 	if (err)
 		return err;
 
