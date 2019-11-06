@@ -47,7 +47,8 @@ static unsigned char used_bit[] = {
  */
 int exfat_load_alloc_bmp(struct super_block *sb)
 {
-	unsigned int i, j, map_size, type, need_map_size;
+	unsigned int i, j, type, need_map_size;
+	long long map_size;
 	sector_t sector;
 	struct exfat_chain clu;
 	struct exfat_dentry *ep = NULL;
@@ -81,11 +82,11 @@ int exfat_load_alloc_bmp(struct super_block *sb)
 
 alloc:
 	sbi->map_clu = le32_to_cpu(ep->bitmap_start_clu);
-	map_size = (unsigned int)le64_to_cpu(ep->bitmap_size);
+	map_size = le64_to_cpu(ep->bitmap_size);
 	need_map_size = (((sbi->num_clusters - BASE_CLUSTER) - 1) >> 3) + 1;
 	if (need_map_size != map_size) {
 		exfat_msg(sb, KERN_ERR,
-				"bogus allocation bitmap size(need : %u, cur : %u)",
+				"bogus allocation bitmap size(need : %u, cur : %lld)",
 				need_map_size, map_size);
 		/*
 		 * Only allowed when bogus allocation
