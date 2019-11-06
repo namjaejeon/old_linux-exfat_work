@@ -149,8 +149,7 @@ int exfat_set_alloc_bitmap(struct super_block *sb, unsigned int clu)
 	b = clu & ((sb->s_blocksize << 3) - 1);
 
 	sector = exfat_cluster_to_sector(sbi, sbi->map_clu) + i;
-	bitmap_set((unsigned long *)(sbi->vol_amap[i]->b_data), b, 1);
-
+	set_bit_le(b, sbi->vol_amap[i]->b_data);
 	set_buffer_uptodate(sbi->vol_amap[i]);
 	mark_buffer_dirty(sbi->vol_amap[i]);
 
@@ -172,9 +171,7 @@ void exfat_clr_alloc_bitmap(struct super_block *sb, unsigned int clu)
 	b = clu & ((sb->s_blocksize << 3) - 1);
 
 	sector = exfat_cluster_to_sector(sbi, sbi->map_clu) + i;
-
-	bitmap_clear((unsigned long *)(sbi->vol_amap[i]->b_data), b, 1);
-
+	clear_bit_le(b, sbi->vol_amap[i]->b_data);
 	set_buffer_uptodate(sbi->vol_amap[i]);
 	mark_buffer_dirty(sbi->vol_amap[i]);
 
