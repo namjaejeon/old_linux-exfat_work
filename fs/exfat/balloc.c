@@ -54,8 +54,7 @@ int exfat_load_alloc_bmp(struct super_block *sb)
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 	struct buffer_head *bh;
 
-	clu.dir = sbi->root_dir;
-	clu.flags = 0x01;
+	exfat_chain_set(&clu, sbi->root_dir, 0, 0x01);
 
 	while (clu.dir != EOF_CLUSTER) {
 		for (i = 0; i < sbi->dentries_per_clu; i++) {
