@@ -111,7 +111,6 @@ alloc:
 			while (i < j)
 				brelse(sbi->vol_amap[i++]);
 
-			/* kfree(NULL) is safe */
 			kfree(sbi->vol_amap);
 			sbi->vol_amap = NULL;
 			return -EIO;
