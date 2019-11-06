@@ -231,8 +231,9 @@ int exfat_clear_cluster(struct inode *inode, unsigned int clu)
 			return ret;
 	}
 
-	/* Trying buffered zero writes
-	 * if it doesn't have DIRSYNC or exfat_zeroed_cluster() returned -EAGAIN
+	/*
+	 * Try buffered zero writes if it doesn't have DIRSYNC or
+	 * exfat_zeroed_cluster() returned -EAGAIN.
 	 */
 	for ( ; s < n; s++) {
 		bh = sb_getblk(sb, s);

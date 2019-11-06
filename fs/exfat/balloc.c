@@ -135,9 +135,9 @@ void exfat_free_alloc_bmp(struct super_block *sb)
 	sbi->vol_amap = NULL;
 }
 
-/* WARN :
- * If the value of "clu" is 0, it means cluster 2 which is
- * the first cluster of cluster heap.
+/*
+ * If the value of "clu" is 0, it means cluster 2 which is the first cluster of
+ * the cluster heap.
  */
 int exfat_set_alloc_bitmap(struct super_block *sb, unsigned int clu)
 {
@@ -156,9 +156,9 @@ int exfat_set_alloc_bitmap(struct super_block *sb, unsigned int clu)
 	return 0;
 }
 
-/* WARN :
- * If the value of "clu" is 0, it means cluster 2 which is
- * the first cluster of cluster heap.
+/*
+ * If the value of "clu" is 0, it means cluster 2 which is the first cluster of
+ * the cluster heap.
  */
 void exfat_clr_alloc_bitmap(struct super_block *sb, unsigned int clu)
 {
@@ -190,9 +190,9 @@ void exfat_clr_alloc_bitmap(struct super_block *sb, unsigned int clu)
 	}
 }
 
-/* WARN :
- * If the value of "clu" is 0, it means cluster 2 which is
- * the first cluster of cluster heap.
+/*
+ * If the value of "clu" is 0, it means cluster 2 which is the first cluster of
+ * the cluster heap.
  */
 unsigned int exfat_test_alloc_bitmap(struct super_block *sb, unsigned int clu)
 {

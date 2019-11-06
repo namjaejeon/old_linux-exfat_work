@@ -250,8 +250,10 @@ get_new:
 
 	err = exfat_readdir(inode, &de);
 	if (err) {
-		// at least we tried to read a sector
-		// move cpos to next sector position (should be aligned)
+		/*
+		 * At least we tried to read a sector.  Move cpos to next sector
+		 * position (should be aligned).
+		 */
 		if (err == -EIO) {
 			cpos += 1 << (sb->s_blocksize_bits);
 			cpos &= ~(sb->s_blocksize - 1);
@@ -343,7 +345,8 @@ static int exfat_calc_num_entries(struct exfat_uni_name *p_uniname)
 	return ((len - 1) / 15 + 3);
 }
 
-/* input  : dir, uni_name
+/*
+ * input  : dir, uni_name
  * output : num_of_entry
  */
 int exfat_get_num_entries(struct exfat_uni_name *p_uniname)
@@ -532,7 +535,7 @@ int exfat_init_dir_entry(struct super_block *sb, struct exfat_chain *p_dir,
 	flags = (type == TYPE_FILE) ? 0x01 : 0x03;
 
 	/*
-	 * we cannot use exfat_get_dentry_set here because file ep is not
+	 * We cannot use exfat_get_dentry_set here because file ep is not
 	 * initialized yet.
 	 */
 	ep = exfat_get_dentry(sb, p_dir, entry, &bh, &sector);
@@ -683,7 +686,7 @@ static int exfat_write_partial_entries_in_entry_set(struct super_block *sb,
 		num_entries -= copy_entries;
 
 		if (num_entries) {
-			// get next sector
+			/* get next sector */
 			if (exfat_is_last_sector_in_cluster(sbi, sec)) {
 				clu = exfat_sector_to_cluster(sbi, sec);
 				if (es->alloc_flag == 0x03)
@@ -894,10 +897,13 @@ static bool exfat_validate_entry(unsigned int type,
 	}
 }
 
-/* returns a set of dentries for a file or dir.
+/*
+ * Returns a set of dentries for a file or dir.
+ *
  * Note that this is a copy (dump) of dentries so that user should
  * call write_entry_set() to apply changes made in this entry set
  * to the real device.
+ *
  * in:
  *   sb+p_dir+entry: indicates a file/dir
  *   type:  specifies how many dentries should be included.
@@ -983,7 +989,7 @@ struct exfat_entry_set_cache *exfat_get_dentry_set(struct super_block *sb,
 
 		if (((off + DENTRY_SIZE) & (sb->s_blocksize - 1)) <
 		    (off & (sb->s_blocksize - 1))) {
-			// get the next sector
+			/* get the next sector */
 			if (exfat_is_last_sector_in_cluster(sbi, sec)) {
 				if (es->alloc_flag == 0x03)
 					clu++;
@@ -1046,11 +1052,12 @@ static int exfat_extract_uni_name(struct exfat_dentry *ep,
 #define DIRENT_STEP_NAME	(2)
 #define DIRENT_STEP_SECD	(3)
 
-/* return values of exfat_find_dir_entry()
- * >= 0 : return dir entiry position with the name in dir
- * -EEXIST : (root dir, ".") it is the root dir itself
- * -ENOENT : entry with the name does not exist
- * -EIO    : I/O error
+/*
+ * return values:
+ *   >= 0	: return dir entiry position with the name in dir
+ *   -EEXIST	: (root dir, ".") it is the root dir itself
+ *   -ENOENT	: entry with the name does not exist
+ *   -EIO	: I/O error
  */
 int exfat_find_dir_entry(struct super_block *sb, struct exfat_inode_info *ei,
 		struct exfat_chain *p_dir, struct exfat_uni_name *p_uniname,
@@ -1219,7 +1226,8 @@ rewind:
 	}
 
 not_found:
-	/* we started at not 0 index,so we should try to find target
+	/*
+	 * We started at not 0 index,so we should try to find target
 	 * from 0 index to the index we started at.
 	 */
 	if (!rewind && end_eidx) {
