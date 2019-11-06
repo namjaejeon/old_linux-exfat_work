@@ -267,7 +267,6 @@ struct exfat_sb_info {
 	struct mutex s_lock; /* superblock lock */
 	struct super_block *host_sb; /* sb pointer */
 	struct exfat_mount_options options;
-	struct nls_table *nls_disk; /* Codepage used on disk */
 	struct nls_table *nls_io; /* Charset used for input and display */
 	struct ratelimit_state ratelimit;
 
@@ -472,6 +471,9 @@ int exfat_get_cluster(struct inode *inode, unsigned int cluster,
 extern const struct inode_operations exfat_dir_inode_operations;
 extern const struct file_operations exfat_dir_operations;
 void exfat_update_bh(struct super_block *sb, struct buffer_head *bh, int sync);
+void exfat_chain_set(struct exfat_chain *ec, unsigned int dir,
+		unsigned int size, unsigned char flags);
+struct exfat_chain *exfat_chain_dup(struct exfat_chain *dir);
 void exfat_get_uniname_from_ext_entry(struct super_block *sb,
 		struct exfat_chain *p_dir, int entry, unsigned short *uniname);
 unsigned int exfat_get_entry_type(struct exfat_dentry *p_entry);

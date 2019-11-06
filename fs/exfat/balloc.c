@@ -47,15 +47,15 @@ static unsigned char used_bit[] = {
  */
 int exfat_load_alloc_bmp(struct super_block *sb)
 {
-	unsigned int i, j, map_size, type, need_map_size;
+	unsigned int i, j, type, need_map_size;
+	long long map_size;
 	sector_t sector;
 	struct exfat_chain clu;
 	struct exfat_dentry *ep = NULL;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 	struct buffer_head *bh;
 
-	clu.dir = sbi->root_dir;
-	clu.flags = 0x01;
+	exfat_chain_set(&clu, sbi->root_dir, 0, 0x01);
 
 	while (clu.dir != EOF_CLUSTER) {
 		for (i = 0; i < sbi->dentries_per_clu; i++) {
@@ -82,11 +82,11 @@ int exfat_load_alloc_bmp(struct super_block *sb)
 
 alloc:
 	sbi->map_clu = le32_to_cpu(ep->bitmap_start_clu);
-	map_size = (unsigned int)le64_to_cpu(ep->bitmap_size);
+	map_size = le64_to_cpu(ep->bitmap_size);
 	need_map_size = (((sbi->num_clusters - BASE_CLUSTER) - 1) >> 3) + 1;
 	if (need_map_size != map_size) {
 		exfat_msg(sb, KERN_ERR,
-				"bogus allocation bitmap size(need : %u, cur : %u)",
+				"bogus allocation bitmap size(need : %u, cur : %lld)",
 				need_map_size, map_size);
 		/*
 		 * Only allowed when bogus allocation
@@ -111,7 +111,6 @@ alloc:
 			while (i < j)
 				brelse(sbi->vol_amap[i++]);
 
-			/* kfree(NULL) is safe */
 			kfree(sbi->vol_amap);
 			sbi->vol_amap = NULL;
 			return -EIO;
@@ -150,8 +149,7 @@ int exfat_set_alloc_bitmap(struct super_block *sb, unsigned int clu)
 	b = clu & ((sb->s_blocksize << 3) - 1);
 
 	sector = exfat_cluster_to_sector(sbi, sbi->map_clu) + i;
-	bitmap_set((unsigned long *)(sbi->vol_amap[i]->b_data), b, 1);
-
+	set_bit_le(b, sbi->vol_amap[i]->b_data);
 	set_buffer_uptodate(sbi->vol_amap[i]);
 	mark_buffer_dirty(sbi->vol_amap[i]);
 
@@ -173,9 +171,7 @@ void exfat_clr_alloc_bitmap(struct super_block *sb, unsigned int clu)
 	b = clu & ((sb->s_blocksize << 3) - 1);
 
 	sector = exfat_cluster_to_sector(sbi, sbi->map_clu) + i;
-
-	bitmap_clear((unsigned long *)(sbi->vol_amap[i]->b_data), b, 1);
-
+	clear_bit_le(b, sbi->vol_amap[i]->b_data);
 	set_buffer_uptodate(sbi->vol_amap[i]);
 	mark_buffer_dirty(sbi->vol_amap[i]);
 
