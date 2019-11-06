@@ -1109,7 +1109,7 @@ static int exfat_rename_file(struct inode *inode, struct exfat_chain *p_dir,
 		if (!epnew)
 			return -EIO;
 
-		memcpy((void *) epnew, (void *) epold, DENTRY_SIZE);
+		memcpy(epnew, epold, DENTRY_SIZE);
 		if (exfat_get_entry_type(epnew) == TYPE_FILE) {
 			epnew->file_attr |= ATTR_ARCHIVE_LE;
 			ei->attr |= ATTR_ARCHIVE;
@@ -1125,7 +1125,7 @@ static int exfat_rename_file(struct inode *inode, struct exfat_chain *p_dir,
 		if (!epold || !epnew)
 			return -EIO;
 
-		memcpy((void *) epnew, (void *) epold, DENTRY_SIZE);
+		memcpy(epnew, epold, DENTRY_SIZE);
 		exfat_update_bh(sb, new_bh, 0);
 		brelse(old_bh);
 		brelse(new_bh);
@@ -1193,7 +1193,7 @@ static int exfat_move_file(struct inode *inode, struct exfat_chain *p_olddir,
 	if (!epnew)
 		return -EIO;
 
-	memcpy((void *) epnew, (void *) epmov, DENTRY_SIZE);
+	memcpy(epnew, epmov, DENTRY_SIZE);
 	if (exfat_get_entry_type(epnew) == TYPE_FILE) {
 		epnew->file_attr |= ATTR_ARCHIVE_LE;
 		ei->attr |= ATTR_ARCHIVE;
@@ -1209,7 +1209,7 @@ static int exfat_move_file(struct inode *inode, struct exfat_chain *p_olddir,
 	if (!epmov || !epnew)
 		return -EIO;
 
-	memcpy((void *) epnew, (void *) epmov, DENTRY_SIZE);
+	memcpy(epnew, epmov, DENTRY_SIZE);
 	exfat_update_bh(sb, new_bh, 0);
 	brelse(mov_bh);
 	brelse(new_bh);
