@@ -247,7 +247,7 @@ static int exfat_search_empty_slot(struct super_block *sb,
 			type = exfat_get_entry_type(ep);
 			brelse(bh);
 
-			if ((type == TYPE_UNUSED) || (type == TYPE_DELETED)) {
+			if (type == TYPE_UNUSED || type == TYPE_DELETED) {
 				num_empty++;
 				if (hint_femp->eidx == EXFAT_HINT_NONE) {
 					hint_femp->eidx = dentry;
@@ -257,13 +257,12 @@ static int exfat_search_empty_slot(struct super_block *sb,
 						clu->flags);
 				}
 
-				if ((type == TYPE_UNUSED) &&
-					(hint_femp->count != CNT_UNUSED_HIT)) {
+				if (type == TYPE_UNUSED &&
+				    hint_femp->count != CNT_UNUSED_HIT)
 					hint_femp->count = CNT_UNUSED_HIT;
-				}
 			} else {
-				if ((hint_femp->eidx != EXFAT_HINT_NONE) &&
-					(hint_femp->count == CNT_UNUSED_HIT)) {
+				if (hint_femp->eidx != EXFAT_HINT_NONE &&
+				    hint_femp->count == CNT_UNUSED_HIT) {
 					/* unused empty group means
 					 * an empty group which includes
 					 * unused dentry
@@ -289,12 +288,12 @@ static int exfat_search_empty_slot(struct super_block *sb,
 		}
 
 		if (clu->flags == 0x03) {
-			if ((--clu->size) > 0)
+			if (--clu->size > 0)
 				clu->dir++;
 			else
 				clu->dir = EOF_CLUSTER;
 		} else {
-			if (exfat_get_next_cluster(sb, &(clu->dir))) {
+			if (exfat_get_next_cluster(sb, &clu->dir)) {
 				ret = -EIO;
 				goto out;
 			}
@@ -1242,9 +1241,9 @@ static void exfat_update_parent_info(struct exfat_inode_info *ei,
 	 * because of flag-mismatch of ei->dir,
 	 * there is abnormal traversing cluster chain.
 	 */
-	if (unlikely((parent_ei->flags != ei->dir.flags)
-		|| (parent_isize != EXFAT_CLU_TO_B(ei->dir.size, sbi))
-		|| (parent_ei->start_clu != ei->dir.dir))) {
+	if (unlikely(parent_ei->flags != ei->dir.flags ||
+		     parent_isize != EXFAT_CLU_TO_B(ei->dir.size, sbi) ||
+		     parent_ei->start_clu != ei->dir.dir)) {
 		exfat_chain_set(&ei->dir, parent_ei->start_clu,
 			EXFAT_B_TO_CLU_ROUND_UP(parent_isize, sbi),
 			parent_ei->flags);
@@ -1273,7 +1272,7 @@ static int __exfat_rename(struct inode *old_parent_inode,
 	struct buffer_head *old_bh, *new_bh = NULL;
 
 	/* check the validity of pointer parameters */
-	if ((new_path == NULL) || (strlen(new_path) == 0))
+	if (new_path == NULL || strlen(new_path) == 0)
 		return -EINVAL;
 
 	if (ei->dir.dir == DIR_DELETED) {
@@ -1347,7 +1346,7 @@ static int __exfat_rename(struct inode *old_parent_inode,
 		ret = exfat_move_file(new_parent_inode, olddir, dentry,
 				&newdir, &uni_name, ei);
 
-	if ((!ret) && new_inode) {
+	if (!ret && new_inode) {
 		/* delete entries of new_dir */
 		ep = exfat_get_dentry(sb, p_dir, new_entry, &new_bh, NULL);
 		if (!ep) {
@@ -1420,8 +1419,7 @@ static int exfat_rename(struct inode *old_dir, struct dentry *old_dentry,
 	old_inode = old_dentry->d_inode;
 	new_inode = new_dentry->d_inode;
 
-	err = __exfat_rename(old_dir, EXFAT_I(old_inode), new_dir,
-		new_dentry);
+	err = __exfat_rename(old_dir, EXFAT_I(old_inode), new_dir, new_dentry);
 	if (err)
 		goto out;
 
@@ -1442,7 +1440,7 @@ static int exfat_rename(struct inode *old_dir, struct dentry *old_dentry,
 	else
 		mark_inode_dirty(old_inode);
 
-	if ((S_ISDIR(old_inode->i_mode)) && (old_dir != new_dir)) {
+	if (S_ISDIR(old_inode->i_mode) && old_dir != new_dir) {
 		drop_nlink(old_dir);
 		if (!new_inode)
 			inc_nlink(new_dir);
@@ -1577,8 +1575,8 @@ int exfat_setattr(struct dentry *dentry, struct iattr *attr)
 	unsigned int ia_valid;
 	int error;
 
-	if ((attr->ia_valid & ATTR_SIZE)
-			&& (attr->ia_size > i_size_read(inode))) {
+	if ((attr->ia_valid & ATTR_SIZE) &&
+	    attr->ia_size > i_size_read(inode)) {
 		error = exfat_cont_expand(inode, attr->ia_size);
 		if (error || attr->ia_valid == ATTR_SIZE)
 			return error;
@@ -1587,8 +1585,8 @@ int exfat_setattr(struct dentry *dentry, struct iattr *attr)
 
 	/* Check for setting the inode time. */
 	ia_valid = attr->ia_valid;
-	if ((ia_valid & (ATTR_MTIME_SET | ATTR_ATIME_SET | ATTR_TIMES_SET))
-			&& exfat_allow_set_time(sbi, inode)) {
+	if ((ia_valid & (ATTR_MTIME_SET | ATTR_ATIME_SET | ATTR_TIMES_SET)) &&
+	    exfat_allow_set_time(sbi, inode)) {
 		attr->ia_valid &= ~(ATTR_MTIME_SET | ATTR_ATIME_SET |
 				ATTR_TIMES_SET);
 	}
@@ -1599,14 +1597,12 @@ int exfat_setattr(struct dentry *dentry, struct iattr *attr)
 		return error;
 
 	if (((attr->ia_valid & ATTR_UID) &&
-			(!uid_eq(attr->ia_uid, sbi->options.fs_uid))) ||
-			((attr->ia_valid & ATTR_GID) &&
-			 (!gid_eq(attr->ia_gid, sbi->options.fs_gid))) ||
-			((attr->ia_valid & ATTR_MODE) &&
-			 (attr->ia_mode & ~(S_IFREG | S_IFLNK | S_IFDIR |
-				0777)))) {
+	     !uid_eq(attr->ia_uid, sbi->options.fs_uid)) ||
+	    ((attr->ia_valid & ATTR_GID) &&
+	     !gid_eq(attr->ia_gid, sbi->options.fs_gid)) ||
+	    ((attr->ia_valid & ATTR_MODE) &&
+	     (attr->ia_mode & ~(S_IFREG | S_IFLNK | S_IFDIR | 0777))))
 		return -EPERM;
-	}
 
 	/*
 	 * We don't return -EPERM here. Yes, strange, but this is too
