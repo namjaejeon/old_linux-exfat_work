@@ -80,9 +80,8 @@ static int exfat_readdir(struct inode *inode, struct exfat_dir_entry *dir_entry)
 		clu->size -= clu_offset;
 	} else {
 		/* hint_information */
-		if ((clu_offset > 0) && ((ei->hint_bmap.off != EOF_CLUSTER) &&
-			(ei->hint_bmap.off > 0)) &&
-			(clu_offset >= ei->hint_bmap.off)) {
+		if (clu_offset > 0 && ei->hint_bmap.off != EOF_CLUSTER &&
+		    ei->hint_bmap.off > 0 && clu_offset >= ei->hint_bmap.off) {
 			clu_offset -= ei->hint_bmap.off;
 			clu->dir = ei->hint_bmap.clu;
 		}
@@ -111,7 +110,7 @@ static int exfat_readdir(struct inode *inode, struct exfat_dir_entry *dir_entry)
 				break;
 			}
 
-			if ((type != TYPE_FILE) && (type != TYPE_DIR)) {
+			if (type != TYPE_FILE && type != TYPE_DIR) {
 				brelse(bh);
 				continue;
 			}
@@ -139,7 +138,7 @@ static int exfat_readdir(struct inode *inode, struct exfat_dir_entry *dir_entry)
 			memset(&dir_entry->access_timestamp, 0,
 				sizeof(struct exfat_date_time));
 
-			*(uni_name.name) = 0x0;
+			*uni_name.name = 0x0;
 			exfat_get_uniname_from_ext_entry(sb, &dir, dentry,
 				uni_name.name);
 			exfat_nls_uni16s_to_vfsname(sb, &uni_name,
@@ -163,7 +162,7 @@ static int exfat_readdir(struct inode *inode, struct exfat_dir_entry *dir_entry)
 		}
 
 		if (clu->flags == 0x03) {
-			if ((--clu->size) > 0)
+			if (--clu->size > 0)
 				clu->dir++;
 			else
 				clu->dir = EOF_CLUSTER;
@@ -341,7 +340,7 @@ static int exfat_calc_num_entries(struct exfat_uni_name *p_uniname)
 		return 0;
 
 	/* 1 file entry + 1 stream entry + name entries */
-	return((len - 1) / 15 + 3);
+	return ((len - 1) / 15 + 3);
 }
 
 /* input  : dir, uni_name
@@ -831,7 +830,7 @@ struct exfat_dentry *exfat_get_dentry(struct super_block *sb,
 	if (exfat_find_location(sb, p_dir, entry, &sec, &off))
 		return NULL;
 
-	if ((p_dir->dir != FREE_CLUSTER) &&
+	if (p_dir->dir != FREE_CLUSTER &&
 			!(entry & (dentries_per_page - 1)))
 		exfat_dir_readahead(sb, sec);
 
@@ -973,7 +972,7 @@ struct exfat_entry_set_cache *exfat_get_dentry_set(struct super_block *sb,
 	pos = &es->entries[0];
 
 	while (num_entries) {
-		if (!(exfat_validate_entry(exfat_get_entry_type(ep), &mode)))
+		if (!exfat_validate_entry(exfat_get_entry_type(ep), &mode))
 			goto err_out;
 
 		/* copy dentry */
@@ -982,9 +981,8 @@ struct exfat_entry_set_cache *exfat_get_dentry_set(struct super_block *sb,
 		if (--num_entries == 0)
 			break;
 
-		if (((off + DENTRY_SIZE) &
-			(sb->s_blocksize - 1)) <
-			(off & (sb->s_blocksize - 1))) {
+		if (((off + DENTRY_SIZE) & (sb->s_blocksize - 1)) <
+		    (off & (sb->s_blocksize - 1))) {
 			// get the next sector
 			if (exfat_is_last_sector_in_cluster(sbi, sec)) {
 				if (es->alloc_flag == 0x03)
@@ -1001,7 +999,7 @@ struct exfat_entry_set_cache *exfat_get_dentry_set(struct super_block *sb,
 			if (!bh)
 				goto err_out;
 			off = 0;
-			ep = (struct exfat_dentry *)(bh->b_data);
+			ep = (struct exfat_dentry *)bh->b_data;
 		} else {
 			ep++;
 			off += DENTRY_SIZE;
@@ -1089,7 +1087,7 @@ rewind:
 	while (clu->dir != EOF_CLUSTER) {
 		i = dentry & (dentries_per_clu - 1);
 		for (; i < dentries_per_clu; i++, dentry++) {
-			if (rewind && (dentry == end_eidx))
+			if (rewind && dentry == end_eidx)
 				goto not_found;
 
 			ep = exfat_get_dentry(sb, clu, i, &bh, NULL);
@@ -1101,8 +1099,8 @@ rewind:
 			entry_type = exfat_get_entry_type(ep);
 			brelse(bh);
 
-			if ((entry_type == TYPE_UNUSED) ||
-					(entry_type == TYPE_DELETED)) {
+			if (entry_type == TYPE_UNUSED ||
+			    entry_type == TYPE_DELETED) {
 				step = DIRENT_STEP_FILE;
 
 				num_empty++;
@@ -1122,8 +1120,8 @@ rewind:
 
 					if (ei->hint_femp.eidx ==
 							EXFAT_HINT_NONE ||
-						(candi_empty.eidx <=
-							 ei->hint_femp.eidx)) {
+						candi_empty.eidx <=
+							 ei->hint_femp.eidx) {
 						memcpy(&ei->hint_femp,
 							&candi_empty,
 							sizeof(candi_empty));
@@ -1138,8 +1136,7 @@ rewind:
 			num_empty = 0;
 			candi_empty.eidx = EXFAT_HINT_NONE;
 
-			if ((entry_type == TYPE_FILE) ||
-				(entry_type == TYPE_DIR)) {
+			if (entry_type == TYPE_FILE || entry_type == TYPE_DIR) {
 				step = DIRENT_STEP_FILE;
 				if ((type == TYPE_ALL) ||
 					(type == entry_type)) {
@@ -1155,10 +1152,10 @@ rewind:
 					continue;
 				}
 				step = DIRENT_STEP_FILE;
-				if ((p_uniname->name_hash ==
-					le16_to_cpu(ep->stream_name_hash)) &&
-					(p_uniname->name_len ==
-						 ep->stream_name_len)) {
+				if (p_uniname->name_hash ==
+						le16_to_cpu(ep->stream_name_hash) &&
+				    p_uniname->name_len ==
+						ep->stream_name_len) {
 					step = DIRENT_STEP_NAME;
 					order = 1;
 					name_len = 0;
@@ -1172,7 +1169,7 @@ rewind:
 					continue;
 				}
 
-				if ((++order) == 2)
+				if (++order == 2)
 					uniname = p_uniname->name;
 				else
 					uniname += 15;
@@ -1209,7 +1206,7 @@ rewind:
 		}
 
 		if (clu->flags == 0x03) {
-			if ((--clu->size) > 0)
+			if (--clu->size > 0)
 				clu->dir++;
 			else
 				clu->dir = EOF_CLUSTER;
@@ -1247,7 +1244,7 @@ found:
 		int ret = 0;
 
 		if (clu->flags == 0x03) {
-			if ((--clu->size) > 0)
+			if (--clu->size > 0)
 				clu->dir++;
 			else
 				clu->dir = EOF_CLUSTER;
@@ -1266,7 +1263,7 @@ found:
 	hint_stat->clu = clu->dir;
 	hint_stat->eidx = dentry + 1;
 	kfree(clu);
-	return (dentry - num_ext);
+	return dentry - num_ext;
 }
 
 /* returns -EIO on error */
@@ -1285,7 +1282,7 @@ int exfat_count_ext_entries(struct super_block *sb, struct exfat_chain *p_dir,
 
 		type = exfat_get_entry_type(ext_ep);
 		brelse(bh);
-		if ((type == TYPE_EXTEND) || (type == TYPE_STREAM))
+		if (type == TYPE_EXTEND || type == TYPE_STREAM)
 			count++;
 		else
 			return count;
@@ -1361,7 +1358,7 @@ int exfat_count_dir_entries(struct super_block *sb, struct exfat_chain *p_dir)
 		}
 
 		if (clu->flags == 0x03) {
-			if ((--clu->size) > 0)
+			if (--clu->size > 0)
 				clu->dir++;
 			else
 				clu->dir = EOF_CLUSTER;
@@ -1405,7 +1402,7 @@ int exfat_zeroed_cluster(struct super_block *sb,
 	sector_t last_blknr = blknr + num_secs;
 	int err, i, n;
 
-	if (((blknr + num_secs) > sbi->num_sectors) && (sbi->num_sectors > 0)) {
+	if (blknr + num_secs > sbi->num_sectors && sbi->num_sectors > 0) {
 		exfat_fs_error_ratelimit(sb,
 			"%s: out of range(sect:%llu len:%u)",
 			__func__, blknr, num_secs);

@@ -220,9 +220,9 @@ unsigned int exfat_test_alloc_bitmap(struct super_block *sb, unsigned int clu)
 		}
 		clu_base += 8;
 
-		if ((++map_b >= sb->s_blocksize) ||
-				(clu_base >= sbi->num_clusters)) {
-			if ((++map_i) >= sbi->map_sectors) {
+		if (++map_b >= sb->s_blocksize ||
+		    clu_base >= sbi->num_clusters) {
+			if (++map_i >= sbi->map_sectors) {
 				clu_base = 2;
 				map_i = 0;
 			}
@@ -246,7 +246,7 @@ int exfat_count_used_clusters(struct super_block *sb, unsigned int *ret_count)
 		unsigned char k = *(sbi->vol_amap[map_i]->b_data + map_b);
 
 		count += used_bit[k];
-		if ((++map_b) >= (unsigned int)sb->s_blocksize) {
+		if (++map_b >= (unsigned int)sb->s_blocksize) {
 			map_i++;
 			map_b = 0;
 		}
