@@ -51,7 +51,8 @@ static int __exfat_truncate(struct inode *inode, loff_t new_size)
 
 	if ((num_clusters_da != num_clusters_phys) &&
 			(num_clusters_new < num_clusters_da)) {
-		/* Decrement reserved clusters
+		/*
+		 * Decrement reserved clusters
 		 * n_reserved = num_clusters_da - max(new,phys)
 		 */
 		int n_reserved = (num_clusters_new > num_clusters_phys) ?
@@ -67,14 +68,16 @@ static int __exfat_truncate(struct inode *inode, loff_t new_size)
 	clu.flags = ei->flags;
 
 	if (new_size > 0) {
-		/* Truncate FAT chain num_clusters after the first cluster
+		/*
+		 * Truncate FAT chain num_clusters after the first cluster
 		 * num_clusters = min(new, phys);
 		 */
 		unsigned int num_clusters =
 			(num_clusters_new < num_clusters_phys) ?
 			num_clusters_new : num_clusters_phys;
 
-		/* Follow FAT chain
+		/*
+		 * Follow FAT chain
 		 * (defensive coding - works fine even with corrupted FAT table
 		 */
 		if (clu.flags == 0x03) {
@@ -171,9 +174,6 @@ static int __exfat_truncate(struct inode *inode, loff_t new_size)
 	return 0;
 }
 
-/* set the information of a given file
- * REMARK : This function does not need any file name on linux
- */
 static int __exfat_write_inode(struct inode *inode, int sync)
 {
 	int ret = -EIO;
@@ -197,9 +197,8 @@ static int __exfat_write_inode(struct inode *inode, int sync)
 	exfat_time_unix2fat(sbi, &inode->i_ctime, &info.create_timestamp);
 	exfat_time_unix2fat(sbi, &inode->i_atime, &info.access_timestamp);
 
-	/* SKIP WRITING INODE :
-	 * if the indoe is already unlinked,
-	 * there is no need for updating inode
+	/*
+	 * If the indode is already unlinked, there is no need for updating it.
 	 */
 	if (ei->dir.dir == DIR_DELETED)
 		return 0;
@@ -468,9 +467,9 @@ static int __exfat_map_cluster(struct inode *inode, unsigned int clu_offset,
 		inode->i_blocks +=
 			num_to_be_allocated << sbi->sect_per_clus_bits;
 
-		/* Move *clu pointer along FAT chains (hole care)
-		 * because the caller of this function expect *clu to be
-		 * the last cluster.
+		/*
+		 * Move *clu pointer along FAT chains (hole care) because the
+		 * caller of this function expect *clu to be the last cluster.
 		 * This only works when num_to_be_allocated >= 2,
 		 * *clu = (the first cluster of the allocated chain) =>
 		 * (the last cluster of ...)
@@ -900,10 +899,9 @@ void exfat_evict_inode(struct inode *inode)
 
 	invalidate_inode_buffers(inode);
 	clear_inode(inode);
-	/* Volume lock is not required,
-	 * because it is only called by evict_inode.
-	 * If any other function can call it,
-	 * you should check whether volume lock is needed or not.
+	/*
+	 * The Volume lock is not required, because this function is only called
+	 * by evict_inode.
 	 */
 	exfat_cache_inval_inode(inode);
 	exfat_unhash_inode(inode);
