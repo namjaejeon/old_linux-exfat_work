@@ -967,7 +967,7 @@ static int exfat_check_dir_empty(struct super_block *sb,
 			if (type == TYPE_UNUSED)
 				goto out;
 
-			if ((type != TYPE_FILE) && (type != TYPE_DIR))
+			if (type != TYPE_FILE && type != TYPE_DIR)
 				continue;
 
 			ret = -ENOTEMPTY;
@@ -975,7 +975,7 @@ static int exfat_check_dir_empty(struct super_block *sb,
 		}
 
 		if (clu->flags == 0x03) {
-			if ((--clu->size) > 0)
+			if (--clu->size > 0)
 				clu->dir++;
 			else
 				clu->dir = EOF_CLUSTER;

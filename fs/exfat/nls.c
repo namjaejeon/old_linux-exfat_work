@@ -549,8 +549,8 @@ static int __exfat_nls_vfsname_to_utf16s(struct super_block *sb,
 	p_uniname->name_len = unilen & 0xFF;
 
 	for (i = 0; i < unilen; i++) {
-		if ((*uniname < 0x0020) ||
-				exfat_nls_wstrchr(bad_uni_chars, *uniname))
+		if (*uniname < 0x0020 ||
+		    exfat_nls_wstrchr(bad_uni_chars, *uniname))
 			lossy |= NLS_NAME_LOSSY;
 
 		upname[i] = exfat_nls_upper(sb, *uniname);
@@ -578,7 +578,7 @@ static int __exfat_nls_uni16s_to_vfsname(struct super_block *sb,
 	struct nls_table *nls = EXFAT_SB(sb)->nls_io;
 
 	i = 0;
-	while ((i < MAX_NAME_LENGTH) && (out_len < (buflen - 1))) {
+	while (i < MAX_NAME_LENGTH && out_len < (buflen - 1)) {
 		if (*uniname == '\0')
 			break;
 
