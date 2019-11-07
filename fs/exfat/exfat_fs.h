@@ -255,7 +255,7 @@ struct exfat_sb_info {
 	unsigned int map_sectors; /* num of allocation bitmap sectors */
 	struct buffer_head **vol_amap; /* allocation bitmap */
 
-	unsigned short **vol_utbl; /* upcase table */
+	unsigned short *vol_utbl; /* upcase table */
 
 	unsigned int clu_srch_ptr; /* cluster search pointer */
 	unsigned int used_clusters; /* number of used clusters */
