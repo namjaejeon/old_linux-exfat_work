@@ -13,22 +13,8 @@
 #include "exfat_fs.h"
 
 /* Upcase tabel macro */
-#define EXFAT_NUM_UPCASE	2918
-#define HIGH_INDEX_BIT		(8)
-#define HIGH_INDEX_MASK		(0xFF00)
-#define LOW_INDEX_BIT		(16 - HIGH_INDEX_BIT)
-#define UTBL_ROW_COUNT		(1 << LOW_INDEX_BIT)
-#define UTBL_COL_COUNT		(1 << HIGH_INDEX_BIT)
-
-static inline unsigned short get_col_index(unsigned short i)
-{
-	return i >> LOW_INDEX_BIT;
-}
-
-static inline unsigned short get_row_index(unsigned short i)
-{
-	return i & ~HIGH_INDEX_MASK;
-}
+#define EXFAT_NUM_UPCASE	(2918)
+#define UTBL_COUNT		(0x10000)
 
 /*
  * Upcase table in compressed format (7.2.5.1 Recommended Up-case Table
@@ -473,10 +459,8 @@ static unsigned short exfat_nls_upper(struct super_block *sb, unsigned short a)
 {
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 
-	/* XXX: multi-index array lookups don't actually work properly in C */
-	if (!sbi->options.case_sensitive &&
-	    sbi->vol_utbl[get_col_index(a)])
-		return sbi->vol_utbl[get_col_index(a)][get_row_index(a)];
+	if (!sbi->options.case_sensitive && sbi->vol_utbl[a])
+		return sbi->vol_utbl[a];
 
 	return a;
 }
@@ -661,39 +645,6 @@ int exfat_nls_vfsname_to_uni16s(struct super_block *sb,
 			p_lossy);
 }
 
-static int exfat_record_upcase_table(struct super_block *sb,
-		unsigned short **upcase_table, unsigned int index,
-		unsigned short uni)
-{
-	int ret = 0, i;
-	unsigned short col_index = get_col_index(index);
-
-	if (!upcase_table[col_index]) {
-		upcase_table[col_index] = kmalloc_array(UTBL_ROW_COUNT,
-				sizeof(unsigned short), GFP_KERNEL);
-		if (!upcase_table[col_index]) {
-			exfat_msg(sb, KERN_ERR,
-					"failed to allocate memory for column 0x%X\n",
-					col_index);
-			ret = -ENOMEM;
-			goto out;
-		}
-
-		for (i = 0; i < UTBL_ROW_COUNT; i++)
-			upcase_table[col_index][i] =
-				(col_index << LOW_INDEX_BIT) | i;
-	}
-
-	/*
-	 * XXX: this is wrong, multi-dimensional array indexes don't work
-	 * like this!
-	 */
-	upcase_table[col_index][get_row_index(index)] = uni;
-out:
-	return ret;
-}
-
-
 static int exfat_load_upcase_table(struct super_block *sb,
 		sector_t sector, unsigned long long num_sectors,
 		unsigned int utbl_checksum)
@@ -704,10 +655,9 @@ static int exfat_load_upcase_table(struct super_block *sb,
 	unsigned int i, index = 0, checksum = 0;
 	int ret = -EIO;
 	unsigned char skip = false;
-	unsigned short **upcase_table;
+	unsigned short *upcase_table;
 
-	upcase_table = kcalloc(UTBL_COL_COUNT, sizeof(unsigned short *),
-				GFP_KERNEL);
+	upcase_table = kzalloc(UTBL_COUNT, GFP_KERNEL);
 	if (!upcase_table)
 		return -ENOMEM;
 
@@ -740,10 +690,7 @@ static int exfat_load_upcase_table(struct super_block *sb,
 			} else if (uni == 0xFFFF) {
 				skip = true;
 			} else { /* uni != index , uni != 0xFFFF */
-				ret = exfat_record_upcase_table(sb,
-						upcase_table, index, uni);
-				if (ret)
-					goto error;
+				upcase_table[index] = uni;
 				index++;
 			}
 		}
@@ -771,14 +718,11 @@ static int exfat_load_default_upcase_table(struct super_block *sb)
 {
 	int i, ret = -EIO;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
-
 	unsigned char skip = false;
+	unsigned short uni = 0, *upcase_table;
 	unsigned int index = 0;
-	unsigned short uni = 0;
-	unsigned short **upcase_table;
 
-	upcase_table = kzalloc(UTBL_COL_COUNT * sizeof(unsigned short *),
-			GFP_KERNEL);
+	upcase_table = kzalloc(UTBL_COUNT, GFP_KERNEL);
 	if (!upcase_table)
 		return -ENOMEM;
 
@@ -794,10 +738,7 @@ static int exfat_load_default_upcase_table(struct super_block *sb)
 		} else if (uni == 0xFFFF) {
 			skip = true;
 		} else {
-			ret = exfat_record_upcase_table(sb,
-					upcase_table, index, uni);
-			if (ret)
-				goto error;
+			upcase_table[index] = uni;
 			index++;
 		}
 	}
@@ -805,7 +746,6 @@ static int exfat_load_default_upcase_table(struct super_block *sb)
 	if (index >= 0xFFFF)
 		return 0;
 
-error:
 	/* FATAL error: default upcase table has error */
 	exfat_free_upcase_table(sb);
 	return ret;
@@ -870,15 +810,7 @@ load_default:
 
 void exfat_free_upcase_table(struct super_block *sb)
 {
-	unsigned int i;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
-	unsigned short **upcase_table;
-
-	upcase_table = sbi->vol_utbl;
-	for (i = 0 ; i < UTBL_COL_COUNT ; i++) {
-		kfree(upcase_table[i]);
-		upcase_table[i] = NULL;
-	}
 
 	kfree(sbi->vol_utbl);
 	sbi->vol_utbl = NULL;
