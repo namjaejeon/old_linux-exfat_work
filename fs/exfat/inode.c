@@ -315,7 +315,7 @@ out:
  * Output: errcode, cluster number
  * *clu = (~0), if it's unable to allocate a new cluster
  */
-static int __exfat_map_cluster(struct inode *inode, unsigned int clu_offset,
+static int exfat_map_cluster(struct inode *inode, unsigned int clu_offset,
 		unsigned int *clu, int create)
 {
 	int ret, modified = false;
@@ -515,7 +515,7 @@ static int exfat_bmap(struct inode *inode, sector_t sector, sector_t *phys,
 	/* Is this block already allocated? */
 	clu_offset = sector >> sbi->sect_per_clus_bits;  /* cluster offset */
 
-	err = __exfat_map_cluster(inode, clu_offset, &cluster,
+	err = exfat_map_cluster(inode, clu_offset, &cluster,
 		*create & BMAP_ADD_CLUSTER);
 	if (err) {
 		if (err != -ENOSPC)
