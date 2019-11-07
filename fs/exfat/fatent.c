@@ -152,7 +152,7 @@ int exfat_free_cluster(struct super_block *sb, struct exfat_chain *p_chain)
 		return 0;
 
 	/* check cluster validation */
-	if ((p_chain->dir < 2) && (p_chain->dir >= sbi->num_clusters)) {
+	if (p_chain->dir < 2 && p_chain->dir >= sbi->num_clusters) {
 		exfat_msg(sb, KERN_ERR, "invalid start cluster (%u)",
 				p_chain->dir);
 		return -EIO;
@@ -231,8 +231,9 @@ int exfat_clear_cluster(struct inode *inode, unsigned int clu)
 			return ret;
 	}
 
-	/* Trying buffered zero writes
-	 * if it doesn't have DIRSYNC or exfat_zeroed_cluster() returned -EAGAIN
+	/*
+	 * Try buffered zero writes if it doesn't have DIRSYNC or
+	 * exfat_zeroed_cluster() returned -EAGAIN.
 	 */
 	for ( ; s < n; s++) {
 		bh = sb_getblk(sb, s);
@@ -258,8 +259,8 @@ int exfat_alloc_cluster(struct super_block *sb, unsigned int num_alloc,
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 
 	/* Check if there are reserved clusters up to max. */
-	if ((sbi->used_clusters + sbi->reserved_clusters) >=
-			(sbi->num_clusters - BASE_CLUSTER))
+	if (sbi->used_clusters + sbi->reserved_clusters >=
+			sbi->num_clusters - BASE_CLUSTER)
 		return -ENOSPC;
 
 	total_cnt = sbi->num_clusters - BASE_CLUSTER;
@@ -291,7 +292,7 @@ int exfat_alloc_cluster(struct super_block *sb, unsigned int num_alloc,
 	}
 
 	/* check cluster validation */
-	if ((hint_clu < BASE_CLUSTER) && (hint_clu >= sbi->num_clusters)) {
+	if (hint_clu < BASE_CLUSTER && hint_clu >= sbi->num_clusters) {
 		exfat_msg(sb, KERN_ERR, "hint_cluster is invalid (%u)\n",
 			hint_clu);
 		hint_clu = BASE_CLUSTER;
@@ -309,7 +310,7 @@ int exfat_alloc_cluster(struct super_block *sb, unsigned int num_alloc,
 
 	while ((new_clu = exfat_test_alloc_bitmap(sb,
 			hint_clu - BASE_CLUSTER)) != EOF_CLUSTER) {
-		if ((new_clu != hint_clu) && (p_chain->flags == 0x03)) {
+		if (new_clu != hint_clu && p_chain->flags == 0x03) {
 			if (exfat_chain_cont_cluster(sb, p_chain->dir,
 					num_clusters)) {
 				ret = -EIO;
@@ -344,7 +345,7 @@ int exfat_alloc_cluster(struct super_block *sb, unsigned int num_alloc,
 		}
 		last_clu = new_clu;
 
-		if ((--num_alloc) == 0) {
+		if (--num_alloc == 0) {
 			sbi->clu_srch_ptr = hint_clu;
 			sbi->used_clusters += num_clusters;
 

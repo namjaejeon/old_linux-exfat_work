@@ -10,7 +10,7 @@
 #include "exfat_raw.h"
 #include "exfat_fs.h"
 
-static unsigned char free_bit[] = {
+static const unsigned char free_bit[] = {
 	0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0, 4, 0, 1, 0, 2,/*  0 ~  19*/
 	0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0, 5, 0, 1, 0, 2, 0, 1, 0, 3,/* 20 ~  39*/
 	0, 1, 0, 2, 0, 1, 0, 4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2,/* 40 ~  59*/
@@ -26,7 +26,7 @@ static unsigned char free_bit[] = {
 	0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0                /*240 ~ 254*/
 };
 
-static unsigned char used_bit[] = {
+static const unsigned char used_bit[] = {
 	0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4, 1, 2, 2, 3,/*  0 ~  19*/
 	2, 3, 3, 4, 2, 3, 3, 4, 3, 4, 4, 5, 1, 2, 2, 3, 2, 3, 3, 4,/* 20 ~  39*/
 	2, 3, 3, 4, 3, 4, 4, 5, 2, 3, 3, 4, 3, 4, 4, 5, 3, 4, 4, 5,/* 40 ~  59*/
@@ -135,9 +135,9 @@ void exfat_free_alloc_bmp(struct super_block *sb)
 	sbi->vol_amap = NULL;
 }
 
-/* WARN :
- * If the value of "clu" is 0, it means cluster 2 which is
- * the first cluster of cluster heap.
+/*
+ * If the value of "clu" is 0, it means cluster 2 which is the first cluster of
+ * the cluster heap.
  */
 int exfat_set_alloc_bitmap(struct super_block *sb, unsigned int clu)
 {
@@ -156,9 +156,9 @@ int exfat_set_alloc_bitmap(struct super_block *sb, unsigned int clu)
 	return 0;
 }
 
-/* WARN :
- * If the value of "clu" is 0, it means cluster 2 which is
- * the first cluster of cluster heap.
+/*
+ * If the value of "clu" is 0, it means cluster 2 which is the first cluster of
+ * the cluster heap.
  */
 void exfat_clr_alloc_bitmap(struct super_block *sb, unsigned int clu)
 {
@@ -190,9 +190,9 @@ void exfat_clr_alloc_bitmap(struct super_block *sb, unsigned int clu)
 	}
 }
 
-/* WARN :
- * If the value of "clu" is 0, it means cluster 2 which is
- * the first cluster of cluster heap.
+/*
+ * If the value of "clu" is 0, it means cluster 2 which is the first cluster of
+ * the cluster heap.
  */
 unsigned int exfat_test_alloc_bitmap(struct super_block *sb, unsigned int clu)
 {
@@ -220,9 +220,9 @@ unsigned int exfat_test_alloc_bitmap(struct super_block *sb, unsigned int clu)
 		}
 		clu_base += 8;
 
-		if ((++map_b >= sb->s_blocksize) ||
-				(clu_base >= sbi->num_clusters)) {
-			if ((++map_i) >= sbi->map_sectors) {
+		if (++map_b >= sb->s_blocksize ||
+		    clu_base >= sbi->num_clusters) {
+			if (++map_i >= sbi->map_sectors) {
 				clu_base = 2;
 				map_i = 0;
 			}
@@ -246,7 +246,7 @@ int exfat_count_used_clusters(struct super_block *sb, unsigned int *ret_count)
 		unsigned char k = *(sbi->vol_amap[map_i]->b_data + map_b);
 
 		count += used_bit[k];
-		if ((++map_b) >= (unsigned int)sb->s_blocksize) {
+		if (++map_b >= (unsigned int)sb->s_blocksize) {
 			map_i++;
 			map_b = 0;
 		}

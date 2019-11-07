@@ -105,7 +105,7 @@ static unsigned int exfat_cache_lookup(struct inode *inode,
 		/* Find the cache of "fclus" or nearest cache. */
 		if (p->fcluster <= fclus && hit->fcluster < p->fcluster) {
 			hit = p;
-			if ((hit->fcluster + hit->nr_contig) < fclus) {
+			if (hit->fcluster + hit->nr_contig < fclus) {
 				offset = hit->nr_contig;
 			} else {
 				offset = fclus - hit->fcluster;
@@ -232,7 +232,7 @@ static inline int cache_contiguous(struct exfat_cache_id *cid,
 		unsigned int dclus)
 {
 	cid->nr_contig++;
-	return ((cid->dcluster + cid->nr_contig) == dclus);
+	return cid->dcluster + cid->nr_contig == dclus;
 }
 
 static inline void cache_init(struct exfat_cache_id *cid,
@@ -269,7 +269,7 @@ int exfat_get_cluster(struct inode *inode, unsigned int cluster,
 	/*
 	 * Don`t use exfat_cache if zero offset or non-cluster allocation
 	 */
-	if ((cluster == 0) || *dclus == EOF_CLUSTER)
+	if (cluster == 0 || *dclus == EOF_CLUSTER)
 		return 0;
 
 	cache_init(&cid, EOF_CLUSTER, EOF_CLUSTER);
@@ -280,10 +280,10 @@ int exfat_get_cluster(struct inode *inode, unsigned int cluster,
 		 * dummy, always not contiguous
 		 * This is reinitialized by cache_init(), later.
 		 */
-		WARN_ON((cid.id != EXTENT_CACHE_VALID) ||
-			(cid.fcluster != EOF_CLUSTER) ||
-			(cid.dcluster != EOF_CLUSTER) ||
-			(cid.nr_contig != 0));
+		WARN_ON(cid.id != EXTENT_CACHE_VALID ||
+			cid.fcluster != EOF_CLUSTER ||
+			cid.dcluster != EOF_CLUSTER ||
+			cid.nr_contig != 0);
 	}
 
 	if (*fclus == cluster)

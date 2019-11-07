@@ -398,12 +398,8 @@ static struct pbr *exfat_read_pbr_with_logical_sector(struct super_block *sb,
 
 	logical_sect = 1 << p_pbr->bsx.f64.sect_size_bits;
 
-	/* is x a power of 2?
-	 * (x) != 0 && (((x) & ((x) - 1)) == 0)
-	 */
-	if (!is_power_of_2(logical_sect)
-		|| (logical_sect < 512)
-		|| (logical_sect > 4096)) {
+	if (!is_power_of_2(logical_sect) ||
+	    logical_sect < 512 || logical_sect > 4096) {
 		exfat_msg(sb, KERN_ERR, "bogus logical sector size %u",
 				logical_sect);
 		return NULL;
