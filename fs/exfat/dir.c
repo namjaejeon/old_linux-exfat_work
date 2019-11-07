@@ -1152,13 +1152,15 @@ rewind:
 			}
 
 			if (entry_type == TYPE_STREAM) {
+				unsigned short name_hash;
+
 				if (step != DIRENT_STEP_STRM) {
 					step = DIRENT_STEP_FILE;
 					continue;
 				}
 				step = DIRENT_STEP_FILE;
-				if (p_uniname->name_hash ==
-						le16_to_cpu(ep->stream_name_hash) &&
+				name_hash = le16_to_cpu(ep->stream_name_hash);
+				if (p_uniname->name_hash == name_hash &&
 				    p_uniname->name_len ==
 						ep->stream_name_len) {
 					step = DIRENT_STEP_NAME;
