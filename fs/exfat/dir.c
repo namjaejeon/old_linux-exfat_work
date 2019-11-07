@@ -956,8 +956,7 @@ struct exfat_entry_set_cache *exfat_get_dentry_set(struct super_block *sb,
 	ep = (struct exfat_dentry *)(bh->b_data + off);
 	entry_type = exfat_get_entry_type(ep);
 
-	if ((entry_type != TYPE_FILE)
-			&& (entry_type != TYPE_DIR))
+	if (entry_type != TYPE_FILE && entry_type != TYPE_DIR)
 		goto err_out;
 
 	if (type == ES_ALL_ENTRIES)
@@ -1145,8 +1144,7 @@ rewind:
 
 			if (entry_type == TYPE_FILE || entry_type == TYPE_DIR) {
 				step = DIRENT_STEP_FILE;
-				if ((type == TYPE_ALL) ||
-					(type == entry_type)) {
+				if (type == TYPE_ALL || type == entry_type) {
 					num_ext = ep->file_num_ext;
 					step = DIRENT_STEP_STRM;
 				}
