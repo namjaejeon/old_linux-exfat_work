@@ -18,9 +18,8 @@
 
 /* 2-level option flag */
 #define BMAP_NOT_CREATE				0
-#define BMAP_ADD_BLOCK				1
-#define BMAP_ADD_CLUSTER			2
-#define BLOCK_ADDED(bmap_ops)	(bmap_ops)
+#define BMAP_ADD_CLUSTER			1
+#define BLOCK_ADDED(bmap_ops)			(bmap_ops)
 
 /* resize the file length */
 static int __exfat_truncate(struct inode *inode, loff_t new_size)
