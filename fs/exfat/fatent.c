@@ -54,7 +54,10 @@ int exfat_ent_set(struct super_block *sb, unsigned int loc,
 
 	fat_entry = (__le32 *)&(bh->b_data[off]);
 	*fat_entry = cpu_to_le32(content);
-	exfat_update_bh(sb, bh, 0);
+	if (sb->s_flags & SB_SYNCHRONOUS)
+		exfat_update_bh(sb, bh, 1);
+	else
+		exfat_update_bh(sb, bh, 0);
 	exfat_mirror_bh(sb, sec, bh);
 	brelse(bh);
 	return 0;
