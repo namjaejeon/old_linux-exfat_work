@@ -347,9 +347,6 @@ static int exfat_map_cluster(struct inode *inode, unsigned int clu_offset,
 
 	*clu = last_clu = ei->start_clu;
 
-	/* XXX: Defensive code needed.
-	 * what if i_size_ondisk != # of allocated clusters
-	 */
 	if (ei->flags == 0x03) {
 		if (clu_offset > 0 && *clu != EOF_CLUSTER) {
 			last_clu += clu_offset - 1;
@@ -899,10 +896,6 @@ void exfat_evict_inode(struct inode *inode)
 
 	invalidate_inode_buffers(inode);
 	clear_inode(inode);
-	/*
-	 * The Volume lock is not required, because this function is only called
-	 * by evict_inode.
-	 */
 	exfat_cache_inval_inode(inode);
 	exfat_unhash_inode(inode);
 }
