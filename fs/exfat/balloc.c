@@ -152,6 +152,8 @@ int exfat_set_alloc_bitmap(struct super_block *sb, unsigned int clu)
 	set_bit_le(b, sbi->vol_amap[i]->b_data);
 	set_buffer_uptodate(sbi->vol_amap[i]);
 	mark_buffer_dirty(sbi->vol_amap[i]);
+	if (sb->s_flags & SB_SYNCHRONOUS)
+		sync_dirty_buffer(sbi->vol_amap[i]);
 
 	return 0;
 }
@@ -174,6 +176,8 @@ void exfat_clr_alloc_bitmap(struct super_block *sb, unsigned int clu)
 	clear_bit_le(b, sbi->vol_amap[i]->b_data);
 	set_buffer_uptodate(sbi->vol_amap[i]);
 	mark_buffer_dirty(sbi->vol_amap[i]);
+	if (sb->s_flags & SB_SYNCHRONOUS)
+		sync_dirty_buffer(sbi->vol_amap[i]);
 
 	if (opts->discard) {
 		int ret_discard;
