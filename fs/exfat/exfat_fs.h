@@ -430,7 +430,7 @@ int exfat_find_location(struct super_block *sb, struct exfat_chain *p_dir,
 		int entry, sector_t *sector, int *offset);
 int exfat_find_last_cluster(struct super_block *sb, struct exfat_chain *p_chain,
 		unsigned int *ret_clu);
-int exfat_mirror_bhs(struct super_block *sb, sector_t sec,
+int exfat_mirror_bh(struct super_block *sb, sector_t sec,
 		struct buffer_head *bh);
 int exfat_count_num_clusters(struct super_block *sb,
 		struct exfat_chain *p_chain, unsigned int *ret_count);

@@ -14,7 +14,7 @@ static int __exfat_ent_get(struct super_block *sb, unsigned int loc,
 		unsigned int *content)
 {
 	unsigned int off, _content;
-	unsigned long long sec;
+	sector_t sec;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 	struct buffer_head *bh;
 
@@ -40,7 +40,7 @@ int exfat_ent_set(struct super_block *sb, unsigned int loc,
 		unsigned int content)
 {
 	unsigned int off;
-	unsigned long long sec;
+	sector_t sec;
 	__le32 *fat_entry;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 	struct buffer_head *bh;
@@ -55,6 +55,7 @@ int exfat_ent_set(struct super_block *sb, unsigned int loc,
 	fat_entry = (__le32 *)&(bh->b_data[off]);
 	*fat_entry = cpu_to_le32(content);
 	exfat_update_bh(sb, bh, 0);
+	exfat_mirror_bh(sb, sec, bh);
 	brelse(bh);
 	return 0;
 }
@@ -216,7 +217,7 @@ int exfat_find_last_cluster(struct super_block *sb, struct exfat_chain *p_chain,
 
 int exfat_clear_cluster(struct inode *inode, unsigned int clu)
 {
-	unsigned long long s, n;
+	sector_t s, n;
 	struct super_block *sb = inode->i_sb;
 	int ret = 0;
 	struct buffer_head *bh = NULL;
@@ -404,12 +405,12 @@ int exfat_count_num_clusters(struct super_block *sb,
 	return 0;
 }
 
-int exfat_mirror_bhs(struct super_block *sb, unsigned long long sec,
+int exfat_mirror_bh(struct super_block *sb, sector_t sec,
 		struct buffer_head *bh)
 {
 	struct buffer_head *c_bh;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
-	unsigned long long sec2;
+	sector_t sec2;
 	int err = 0;
 
 	if (sbi->FAT2_start_sector != sbi->FAT1_start_sector) {
