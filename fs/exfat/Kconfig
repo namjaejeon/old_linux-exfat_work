@@ -10,7 +10,7 @@ config EXFAT
 	  To compile this as a module, choose M here: the module will be called
 	  exfat.
 
-config EXFAT_DEFAULT_IOCHARSET
+config EXFAT_FS_DEFAULT_IOCHARSET
 	string "Default iocharset for exFAT"
 	default "utf8"
 	depends on EXFAT
