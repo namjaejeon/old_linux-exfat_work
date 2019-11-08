@@ -215,8 +215,6 @@ struct exfat_mount_options {
 	unsigned short fs_dmask;
 	/* permission for setting the [am]time */
 	unsigned short allow_utime;
-	/* codepage for shortname conversions */
-	unsigned short codepage;
 	/* charset for filename input/display */
 	char *iocharset;
 	unsigned char utf8;
