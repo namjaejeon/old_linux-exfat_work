@@ -141,8 +141,7 @@ int __exfat_truncate(struct inode *inode, loff_t new_size)
 		 * num_clusters = min(new, phys);
 		 */
 		unsigned int num_clusters =
-			(num_clusters_new < num_clusters_phys) ?
-			num_clusters_new : num_clusters_phys;
+			min(num_clusters_new, num_clusters_phys);
 
 		/*
 		 * Follow FAT chain
