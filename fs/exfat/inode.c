@@ -19,7 +19,6 @@
 /* 2-level option flag */
 #define BMAP_NOT_CREATE				0
 #define BMAP_ADD_CLUSTER			1
-#define BLOCK_ADDED(bmap_ops)			(bmap_ops)
 
 static int __exfat_write_inode(struct inode *inode, int sync)
 {
@@ -361,14 +360,13 @@ static int exfat_get_block(struct inode *inode, sector_t iblock,
 		max_blocks = min(mapped_blocks, max_blocks);
 
 		/* Treat newly added block / cluster */
-		if (BLOCK_ADDED(bmap_create) || buffer_delay(bh_result)) {
-
+		if (bmap_create || buffer_delay(bh_result)) {
 			/* Update i_size_ondisk */
 			pos = EXFAT_BLK_TO_B((iblock + 1), sb);
 			if (EXFAT_I(inode)->i_size_ondisk < pos)
 				EXFAT_I(inode)->i_size_ondisk = pos;
 
-			if (BLOCK_ADDED(bmap_create)) {
+			if (bmap_create) {
 				if (buffer_delay(bh_result) &&
 				    pos > EXFAT_I(inode)->i_size_aligned) {
 					exfat_fs_error(sb,
