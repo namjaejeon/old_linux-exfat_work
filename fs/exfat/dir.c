@@ -330,7 +330,7 @@ int exfat_alloc_new_dir(struct inode *inode, struct exfat_chain *clu)
 	if (ret)
 		return ret;
 
-	return exfat_clear_cluster(inode, clu->dir);
+	return exfat_zeroed_cluster(inode, clu->dir);
 }
 
 static int exfat_calc_num_entries(struct exfat_uni_name *p_uniname)
@@ -1379,84 +1379,4 @@ int exfat_count_dir_entries(struct super_block *sb, struct exfat_chain *p_dir)
 	}
 
 	return count;
-}
-
-static inline void exfat_wait_bhs(struct buffer_head **bhs, int nr_bhs)
-{
-	int i;
-
-	for (i = 0; i < nr_bhs; i++)
-		write_dirty_buffer(bhs[i], WRITE);
-}
-
-static inline int exfat_sync_bhs(struct buffer_head **bhs, int nr_bhs)
-{
-	int i, err = 0;
-
-	for (i = 0; i < nr_bhs; i++) {
-		wait_on_buffer(bhs[i]);
-		if (!err && !buffer_uptodate(bhs[i]))
-			err = -EIO;
-	}
-	return err;
-}
-
-int exfat_zeroed_cluster(struct super_block *sb,
-		sector_t blknr, unsigned int num_secs)
-{
-	struct exfat_sb_info *sbi = EXFAT_SB(sb);
-	struct buffer_head *bhs[MAX_BUF_PER_PAGE];
-	int nr_bhs = MAX_BUF_PER_PAGE;
-	sector_t last_blknr = blknr + num_secs;
-	int err, i, n;
-
-	if (blknr + num_secs > sbi->num_sectors && sbi->num_sectors > 0) {
-		exfat_fs_error_ratelimit(sb,
-			"%s: out of range(sect:%llu len:%u)",
-			__func__, blknr, num_secs);
-		return -EIO;
-	}
-
-	/* Zeroing the unused blocks on this cluster */
-	n = 0;
-	while (blknr < last_blknr) {
-		bhs[n] = sb_getblk(sb, (sector_t)blknr);
-		if (!bhs[n]) {
-			err = -ENOMEM;
-			goto error;
-		}
-		memset(bhs[n]->b_data, 0, sb->s_blocksize);
-		exfat_update_bh(sb, bhs[n], 0);
-
-		n++;
-		blknr++;
-
-		if (blknr == last_blknr)
-			break;
-
-		if (n == nr_bhs) {
-			exfat_wait_bhs(bhs, n);
-
-			for (i = 0; i < n; i++)
-				brelse(bhs[i]);
-			n = 0;
-		}
-	}
-	exfat_wait_bhs(bhs, n);
-
-	err = exfat_sync_bhs(bhs, n);
-	if (err)
-		goto error;
-
-	for (i = 0; i < n; i++)
-		brelse(bhs[i]);
-
-	return 0;
-
-error:
-	exfat_msg(sb, KERN_ERR, "failed zeroed sect %llu\n", blknr);
-	for (i = 0; i < n; i++)
-		bforget(bhs[i]);
-
-	return err;
 }

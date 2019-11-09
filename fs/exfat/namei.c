@@ -362,7 +362,7 @@ int exfat_find_empty_entry(struct inode *inode, struct exfat_chain *p_dir,
 		if (ret)
 			return ret;
 
-		if (exfat_clear_cluster(inode, clu.dir))
+		if (exfat_zeroed_cluster(inode, clu.dir))
 			return -EIO;
 
 		/* append to the FAT chain */

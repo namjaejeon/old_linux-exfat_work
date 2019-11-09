@@ -425,7 +425,7 @@ struct exfat_dentry *exfat_get_dentry(struct super_block *sb,
 struct exfat_entry_set_cache *exfat_get_dentry_set(struct super_block *sb,
 		struct exfat_chain *p_dir, int entry, unsigned int type,
 		struct exfat_dentry **file_ep);
-int exfat_clear_cluster(struct inode *inode, unsigned int clu);
+int exfat_zeroed_cluster(struct inode *dir, unsigned int clu);
 int exfat_find_location(struct super_block *sb, struct exfat_chain *p_dir,
 		int entry, sector_t *sector, int *offset);
 int exfat_find_last_cluster(struct super_block *sb, struct exfat_chain *p_chain,
@@ -497,8 +497,6 @@ int exfat_get_num_entries(struct exfat_uni_name *p_uniname);
 int exfat_find_dir_entry(struct super_block *sb, struct exfat_inode_info *ei,
 		struct exfat_chain *p_dir, struct exfat_uni_name *p_uniname,
 		int num_entries, unsigned int type);
-int exfat_zeroed_cluster(struct super_block *sb, sector_t blknr,
-		unsigned int num_secs);
 int exfat_alloc_new_dir(struct inode *inode, struct exfat_chain *clu);
 
 /* inode.c */
