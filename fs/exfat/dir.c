@@ -1063,7 +1063,7 @@ int exfat_find_dir_entry(struct super_block *sb, struct exfat_inode_info *ei,
 		int num_entries, unsigned int type)
 {
 	int i, rewind = 0, dentry = 0, end_eidx = 0, num_ext = 0, len;
-	int order, step, name_len;
+	int order, step, name_len = 0;
 	int dentries_per_clu, num_empty = 0;
 	unsigned int entry_type;
 	unsigned short entry_uniname[16], *uniname = NULL, unichar;
