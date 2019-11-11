@@ -95,7 +95,7 @@ static int exfat_sanitize_mode(const struct exfat_sb_info *sbi,
 /* resize the file length */
 int __exfat_truncate(struct inode *inode, loff_t new_size)
 {
-	unsigned int num_clusters_new, num_clusters_da, num_clusters_phys;
+	unsigned int num_clusters_new, num_clusters_phys;
 	unsigned int last_clu = FREE_CLUSTER;
 	struct exfat_chain clu;
 	struct exfat_timestamp tm;
@@ -112,26 +112,9 @@ int __exfat_truncate(struct inode *inode, loff_t new_size)
 
 	exfat_set_vol_flags(sb, VOL_DIRTY);
 
-	/* Reserved count update */
-	num_clusters_da =
-		EXFAT_B_TO_CLU_ROUND_UP(EXFAT_I(inode)->i_size_aligned, sbi);
 	num_clusters_new = EXFAT_B_TO_CLU_ROUND_UP(i_size_read(inode), sbi);
 	num_clusters_phys =
 		EXFAT_B_TO_CLU_ROUND_UP(EXFAT_I(inode)->i_size_ondisk, sbi);
-
-	if (num_clusters_da != num_clusters_phys &&
-			num_clusters_new < num_clusters_da) {
-		/*
-		 * Decrement reserved clusters
-		 * n_reserved = num_clusters_da - max(new,phys)
-		 */
-		int n_reserved = (num_clusters_new > num_clusters_phys) ?
-			(num_clusters_da - num_clusters_new) :
-			(num_clusters_da - num_clusters_phys);
-
-		sbi->reserved_clusters -= n_reserved;
-		WARN_ON(sbi->reserved_clusters < 0);
-	}
 
 	exfat_chain_set(&clu, ei->start_clu, num_clusters_phys, ei->flags);
 
@@ -160,7 +143,7 @@ int __exfat_truncate(struct inode *inode, loff_t new_size)
 				clu.size--;
 			}
 		}
-	} else if (new_size == 0) {
+	} else {
 		ei->flags = 0x03;
 		ei->start_clu = EOF_CLUSTER;
 	}
@@ -169,12 +152,6 @@ int __exfat_truncate(struct inode *inode, loff_t new_size)
 
 	if (ei->type == TYPE_FILE)
 		ei->attr |= ATTR_ARCHIVE;
-
-	/*
-	 * clu.dir: free from
-	 * clu.size: # of clusters to free, no fat_free if 0
-	 * clu.flags: ei->flags
-	 */
 
 	/* update the directory entry */
 	if (!evict) {
@@ -208,7 +185,6 @@ int __exfat_truncate(struct inode *inode, loff_t new_size)
 		    inode_needs_sync(inode)))
 			return -EIO;
 		exfat_release_dentry_set(es);
-
 	}
 
 	/* cut off from the FAT chain */

@@ -90,8 +90,7 @@ static int exfat_statfs(struct dentry *dentry, struct kstatfs *buf)
 	buf->f_type = sb->s_magic;
 	buf->f_bsize = sbi->cluster_size;
 	buf->f_blocks = sbi->num_clusters - 2; /* clu 0 & 1 */
-	buf->f_bfree = buf->f_blocks -
-		(sbi->used_clusters + sbi->reserved_clusters);
+	buf->f_bfree = buf->f_blocks - sbi->used_clusters;
 	buf->f_bavail = buf->f_bfree;
 	buf->f_fsid.val[0] = (unsigned int)id;
 	buf->f_fsid.val[1] = (unsigned int)(id >> 32);

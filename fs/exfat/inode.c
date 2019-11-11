@@ -129,7 +129,6 @@ static int exfat_map_cluster(struct inode *inode, unsigned int clu_offset,
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 	struct exfat_inode_info *ei = EXFAT_I(inode);
 	unsigned int local_clu_offset = clu_offset;
-	int reserved_clusters = sbi->reserved_clusters;
 	unsigned int num_to_be_allocated = 0, num_clusters = 0;
 
 	ei->rwoffset = EXFAT_CLU_TO_B(clu_offset, sbi);
@@ -286,9 +285,6 @@ static int exfat_map_cluster(struct inode *inode, unsigned int clu_offset,
 
 	}
 
-	/* update reserved_clusters */
-	sbi->reserved_clusters = reserved_clusters;
-
 	/* hint information */
 	ei->hint_bmap.off = local_clu_offset;
 	ei->hint_bmap.clu = *clu;
@@ -434,30 +430,20 @@ static void exfat_write_failed(struct address_space *mapping, loff_t to)
 	}
 }
 
-static int __exfat_write_begin(struct file *file, struct address_space *mapping,
+static int exfat_write_begin(struct file *file, struct address_space *mapping,
 		loff_t pos, unsigned int len, unsigned int flags,
-		struct page **pagep, void **fsdata, get_block_t *get_block,
-		loff_t *bytes)
+		struct page **pagep, void **fsdata)
 {
 	int ret;
 
 	*pagep = NULL;
 	ret = cont_write_begin(file, mapping, pos, len, flags, pagep, fsdata,
-			get_block, bytes);
+			exfat_get_block, &EXFAT_I(mapping->host)->i_size_ondisk);
 
 	if (ret < 0)
 		exfat_write_failed(mapping, pos+len);
 
 	return ret;
-}
-
-static int exfat_write_begin(struct file *file, struct address_space *mapping,
-		loff_t pos, unsigned int len, unsigned int flags,
-		struct page **pagep, void **fsdata)
-{
-	return __exfat_write_begin(file, mapping, pos, len, flags,
-			pagep, fsdata, exfat_get_block,
-			&EXFAT_I(mapping->host)->i_size_ondisk);
 }
 
 static int exfat_write_end(struct file *file, struct address_space *mapping,

@@ -257,9 +257,6 @@ struct exfat_sb_info {
 	unsigned int clu_srch_ptr; /* cluster search pointer */
 	unsigned int used_clusters; /* number of used clusters */
 
-	int reserved_clusters; /* # of reserved clusters (DA) */
-	void *amap; /* AU Allocation Map */
-
 	bool s_dirt;
 	struct mutex s_lock; /* superblock lock */
 	struct super_block *host_sb; /* sb pointer */
@@ -469,10 +466,6 @@ int exfat_get_cluster(struct inode *inode, unsigned int cluster,
 /* dir.c */
 extern const struct inode_operations exfat_dir_inode_operations;
 extern const struct file_operations exfat_dir_operations;
-void exfat_update_bh(struct super_block *sb, struct buffer_head *bh, int sync);
-void exfat_chain_set(struct exfat_chain *ec, unsigned int dir,
-		unsigned int size, unsigned char flags);
-struct exfat_chain *exfat_chain_dup(struct exfat_chain *dir);
 void exfat_get_uniname_from_ext_entry(struct super_block *sb,
 		struct exfat_chain *p_dir, int entry, unsigned short *uniname);
 unsigned int exfat_get_entry_type(struct exfat_dentry *p_entry);
@@ -541,5 +534,9 @@ struct exfat_timestamp *exfat_tm_now(struct exfat_sb_info *sbi,
 		struct exfat_timestamp *tm);
 unsigned short exfat_calc_chksum_2byte(void *data, int len,
 		unsigned short chksum, int type);
+void exfat_update_bh(struct super_block *sb, struct buffer_head *bh, int sync);
+void exfat_chain_set(struct exfat_chain *ec, unsigned int dir,
+		unsigned int size, unsigned char flags);
+struct exfat_chain *exfat_chain_dup(struct exfat_chain *dir);
 
 #endif /* !_EXFAT_H */
