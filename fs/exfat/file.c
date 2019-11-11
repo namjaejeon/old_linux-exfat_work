@@ -143,7 +143,7 @@ int __exfat_truncate(struct inode *inode, loff_t new_size)
 				clu.size--;
 			}
 		}
-	} else if (new_size == 0) {
+	} else {
 		ei->flags = 0x03;
 		ei->start_clu = EOF_CLUSTER;
 	}
