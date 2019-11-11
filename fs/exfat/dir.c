@@ -10,36 +10,6 @@
 #include "exfat_raw.h"
 #include "exfat_fs.h"
 
-void exfat_update_bh(struct super_block *sb, struct buffer_head *bh, int sync)
-{
-	WRITE_ONCE(EXFAT_SB(sb)->s_dirt, true);
-	set_buffer_uptodate(bh);
-	mark_buffer_dirty(bh);
-
-	if (sync)
-		sync_dirty_buffer(bh);
-}
-
-void exfat_chain_set(struct exfat_chain *ec, unsigned int dir,
-		unsigned int size, unsigned char flags)
-{
-	ec->dir = dir;
-	ec->size = size;
-	ec->flags = flags;
-}
-
-struct exfat_chain *exfat_chain_dup(struct exfat_chain *ec)
-{
-	struct exfat_chain *dup;
-
-	dup = kmalloc(sizeof(struct exfat_chain), GFP_KERNEL);
-	if (!dup)
-		return NULL;
-
-	exfat_chain_set(dup, ec->dir, ec->size, ec->flags);
-	return dup;
-}
-
 /* read a directory entry from the opened directory */
 static int exfat_readdir(struct inode *inode, struct exfat_dir_entry *dir_entry)
 {
