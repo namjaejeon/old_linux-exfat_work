@@ -91,7 +91,7 @@ static int __exfat_write_inode(struct inode *inode, int sync)
 	ep2->stream_size = ep2->stream_valid_size;
 
 	ret = exfat_update_dir_chksum_with_entry_set(sb, es, sync);
-	exfat_release_dentry_set(es);
+	kfree(es);
 	return ret;
 }
 
@@ -259,7 +259,7 @@ static int exfat_map_cluster(struct inode *inode, unsigned int clu_offset,
 			if (exfat_update_dir_chksum_with_entry_set(sb, es,
 			    inode_needs_sync(inode)))
 				return -EIO;
-			exfat_release_dentry_set(es);
+			kfree(es);
 
 		} /* end of if != DIR_DELETED */
 

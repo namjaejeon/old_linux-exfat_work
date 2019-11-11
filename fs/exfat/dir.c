@@ -155,7 +155,6 @@ out:
 static void exfat_init_namebuf(struct exfat_dentry_namebuf *nb)
 {
 	nb->lfn = NULL;
-	nb->sfn = NULL;
 	nb->lfnbuf_len = 0;
 }
 
@@ -164,7 +163,6 @@ static int exfat_alloc_namebuf(struct exfat_dentry_namebuf *nb)
 	nb->lfn = __getname();
 	if (!nb->lfn)
 		return -ENOMEM;
-	nb->sfn = nb->lfn + MAX_VFSNAME_BUF_SIZE;
 	nb->lfnbuf_len = MAX_VFSNAME_BUF_SIZE;
 	return 0;
 }
@@ -184,11 +182,12 @@ static int exfat_iterate(struct file *filp, struct dir_context *ctx)
 {
 	struct inode *inode = filp->f_path.dentry->d_inode;
 	struct super_block *sb = inode->i_sb;
+	struct inode *tmp;
 	struct exfat_dir_entry de;
 	struct exfat_dentry_namebuf *nb = &(de.namebuf);
 	struct exfat_inode_info *ei = EXFAT_I(inode);
 	unsigned long inum;
-	loff_t cpos;
+	loff_t cpos, i_pos;
 	int err = 0, fake_offset = 0;
 
 	exfat_init_namebuf(nb);
@@ -238,21 +237,14 @@ get_new:
 	if (!nb->lfn[0])
 		goto end_of_dir;
 
-	if (!memcmp(nb->sfn, DOS_CUR_DIR_NAME, DOS_NAME_LENGTH)) {
-		inum = inode->i_ino;
-	} else if (!memcmp(nb->sfn, DOS_PAR_DIR_NAME, DOS_NAME_LENGTH)) {
-		inum = parent_ino(filp->f_path.dentry);
+	i_pos = ((loff_t)ei->start_clu << 32) |
+		((ei->rwoffset - 1) & 0xffffffff);
+	tmp = exfat_iget(sb, i_pos);
+	if (tmp) {
+		inum = tmp->i_ino;
+		iput(tmp);
 	} else {
-		loff_t i_pos = ((loff_t)ei->start_clu << 32) |
-			((ei->rwoffset - 1) & 0xffffffff);
-		struct inode *tmp = exfat_iget(sb, i_pos);
-
-		if (tmp) {
-			inum = tmp->i_ino;
-			iput(tmp);
-		} else {
-			inum = iunique(sb, EXFAT_ROOT_INO);
-		}
+		inum = iunique(sb, EXFAT_ROOT_INO);
 	}
 
 	/*
@@ -260,10 +252,11 @@ get_new:
 	 * Because page fault can occur in dir_emit() when the size
 	 * of buffer given from user is larger than one page size.
 	 */
+	mutex_unlock(&EXFAT_SB(sb)->s_lock);
 	if (!dir_emit(ctx, nb->lfn, strlen(nb->lfn), inum,
 			(de.attr & ATTR_SUBDIR) ? DT_DIR : DT_REG))
 		goto out_unlocked;
-	mutex_unlock(&EXFAT_SB(sb)->s_lock);
+	mutex_lock(&EXFAT_SB(sb)->s_lock);
 	ctx->pos = cpos;
 	goto get_new;
 
@@ -980,14 +973,9 @@ struct exfat_entry_set_cache *exfat_get_dentry_set(struct super_block *sb,
 
 	return es;
 err_out:
-	exfat_release_dentry_set(es);
+	kfree(es);
 	brelse(bh);
 	return NULL;
-}
-
-void exfat_release_dentry_set(struct exfat_entry_set_cache *es)
-{
-	kfree(es);
 }
 
 static int exfat_extract_uni_name(struct exfat_dentry *ep,
@@ -1236,7 +1224,6 @@ found:
 	return dentry - num_ext;
 }
 
-/* returns -EIO on error */
 int exfat_count_ext_entries(struct super_block *sb, struct exfat_chain *p_dir,
 		int entry, struct exfat_dentry *ep)
 {
@@ -1293,7 +1280,7 @@ void exfat_get_uniname_from_ext_entry(struct super_block *sb,
 	}
 
 out:
-	exfat_release_dentry_set(es);
+	kfree(es);
 }
 
 int exfat_count_dir_entries(struct super_block *sb, struct exfat_chain *p_dir)
