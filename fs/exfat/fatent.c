@@ -54,10 +54,7 @@ int exfat_ent_set(struct super_block *sb, unsigned int loc,
 
 	fat_entry = (__le32 *)&(bh->b_data[off]);
 	*fat_entry = cpu_to_le32(content);
-	if (sb->s_flags & SB_SYNCHRONOUS)
-		exfat_update_bh(sb, bh, 1);
-	else
-		exfat_update_bh(sb, bh, 0);
+	exfat_update_bh(sb, bh, sb->s_flags & SB_SYNCHRONOUS);
 	exfat_mirror_bh(sb, sec, bh);
 	brelse(bh);
 	return 0;
@@ -141,10 +138,11 @@ int exfat_chain_cont_cluster(struct super_block *sb, unsigned int chain,
 	return 0;
 }
 
-int exfat_free_cluster(struct super_block *sb, struct exfat_chain *p_chain)
+int exfat_free_cluster(struct inode *inode, struct exfat_chain *p_chain)
 {
 	unsigned int num_clusters = 0;
 	unsigned int clu;
+	struct super_block *sb = inode->i_sb;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 
 	/* invalid cluster number */
@@ -167,14 +165,14 @@ int exfat_free_cluster(struct super_block *sb, struct exfat_chain *p_chain)
 
 	if (p_chain->flags == 0x03) {
 		do {
-			exfat_clr_alloc_bitmap(sb, clu-2);
+			exfat_clr_alloc_bitmap(inode, clu-2);
 			clu++;
 
 			num_clusters++;
 		} while (num_clusters < p_chain->size);
 	} else {
 		do {
-			exfat_clr_alloc_bitmap(sb, (clu - BASE_CLUSTER));
+			exfat_clr_alloc_bitmap(inode, (clu - BASE_CLUSTER));
 
 			if (exfat_get_next_cluster(sb, &clu))
 				goto out;
@@ -218,48 +216,95 @@ int exfat_find_last_cluster(struct super_block *sb, struct exfat_chain *p_chain,
 	return 0;
 }
 
-int exfat_clear_cluster(struct inode *inode, unsigned int clu)
+static inline int exfat_sync_bhs(struct buffer_head **bhs, int nr_bhs)
 {
-	sector_t s, n;
-	struct super_block *sb = inode->i_sb;
-	int ret = 0;
-	struct buffer_head *bh = NULL;
-	struct exfat_sb_info *sbi = EXFAT_SB(sb);
+	int i, err = 0;
 
-	s = exfat_cluster_to_sector(sbi, clu);
-	n = s + sbi->sect_per_clus;
+	for (i = 0; i < nr_bhs; i++)
+		write_dirty_buffer(bhs[i], 0);
 
-	if (IS_DIRSYNC(inode)) {
-		ret = exfat_zeroed_cluster(sb, s, sbi->sect_per_clus);
-		if (ret == -EIO)
-			return ret;
+	for (i = 0; i < nr_bhs; i++) {
+		wait_on_buffer(bhs[i]);
+		if (!err && !buffer_uptodate(bhs[i]))
+			err = -EIO;
 	}
-
-	/*
-	 * Try buffered zero writes if it doesn't have DIRSYNC or
-	 * exfat_zeroed_cluster() returned -EAGAIN.
-	 */
-	for ( ; s < n; s++) {
-		bh = sb_getblk(sb, s);
-		if (!bh) {
-			ret = -ENOMEM;
-			goto out;
-		}
-		memset(bh->b_data, 0x0, sb->s_blocksize);
-		set_buffer_uptodate(bh);
-		mark_buffer_dirty(bh);
-		brelse(bh);
-	}
-out:
-	return ret;
+	return err;
 }
 
-int exfat_alloc_cluster(struct super_block *sb, unsigned int num_alloc,
+int exfat_zeroed_cluster(struct inode *dir, unsigned int clu)
+{
+	struct super_block *sb = dir->i_sb;
+	struct exfat_sb_info *sbi = EXFAT_SB(sb);
+	struct buffer_head *bhs[MAX_BUF_PER_PAGE];
+	int nr_bhs = MAX_BUF_PER_PAGE;
+	sector_t blknr, last_blknr;
+	int err, i, n;
+
+	blknr = exfat_cluster_to_sector(sbi, clu);
+	last_blknr = blknr + sbi->sect_per_clus;
+
+	if (last_blknr > sbi->num_sectors && sbi->num_sectors > 0) {
+		exfat_fs_error_ratelimit(sb,
+			"%s: out of range(sect:%llu len:%u)",
+			__func__, (unsigned long long)blknr,
+			sbi->sect_per_clus);
+		return -EIO;
+	}
+
+	/* Zeroing the unused blocks on this cluster */
+	n = 0;
+	while (blknr < last_blknr) {
+		bhs[n] = sb_getblk(sb, (sector_t)blknr);
+		if (!bhs[n]) {
+			err = -ENOMEM;
+			goto error;
+		}
+		memset(bhs[n]->b_data, 0, sb->s_blocksize);
+		exfat_update_bh(sb, bhs[n], 0);
+
+		n++;
+		blknr++;
+
+		if (n == nr_bhs) {
+			if (IS_DIRSYNC(dir)) {
+				err = exfat_sync_bhs(bhs, n);
+				if (err)
+					goto error;
+			}
+
+			for (i = 0; i < n; i++)
+				brelse(bhs[i]);
+			n = 0;
+		}
+	}
+
+	if (IS_DIRSYNC(dir)) {
+		err = exfat_sync_bhs(bhs, n);
+		if (err)
+			goto error;
+	}
+
+	for (i = 0; i < n; i++)
+		brelse(bhs[i]);
+
+	return 0;
+
+error:
+	exfat_msg(sb, KERN_ERR, "failed zeroed sect %llu\n",
+		(unsigned long long)blknr);
+	for (i = 0; i < n; i++)
+		bforget(bhs[i]);
+
+	return err;
+}
+
+int exfat_alloc_cluster(struct inode *inode, unsigned int num_alloc,
 		struct exfat_chain *p_chain)
 {
 	int ret = -ENOSPC;
 	unsigned int num_clusters = 0, total_cnt;
 	unsigned int hint_clu, new_clu, last_clu = EOF_CLUSTER;
+	struct super_block *sb = inode->i_sb;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 
 	/* Check if there are reserved clusters up to max. */
@@ -324,7 +369,7 @@ int exfat_alloc_cluster(struct super_block *sb, unsigned int num_alloc,
 		}
 
 		/* update allocation bitmap */
-		if (exfat_set_alloc_bitmap(sb, new_clu - BASE_CLUSTER)) {
+		if (exfat_set_alloc_bitmap(inode, new_clu - BASE_CLUSTER)) {
 			ret = -EIO;
 			goto error;
 		}
@@ -373,7 +418,7 @@ int exfat_alloc_cluster(struct super_block *sb, unsigned int num_alloc,
 	}
 error:
 	if (num_clusters)
-		exfat_free_cluster(sb, p_chain);
+		exfat_free_cluster(inode, p_chain);
 	return ret;
 }
 

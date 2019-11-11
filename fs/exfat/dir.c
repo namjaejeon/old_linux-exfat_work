@@ -322,15 +322,14 @@ const struct file_operations exfat_dir_operations = {
 int exfat_alloc_new_dir(struct inode *inode, struct exfat_chain *clu)
 {
 	int ret;
-	struct super_block *sb = inode->i_sb;
 
 	exfat_chain_set(clu, EOF_CLUSTER, 0, 0x03);
 
-	ret = exfat_alloc_cluster(sb, 1, clu);
+	ret = exfat_alloc_cluster(inode, 1, clu);
 	if (ret)
 		return ret;
 
-	return exfat_clear_cluster(inode, clu->dir);
+	return exfat_zeroed_cluster(inode, clu->dir);
 }
 
 static int exfat_calc_num_entries(struct exfat_uni_name *p_uniname)
@@ -523,14 +522,16 @@ static void exfat_init_name_entry(struct exfat_dentry *ep,
 	}
 }
 
-int exfat_init_dir_entry(struct super_block *sb, struct exfat_chain *p_dir,
+int exfat_init_dir_entry(struct inode *inode, struct exfat_chain *p_dir,
 		int entry, unsigned int type, unsigned int start_clu,
 		unsigned long long size)
 {
+	struct super_block *sb = inode->i_sb;
 	sector_t sector;
 	unsigned char flags;
 	struct exfat_dentry *ep;
 	struct buffer_head *bh;
+	int sync = IS_DIRSYNC(inode);
 
 	flags = (type == TYPE_FILE) ? 0x01 : 0x03;
 
@@ -543,7 +544,7 @@ int exfat_init_dir_entry(struct super_block *sb, struct exfat_chain *p_dir,
 		return -EIO;
 
 	exfat_init_file_entry(sb, ep, type);
-	exfat_update_bh(sb, bh, 0);
+	exfat_update_bh(sb, bh, sync);
 	brelse(bh);
 
 	ep = exfat_get_dentry(sb, p_dir, entry + 1, &bh, &sector);
@@ -551,15 +552,16 @@ int exfat_init_dir_entry(struct super_block *sb, struct exfat_chain *p_dir,
 		return -EIO;
 
 	exfat_init_stream_entry(ep, flags, start_clu, size);
-	exfat_update_bh(sb, bh, 0);
+	exfat_update_bh(sb, bh, sync);
 	brelse(bh);
 
 	return 0;
 }
 
-int update_dir_chksum(struct super_block *sb, struct exfat_chain *p_dir,
+int update_dir_chksum(struct inode *inode, struct exfat_chain *p_dir,
 		int entry)
 {
+	struct super_block *sb = inode->i_sb;
 	int ret = 0;
 	int i, num_entries;
 	sector_t sector;
@@ -586,27 +588,29 @@ int update_dir_chksum(struct super_block *sb, struct exfat_chain *p_dir,
 	}
 
 	fep->file_checksum = cpu_to_le16(chksum);
-	exfat_update_bh(sb, fbh, 0);
+	exfat_update_bh(sb, fbh, IS_DIRSYNC(inode));
 out_unlock:
 	brelse(fbh);
 	return ret;
 }
 
-int exfat_init_ext_entry(struct super_block *sb, struct exfat_chain *p_dir,
+int exfat_init_ext_entry(struct inode *inode, struct exfat_chain *p_dir,
 		int entry, int num_entries, struct exfat_uni_name *p_uniname)
 {
+	struct super_block *sb = inode->i_sb;
 	int i;
 	sector_t sector;
 	unsigned short *uniname = p_uniname->name;
 	struct exfat_dentry *ep;
 	struct buffer_head *bh;
+	int sync = IS_DIRSYNC(inode);
 
 	ep = exfat_get_dentry(sb, p_dir, entry, &bh, &sector);
 	if (!ep)
 		return -EIO;
 
 	ep->file_num_ext = (unsigned char)(num_entries - 1);
-	exfat_update_bh(sb, bh, 0);
+	exfat_update_bh(sb, bh, sync);
 	brelse(bh);
 
 	ep = exfat_get_dentry(sb, p_dir, entry + 1, &bh, &sector);
@@ -615,7 +619,7 @@ int exfat_init_ext_entry(struct super_block *sb, struct exfat_chain *p_dir,
 
 	ep->stream_name_len = p_uniname->name_len;
 	ep->stream_name_hash = cpu_to_le16(p_uniname->name_hash);
-	exfat_update_bh(sb, bh, 0);
+	exfat_update_bh(sb, bh, sync);
 	brelse(bh);
 
 	for (i = 2; i < num_entries; i++) {
@@ -624,18 +628,19 @@ int exfat_init_ext_entry(struct super_block *sb, struct exfat_chain *p_dir,
 			return -EIO;
 
 		exfat_init_name_entry(ep, uniname);
-		exfat_update_bh(sb, bh, 0);
+		exfat_update_bh(sb, bh, sync);
 		brelse(bh);
 		uniname += 15;
 	}
 
-	update_dir_chksum(sb, p_dir, entry);
+	update_dir_chksum(inode, p_dir, entry);
 	return 0;
 }
 
-int exfat_remove_entries(struct super_block *sb, struct exfat_chain *p_dir,
+int exfat_remove_entries(struct inode *inode, struct exfat_chain *p_dir,
 		int entry, int order, int num_entries)
 {
+	struct super_block *sb = inode->i_sb;
 	int i;
 	sector_t sector;
 	struct exfat_dentry *ep;
@@ -647,27 +652,32 @@ int exfat_remove_entries(struct super_block *sb, struct exfat_chain *p_dir,
 			return -EIO;
 
 		exfat_set_entry_type(ep, TYPE_DELETED);
-		exfat_update_bh(sb, bh, 0);
+		exfat_update_bh(sb, bh, IS_DIRSYNC(inode));
 		brelse(bh);
 	}
 
 	return 0;
 }
 
-/* write back all entries in entry set */
-static int exfat_write_partial_entries_in_entry_set(struct super_block *sb,
-		struct exfat_entry_set_cache *es, sector_t sec,
-		unsigned int off, unsigned int count)
+int exfat_update_dir_chksum_with_entry_set(struct super_block *sb,
+		struct exfat_entry_set_cache *es, int sync)
 {
-	int num_entries;
-	unsigned int buf_off = (off - es->offset);
-	unsigned int remaining_byte_in_sector, copy_entries;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
-	unsigned int clu;
-	int sync = es->sync;
 	struct buffer_head *bh;
+	sector_t sec = es->sector;
+	unsigned int off = es->offset;
+	int chksum_type = CS_DIR_ENTRY, i, num_entries = es->num_entries;
+	unsigned int buf_off = (off - es->offset);
+	unsigned int remaining_byte_in_sector, copy_entries, clu;
+	unsigned short chksum = 0;
 
-	num_entries = count;
+	for (i = 0; i < num_entries; i++) {
+		chksum = exfat_calc_chksum_2byte(&es->entries[i], DENTRY_SIZE,
+			chksum, chksum_type);
+		chksum_type = CS_DEFAULT;
+	}
+
+	es->entries[0].file_checksum = cpu_to_le16(chksum);
 
 	while (num_entries) {
 		/* write per sector base */
@@ -705,23 +715,6 @@ static int exfat_write_partial_entries_in_entry_set(struct super_block *sb,
 	return 0;
 err_out:
 	return -EIO;
-}
-
-int exfat_update_dir_chksum_with_entry_set(struct super_block *sb,
-		struct exfat_entry_set_cache *es)
-{
-	unsigned short chksum = 0;
-	int chksum_type = CS_DIR_ENTRY, i;
-
-	for (i = 0; i < es->num_entries; i++) {
-		chksum = exfat_calc_chksum_2byte(&es->entries[i], DENTRY_SIZE,
-			chksum, chksum_type);
-		chksum_type = CS_DEFAULT;
-	}
-
-	es->entries[0].file_checksum = cpu_to_le16(chksum);
-	return exfat_write_partial_entries_in_entry_set(sb, es, es->sector,
-			es->offset, es->num_entries);
 }
 
 static int exfat_walk_fat_chain(struct super_block *sb,
@@ -972,7 +965,6 @@ struct exfat_entry_set_cache *exfat_get_dentry_set(struct super_block *sb,
 	es->sector = sec;
 	es->offset = off;
 	es->alloc_flag = p_dir->flags;
-	es->sync = 0;
 
 	pos = &es->entries[0];
 
@@ -1063,7 +1055,7 @@ int exfat_find_dir_entry(struct super_block *sb, struct exfat_inode_info *ei,
 		int num_entries, unsigned int type)
 {
 	int i, rewind = 0, dentry = 0, end_eidx = 0, num_ext = 0, len;
-	int order, step, name_len;
+	int order, step, name_len = 0;
 	int dentries_per_clu, num_empty = 0;
 	unsigned int entry_type;
 	unsigned short entry_uniname[16], *uniname = NULL, unichar;
@@ -1379,84 +1371,4 @@ int exfat_count_dir_entries(struct super_block *sb, struct exfat_chain *p_dir)
 	}
 
 	return count;
-}
-
-static inline void exfat_wait_bhs(struct buffer_head **bhs, int nr_bhs)
-{
-	int i;
-
-	for (i = 0; i < nr_bhs; i++)
-		write_dirty_buffer(bhs[i], WRITE);
-}
-
-static inline int exfat_sync_bhs(struct buffer_head **bhs, int nr_bhs)
-{
-	int i, err = 0;
-
-	for (i = 0; i < nr_bhs; i++) {
-		wait_on_buffer(bhs[i]);
-		if (!err && !buffer_uptodate(bhs[i]))
-			err = -EIO;
-	}
-	return err;
-}
-
-int exfat_zeroed_cluster(struct super_block *sb,
-		sector_t blknr, unsigned int num_secs)
-{
-	struct exfat_sb_info *sbi = EXFAT_SB(sb);
-	struct buffer_head *bhs[MAX_BUF_PER_PAGE];
-	int nr_bhs = MAX_BUF_PER_PAGE;
-	sector_t last_blknr = blknr + num_secs;
-	int err, i, n;
-
-	if (blknr + num_secs > sbi->num_sectors && sbi->num_sectors > 0) {
-		exfat_fs_error_ratelimit(sb,
-			"%s: out of range(sect:%llu len:%u)",
-			__func__, blknr, num_secs);
-		return -EIO;
-	}
-
-	/* Zeroing the unused blocks on this cluster */
-	n = 0;
-	while (blknr < last_blknr) {
-		bhs[n] = sb_getblk(sb, (sector_t)blknr);
-		if (!bhs[n]) {
-			err = -ENOMEM;
-			goto error;
-		}
-		memset(bhs[n]->b_data, 0, sb->s_blocksize);
-		exfat_update_bh(sb, bhs[n], 0);
-
-		n++;
-		blknr++;
-
-		if (blknr == last_blknr)
-			break;
-
-		if (n == nr_bhs) {
-			exfat_wait_bhs(bhs, n);
-
-			for (i = 0; i < n; i++)
-				brelse(bhs[i]);
-			n = 0;
-		}
-	}
-	exfat_wait_bhs(bhs, n);
-
-	err = exfat_sync_bhs(bhs, n);
-	if (err)
-		goto error;
-
-	for (i = 0; i < n; i++)
-		brelse(bhs[i]);
-
-	return 0;
-
-error:
-	exfat_msg(sb, KERN_ERR, "failed zeroed sect %llu\n", blknr);
-	for (i = 0; i < n; i++)
-		bforget(bhs[i]);
-
-	return err;
 }

@@ -11,6 +11,7 @@
 #include <linux/time.h>
 #include <linux/writeback.h>
 #include <linux/uio.h>
+#include <linux/random.h>
 #include <linux/iversion.h>
 
 #include "exfat_raw.h"
@@ -19,7 +20,6 @@
 /* 2-level option flag */
 #define BMAP_NOT_CREATE				0
 #define BMAP_ADD_CLUSTER			1
-#define BLOCK_ADDED(bmap_ops)			(bmap_ops)
 
 static int __exfat_write_inode(struct inode *inode, int sync)
 {
@@ -90,8 +90,7 @@ static int __exfat_write_inode(struct inode *inode, int sync)
 	ep2->stream_valid_size = cpu_to_le64(on_disk_size);
 	ep2->stream_size = ep2->stream_valid_size;
 
-	es->sync = sync;
-	ret = exfat_update_dir_chksum_with_entry_set(sb, es);
+	ret = exfat_update_dir_chksum_with_entry_set(sb, es, sync);
 	exfat_release_dentry_set(es);
 	return ret;
 }
@@ -200,7 +199,7 @@ static int exfat_map_cluster(struct inode *inode, unsigned int clu_offset,
 			return -EIO;
 		}
 
-		ret = exfat_alloc_cluster(sb, num_to_be_allocated, &new_clu);
+		ret = exfat_alloc_cluster(inode, num_to_be_allocated, &new_clu);
 		if (ret)
 			return ret;
 
@@ -258,7 +257,8 @@ static int exfat_map_cluster(struct inode *inode, unsigned int clu_offset,
 				ep->stream_size = ep->stream_valid_size;
 			}
 
-			if (exfat_update_dir_chksum_with_entry_set(sb, es))
+			if (exfat_update_dir_chksum_with_entry_set(sb, es,
+			    inode_needs_sync(inode)))
 				return -EIO;
 			exfat_release_dentry_set(es);
 
@@ -361,14 +361,13 @@ static int exfat_get_block(struct inode *inode, sector_t iblock,
 		max_blocks = min(mapped_blocks, max_blocks);
 
 		/* Treat newly added block / cluster */
-		if (BLOCK_ADDED(bmap_create) || buffer_delay(bh_result)) {
-
+		if (bmap_create || buffer_delay(bh_result)) {
 			/* Update i_size_ondisk */
 			pos = EXFAT_BLK_TO_B((iblock + 1), sb);
 			if (EXFAT_I(inode)->i_size_ondisk < pos)
 				EXFAT_I(inode)->i_size_ondisk = pos;
 
-			if (BLOCK_ADDED(bmap_create)) {
+			if (bmap_create) {
 				if (buffer_delay(bh_result) &&
 				    pos > EXFAT_I(inode)->i_size_aligned) {
 					exfat_fs_error(sb,
@@ -616,7 +615,7 @@ static int exfat_fill_inode(struct inode *inode, struct exfat_dir_entry *info)
 	inode->i_uid = sbi->options.fs_uid;
 	inode->i_gid = sbi->options.fs_gid;
 	inode_inc_iversion(inode);
-	inode->i_generation = get_seconds();
+	inode->i_generation = prandom_u32();
 
 	if (info->attr & ATTR_SUBDIR) { /* directory */
 		inode->i_generation &= ~1;

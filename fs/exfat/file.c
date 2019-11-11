@@ -141,8 +141,7 @@ int __exfat_truncate(struct inode *inode, loff_t new_size)
 		 * num_clusters = min(new, phys);
 		 */
 		unsigned int num_clusters =
-			(num_clusters_new < num_clusters_phys) ?
-			num_clusters_new : num_clusters_phys;
+			min(num_clusters_new, num_clusters_phys);
 
 		/*
 		 * Follow FAT chain
@@ -205,7 +204,8 @@ int __exfat_truncate(struct inode *inode, loff_t new_size)
 			ep2->stream_start_clu = FREE_CLUSTER;
 		}
 
-		if (exfat_update_dir_chksum_with_entry_set(sb, es))
+		if (exfat_update_dir_chksum_with_entry_set(sb, es,
+		    inode_needs_sync(inode)))
 			return -EIO;
 		exfat_release_dentry_set(es);
 
@@ -234,7 +234,7 @@ int __exfat_truncate(struct inode *inode, loff_t new_size)
 	ei->hint_femp.eidx = EXFAT_HINT_NONE;
 
 	/* free the clusters */
-	if (exfat_free_cluster(sb, &clu))
+	if (exfat_free_cluster(inode, &clu))
 		return -EIO;
 
 	exfat_set_vol_flags(sb, VOL_CLEAN);
