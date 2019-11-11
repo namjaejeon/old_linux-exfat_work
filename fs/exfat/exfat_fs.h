@@ -53,7 +53,6 @@ enum exfat_error_mode {
  * Type Definitions
  */
 #define ES_2_ENTRIES	2
-#define ES_3_ENTRIES	3
 #define ES_ALL_ENTRIES	0
 
 #define DIR_DELETED	0xFFFF0321
