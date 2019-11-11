@@ -430,30 +430,20 @@ static void exfat_write_failed(struct address_space *mapping, loff_t to)
 	}
 }
 
-static int __exfat_write_begin(struct file *file, struct address_space *mapping,
+static int exfat_write_begin(struct file *file, struct address_space *mapping,
 		loff_t pos, unsigned int len, unsigned int flags,
-		struct page **pagep, void **fsdata, get_block_t *get_block,
-		loff_t *bytes)
+		struct page **pagep, void **fsdata)
 {
 	int ret;
 
 	*pagep = NULL;
 	ret = cont_write_begin(file, mapping, pos, len, flags, pagep, fsdata,
-			get_block, bytes);
+			exfat_get_block, &EXFAT_I(mapping->host)->i_size_ondisk);
 
 	if (ret < 0)
 		exfat_write_failed(mapping, pos+len);
 
 	return ret;
-}
-
-static int exfat_write_begin(struct file *file, struct address_space *mapping,
-		loff_t pos, unsigned int len, unsigned int flags,
-		struct page **pagep, void **fsdata)
-{
-	return __exfat_write_begin(file, mapping, pos, len, flags,
-			pagep, fsdata, exfat_get_block,
-			&EXFAT_I(mapping->host)->i_size_ondisk);
 }
 
 static int exfat_write_end(struct file *file, struct address_space *mapping,
