@@ -248,7 +248,8 @@ int exfat_zeroed_cluster(struct inode *dir, unsigned int clu)
 	if (last_blknr > sbi->num_sectors && sbi->num_sectors > 0) {
 		exfat_fs_error_ratelimit(sb,
 			"%s: out of range(sect:%llu len:%u)",
-			__func__, blknr, sbi->sect_per_clus);
+			__func__, (unsigned long long)blknr,
+			sbi->sect_per_clus);
 		return -EIO;
 	}
 
@@ -291,7 +292,8 @@ int exfat_zeroed_cluster(struct inode *dir, unsigned int clu)
 	return 0;
 
 error:
-	exfat_msg(sb, KERN_ERR, "failed zeroed sect %llu\n", blknr);
+	exfat_msg(sb, KERN_ERR, "failed zeroed sect %llu\n",
+		(unsigned long long)blknr);
 	for (i = 0; i < n; i++)
 		bforget(bhs[i]);
 
