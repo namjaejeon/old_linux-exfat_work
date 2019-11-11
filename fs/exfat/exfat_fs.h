@@ -257,8 +257,6 @@ struct exfat_sb_info {
 	unsigned int clu_srch_ptr; /* cluster search pointer */
 	unsigned int used_clusters; /* number of used clusters */
 
-	int reserved_clusters; /* # of reserved clusters (DA) */
-
 	bool s_dirt;
 	struct mutex s_lock; /* superblock lock */
 	struct super_block *host_sb; /* sb pointer */

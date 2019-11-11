@@ -119,20 +119,6 @@ int __exfat_truncate(struct inode *inode, loff_t new_size)
 	num_clusters_phys =
 		EXFAT_B_TO_CLU_ROUND_UP(EXFAT_I(inode)->i_size_ondisk, sbi);
 
-	if (num_clusters_da != num_clusters_phys &&
-			num_clusters_new < num_clusters_da) {
-		/*
-		 * Decrement reserved clusters
-		 * n_reserved = num_clusters_da - max(new,phys)
-		 */
-		int n_reserved = (num_clusters_new > num_clusters_phys) ?
-			(num_clusters_da - num_clusters_new) :
-			(num_clusters_da - num_clusters_phys);
-
-		sbi->reserved_clusters -= n_reserved;
-		WARN_ON(sbi->reserved_clusters < 0);
-	}
-
 	exfat_chain_set(&clu, ei->start_clu, num_clusters_phys, ei->flags);
 
 	if (new_size > 0) {

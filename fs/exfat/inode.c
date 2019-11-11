@@ -129,7 +129,6 @@ static int exfat_map_cluster(struct inode *inode, unsigned int clu_offset,
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 	struct exfat_inode_info *ei = EXFAT_I(inode);
 	unsigned int local_clu_offset = clu_offset;
-	int reserved_clusters = sbi->reserved_clusters;
 	unsigned int num_to_be_allocated = 0, num_clusters = 0;
 
 	ei->rwoffset = EXFAT_CLU_TO_B(clu_offset, sbi);
@@ -285,9 +284,6 @@ static int exfat_map_cluster(struct inode *inode, unsigned int clu_offset,
 		}
 
 	}
-
-	/* update reserved_clusters */
-	sbi->reserved_clusters = reserved_clusters;
 
 	/* hint information */
 	ei->hint_bmap.off = local_clu_offset;
