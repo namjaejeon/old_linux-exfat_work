@@ -11,6 +11,7 @@
 #include <linux/time.h>
 #include <linux/writeback.h>
 #include <linux/uio.h>
+#include <linux/random.h>
 #include <linux/iversion.h>
 
 #include "exfat_raw.h"
@@ -614,7 +615,7 @@ static int exfat_fill_inode(struct inode *inode, struct exfat_dir_entry *info)
 	inode->i_uid = sbi->options.fs_uid;
 	inode->i_gid = sbi->options.fs_gid;
 	inode_inc_iversion(inode);
-	inode->i_generation = get_seconds();
+	inode->i_generation = prandom_u32();
 
 	if (info->attr & ATTR_SUBDIR) { /* directory */
 		inode->i_generation &= ~1;
