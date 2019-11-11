@@ -973,14 +973,9 @@ struct exfat_entry_set_cache *exfat_get_dentry_set(struct super_block *sb,
 
 	return es;
 err_out:
-	exfat_release_dentry_set(es);
+	kfree(es);
 	brelse(bh);
 	return NULL;
-}
-
-void exfat_release_dentry_set(struct exfat_entry_set_cache *es)
-{
-	kfree(es);
 }
 
 static int exfat_extract_uni_name(struct exfat_dentry *ep,
@@ -1286,7 +1281,7 @@ void exfat_get_uniname_from_ext_entry(struct super_block *sb,
 	}
 
 out:
-	exfat_release_dentry_set(es);
+	kfree(es);
 }
 
 int exfat_count_dir_entries(struct super_block *sb, struct exfat_chain *p_dir)

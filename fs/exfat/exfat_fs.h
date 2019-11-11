@@ -476,7 +476,6 @@ int update_dir_chksum(struct inode *inode, struct exfat_chain *p_dir,
 		int entry);
 int exfat_update_dir_chksum_with_entry_set(struct super_block *sb,
 		struct exfat_entry_set_cache *es, int sync);
-void exfat_release_dentry_set(struct exfat_entry_set_cache *es);
 int exfat_get_num_entries(struct exfat_uni_name *p_uniname);
 int exfat_find_dir_entry(struct super_block *sb, struct exfat_inode_info *ei,
 		struct exfat_chain *p_dir, struct exfat_uni_name *p_uniname,

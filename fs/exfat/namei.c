@@ -725,7 +725,7 @@ static int exfat_find(struct inode *dir, struct qstr *qname,
 
 		memset(&info->access_timestamp, 0,
 				sizeof(struct exfat_date_time));
-		exfat_release_dentry_set(es);
+		kfree(es);
 
 		if (info->type == TYPE_DIR) {
 			exfat_chain_set(&cdir, info->start_clu,

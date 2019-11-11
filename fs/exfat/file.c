@@ -3,6 +3,7 @@
  * Copyright (C) 2012-2013 Samsung Electronics Co., Ltd.
  */
 
+#include <linux/slab.h>
 #include <linux/cred.h>
 #include <linux/buffer_head.h>
 
@@ -184,7 +185,7 @@ int __exfat_truncate(struct inode *inode, loff_t new_size)
 		if (exfat_update_dir_chksum_with_entry_set(sb, es,
 		    inode_needs_sync(inode)))
 			return -EIO;
-		exfat_release_dentry_set(es);
+		kfree(es);
 	}
 
 	/* cut off from the FAT chain */
