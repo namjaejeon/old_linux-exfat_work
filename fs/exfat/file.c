@@ -170,12 +170,6 @@ int __exfat_truncate(struct inode *inode, loff_t new_size)
 	if (ei->type == TYPE_FILE)
 		ei->attr |= ATTR_ARCHIVE;
 
-	/*
-	 * clu.dir: free from
-	 * clu.size: # of clusters to free, no fat_free if 0
-	 * clu.flags: ei->flags
-	 */
-
 	/* update the directory entry */
 	if (!evict) {
 		es = exfat_get_dentry_set(sb, &(ei->dir), ei->entry,
