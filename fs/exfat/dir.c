@@ -1224,7 +1224,6 @@ found:
 	return dentry - num_ext;
 }
 
-/* returns -EIO on error */
 int exfat_count_ext_entries(struct super_block *sb, struct exfat_chain *p_dir,
 		int entry, struct exfat_dentry *ep)
 {
