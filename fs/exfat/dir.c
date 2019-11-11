@@ -252,10 +252,11 @@ get_new:
 	 * Because page fault can occur in dir_emit() when the size
 	 * of buffer given from user is larger than one page size.
 	 */
+	mutex_unlock(&EXFAT_SB(sb)->s_lock);
 	if (!dir_emit(ctx, nb->lfn, strlen(nb->lfn), inum,
 			(de.attr & ATTR_SUBDIR) ? DT_DIR : DT_REG))
 		goto out_unlocked;
-	mutex_unlock(&EXFAT_SB(sb)->s_lock);
+	mutex_lock(&EXFAT_SB(sb)->s_lock);
 	ctx->pos = cpos;
 	goto get_new;
 
