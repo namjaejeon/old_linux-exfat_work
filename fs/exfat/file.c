@@ -204,7 +204,8 @@ int __exfat_truncate(struct inode *inode, loff_t new_size)
 			ep2->stream_start_clu = FREE_CLUSTER;
 		}
 
-		if (exfat_update_dir_chksum_with_entry_set(sb, es))
+		if (exfat_update_dir_chksum_with_entry_set(sb, es,
+		    inode_needs_sync(inode)))
 			return -EIO;
 		exfat_release_dentry_set(es);
 

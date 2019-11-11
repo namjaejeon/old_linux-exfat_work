@@ -654,20 +654,25 @@ int exfat_remove_entries(struct super_block *sb, struct exfat_chain *p_dir,
 	return 0;
 }
 
-/* write back all entries in entry set */
-static int exfat_write_partial_entries_in_entry_set(struct super_block *sb,
-		struct exfat_entry_set_cache *es, sector_t sec,
-		unsigned int off, unsigned int count)
+int exfat_update_dir_chksum_with_entry_set(struct super_block *sb,
+		struct exfat_entry_set_cache *es, int sync)
 {
-	int num_entries;
-	unsigned int buf_off = (off - es->offset);
-	unsigned int remaining_byte_in_sector, copy_entries;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
-	unsigned int clu;
-	int sync = es->sync;
 	struct buffer_head *bh;
+	sector_t sec = es->sector;
+	unsigned int off = es->offset;
+	int chksum_type = CS_DIR_ENTRY, i, num_entries = es->num_entries;
+	unsigned int buf_off = (off - es->offset);
+	unsigned int remaining_byte_in_sector, copy_entries, clu;
+	unsigned short chksum = 0;
 
-	num_entries = count;
+	for (i = 0; i < num_entries; i++) {
+		chksum = exfat_calc_chksum_2byte(&es->entries[i], DENTRY_SIZE,
+			chksum, chksum_type);
+		chksum_type = CS_DEFAULT;
+	}
+
+	es->entries[0].file_checksum = cpu_to_le16(chksum);
 
 	while (num_entries) {
 		/* write per sector base */
@@ -705,23 +710,6 @@ static int exfat_write_partial_entries_in_entry_set(struct super_block *sb,
 	return 0;
 err_out:
 	return -EIO;
-}
-
-int exfat_update_dir_chksum_with_entry_set(struct super_block *sb,
-		struct exfat_entry_set_cache *es)
-{
-	unsigned short chksum = 0;
-	int chksum_type = CS_DIR_ENTRY, i;
-
-	for (i = 0; i < es->num_entries; i++) {
-		chksum = exfat_calc_chksum_2byte(&es->entries[i], DENTRY_SIZE,
-			chksum, chksum_type);
-		chksum_type = CS_DEFAULT;
-	}
-
-	es->entries[0].file_checksum = cpu_to_le16(chksum);
-	return exfat_write_partial_entries_in_entry_set(sb, es, es->sector,
-			es->offset, es->num_entries);
 }
 
 static int exfat_walk_fat_chain(struct super_block *sb,
@@ -972,7 +960,6 @@ struct exfat_entry_set_cache *exfat_get_dentry_set(struct super_block *sb,
 	es->sector = sec;
 	es->offset = off;
 	es->alloc_flag = p_dir->flags;
-	es->sync = 0;
 
 	pos = &es->entries[0];
 

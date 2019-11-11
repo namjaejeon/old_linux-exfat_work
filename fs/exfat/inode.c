@@ -89,8 +89,7 @@ static int __exfat_write_inode(struct inode *inode, int sync)
 	ep2->stream_valid_size = cpu_to_le64(on_disk_size);
 	ep2->stream_size = ep2->stream_valid_size;
 
-	es->sync = sync;
-	ret = exfat_update_dir_chksum_with_entry_set(sb, es);
+	ret = exfat_update_dir_chksum_with_entry_set(sb, es, sync);
 	exfat_release_dentry_set(es);
 	return ret;
 }
@@ -257,7 +256,8 @@ static int exfat_map_cluster(struct inode *inode, unsigned int clu_offset,
 				ep->stream_size = ep->stream_valid_size;
 			}
 
-			if (exfat_update_dir_chksum_with_entry_set(sb, es))
+			if (exfat_update_dir_chksum_with_entry_set(sb, es,
+			    inode_needs_sync(inode)))
 				return -EIO;
 			exfat_release_dentry_set(es);
 

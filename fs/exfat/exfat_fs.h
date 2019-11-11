@@ -186,7 +186,6 @@ struct exfat_entry_set_cache {
 	/* flag in stream entry. 01 for cluster chain, 03 for contig. */
 	int alloc_flag;
 	unsigned int num_entries;
-	int sync;
 	struct exfat_dentry entries[];
 };
 
@@ -491,7 +490,7 @@ int exfat_remove_entries(struct super_block *sb, struct exfat_chain *p_dir,
 int update_dir_chksum(struct super_block *sb, struct exfat_chain *p_dir,
 		int entry);
 int exfat_update_dir_chksum_with_entry_set(struct super_block *sb,
-		struct exfat_entry_set_cache *es);
+		struct exfat_entry_set_cache *es, int sync);
 void exfat_release_dentry_set(struct exfat_entry_set_cache *es);
 int exfat_get_num_entries(struct exfat_uni_name *p_uniname);
 int exfat_find_dir_entry(struct super_block *sb, struct exfat_inode_info *ei,
