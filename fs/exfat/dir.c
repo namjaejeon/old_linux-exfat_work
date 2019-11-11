@@ -322,11 +322,10 @@ const struct file_operations exfat_dir_operations = {
 int exfat_alloc_new_dir(struct inode *inode, struct exfat_chain *clu)
 {
 	int ret;
-	struct super_block *sb = inode->i_sb;
 
 	exfat_chain_set(clu, EOF_CLUSTER, 0, 0x03);
 
-	ret = exfat_alloc_cluster(sb, 1, clu);
+	ret = exfat_alloc_cluster(inode, 1, clu);
 	if (ret)
 		return ret;
 
@@ -523,14 +522,16 @@ static void exfat_init_name_entry(struct exfat_dentry *ep,
 	}
 }
 
-int exfat_init_dir_entry(struct super_block *sb, struct exfat_chain *p_dir,
+int exfat_init_dir_entry(struct inode *inode, struct exfat_chain *p_dir,
 		int entry, unsigned int type, unsigned int start_clu,
 		unsigned long long size)
 {
+	struct super_block *sb = inode->i_sb;
 	sector_t sector;
 	unsigned char flags;
 	struct exfat_dentry *ep;
 	struct buffer_head *bh;
+	int sync = IS_DIRSYNC(inode);
 
 	flags = (type == TYPE_FILE) ? 0x01 : 0x03;
 
@@ -543,7 +544,7 @@ int exfat_init_dir_entry(struct super_block *sb, struct exfat_chain *p_dir,
 		return -EIO;
 
 	exfat_init_file_entry(sb, ep, type);
-	exfat_update_bh(sb, bh, 0);
+	exfat_update_bh(sb, bh, sync);
 	brelse(bh);
 
 	ep = exfat_get_dentry(sb, p_dir, entry + 1, &bh, &sector);
@@ -551,15 +552,16 @@ int exfat_init_dir_entry(struct super_block *sb, struct exfat_chain *p_dir,
 		return -EIO;
 
 	exfat_init_stream_entry(ep, flags, start_clu, size);
-	exfat_update_bh(sb, bh, 0);
+	exfat_update_bh(sb, bh, sync);
 	brelse(bh);
 
 	return 0;
 }
 
-int update_dir_chksum(struct super_block *sb, struct exfat_chain *p_dir,
+int update_dir_chksum(struct inode *inode, struct exfat_chain *p_dir,
 		int entry)
 {
+	struct super_block *sb = inode->i_sb;
 	int ret = 0;
 	int i, num_entries;
 	sector_t sector;
@@ -586,27 +588,29 @@ int update_dir_chksum(struct super_block *sb, struct exfat_chain *p_dir,
 	}
 
 	fep->file_checksum = cpu_to_le16(chksum);
-	exfat_update_bh(sb, fbh, 0);
+	exfat_update_bh(sb, fbh, IS_DIRSYNC(inode));
 out_unlock:
 	brelse(fbh);
 	return ret;
 }
 
-int exfat_init_ext_entry(struct super_block *sb, struct exfat_chain *p_dir,
+int exfat_init_ext_entry(struct inode *inode, struct exfat_chain *p_dir,
 		int entry, int num_entries, struct exfat_uni_name *p_uniname)
 {
+	struct super_block *sb = inode->i_sb;
 	int i;
 	sector_t sector;
 	unsigned short *uniname = p_uniname->name;
 	struct exfat_dentry *ep;
 	struct buffer_head *bh;
+	int sync = IS_DIRSYNC(inode);
 
 	ep = exfat_get_dentry(sb, p_dir, entry, &bh, &sector);
 	if (!ep)
 		return -EIO;
 
 	ep->file_num_ext = (unsigned char)(num_entries - 1);
-	exfat_update_bh(sb, bh, 0);
+	exfat_update_bh(sb, bh, sync);
 	brelse(bh);
 
 	ep = exfat_get_dentry(sb, p_dir, entry + 1, &bh, &sector);
@@ -615,7 +619,7 @@ int exfat_init_ext_entry(struct super_block *sb, struct exfat_chain *p_dir,
 
 	ep->stream_name_len = p_uniname->name_len;
 	ep->stream_name_hash = cpu_to_le16(p_uniname->name_hash);
-	exfat_update_bh(sb, bh, 0);
+	exfat_update_bh(sb, bh, sync);
 	brelse(bh);
 
 	for (i = 2; i < num_entries; i++) {
@@ -624,18 +628,19 @@ int exfat_init_ext_entry(struct super_block *sb, struct exfat_chain *p_dir,
 			return -EIO;
 
 		exfat_init_name_entry(ep, uniname);
-		exfat_update_bh(sb, bh, 0);
+		exfat_update_bh(sb, bh, sync);
 		brelse(bh);
 		uniname += 15;
 	}
 
-	update_dir_chksum(sb, p_dir, entry);
+	update_dir_chksum(inode, p_dir, entry);
 	return 0;
 }
 
-int exfat_remove_entries(struct super_block *sb, struct exfat_chain *p_dir,
+int exfat_remove_entries(struct inode *inode, struct exfat_chain *p_dir,
 		int entry, int order, int num_entries)
 {
+	struct super_block *sb = inode->i_sb;
 	int i;
 	sector_t sector;
 	struct exfat_dentry *ep;
@@ -647,7 +652,7 @@ int exfat_remove_entries(struct super_block *sb, struct exfat_chain *p_dir,
 			return -EIO;
 
 		exfat_set_entry_type(ep, TYPE_DELETED);
-		exfat_update_bh(sb, bh, 0);
+		exfat_update_bh(sb, bh, IS_DIRSYNC(inode));
 		brelse(bh);
 	}
 

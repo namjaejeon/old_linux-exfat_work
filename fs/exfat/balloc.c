@@ -139,10 +139,11 @@ void exfat_free_alloc_bmp(struct super_block *sb)
  * If the value of "clu" is 0, it means cluster 2 which is the first cluster of
  * the cluster heap.
  */
-int exfat_set_alloc_bitmap(struct super_block *sb, unsigned int clu)
+int exfat_set_alloc_bitmap(struct inode *inode, unsigned int clu)
 {
 	int i, b;
 	sector_t sector;
+	struct super_block *sb = inode->i_sb;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 
 	i = clu >> (sb->s_blocksize_bits + 3);
@@ -150,10 +151,7 @@ int exfat_set_alloc_bitmap(struct super_block *sb, unsigned int clu)
 
 	sector = exfat_cluster_to_sector(sbi, sbi->map_clu) + i;
 	set_bit_le(b, sbi->vol_amap[i]->b_data);
-	set_buffer_uptodate(sbi->vol_amap[i]);
-	mark_buffer_dirty(sbi->vol_amap[i]);
-	if (sb->s_flags & SB_SYNCHRONOUS)
-		sync_dirty_buffer(sbi->vol_amap[i]);
+	exfat_update_bh(sb, sbi->vol_amap[i], IS_DIRSYNC(inode));
 
 	return 0;
 }
@@ -162,10 +160,11 @@ int exfat_set_alloc_bitmap(struct super_block *sb, unsigned int clu)
  * If the value of "clu" is 0, it means cluster 2 which is the first cluster of
  * the cluster heap.
  */
-void exfat_clr_alloc_bitmap(struct super_block *sb, unsigned int clu)
+void exfat_clr_alloc_bitmap(struct inode *inode, unsigned int clu)
 {
 	int i, b;
 	sector_t sector;
+	struct super_block *sb = inode->i_sb;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 	struct exfat_mount_options *opts = &sbi->options;
 
@@ -174,10 +173,7 @@ void exfat_clr_alloc_bitmap(struct super_block *sb, unsigned int clu)
 
 	sector = exfat_cluster_to_sector(sbi, sbi->map_clu) + i;
 	clear_bit_le(b, sbi->vol_amap[i]->b_data);
-	set_buffer_uptodate(sbi->vol_amap[i]);
-	mark_buffer_dirty(sbi->vol_amap[i]);
-	if (sb->s_flags & SB_SYNCHRONOUS)
-		sync_dirty_buffer(sbi->vol_amap[i]);
+	exfat_update_bh(sb, sbi->vol_amap[i], IS_DIRSYNC(inode));
 
 	if (opts->discard) {
 		int ret_discard;

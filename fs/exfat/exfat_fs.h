@@ -407,9 +407,9 @@ int exfat_set_vol_flags(struct super_block *sb, unsigned short new_flag);
 /* fatent.c */
 #define exfat_get_next_cluster(sb, pclu) exfat_ent_get(sb, *(pclu), pclu)
 
-int exfat_alloc_cluster(struct super_block *sb, unsigned int num_alloc,
+int exfat_alloc_cluster(struct inode *inode, unsigned int num_alloc,
 		struct exfat_chain *p_chain);
-int exfat_free_cluster(struct super_block *sb, struct exfat_chain *p_chain);
+int exfat_free_cluster(struct inode *inode, struct exfat_chain *p_chain);
 int exfat_ent_get(struct super_block *sb, unsigned int loc,
 		unsigned int *content);
 int exfat_ent_set(struct super_block *sb, unsigned int loc,
@@ -438,8 +438,8 @@ int exfat_count_dir_entries(struct super_block *sb, struct exfat_chain *p_dir);
 /* balloc.c */
 int exfat_load_alloc_bmp(struct super_block *sb);
 void exfat_free_alloc_bmp(struct super_block *sb);
-int exfat_set_alloc_bitmap(struct super_block *sb, unsigned int clu);
-void exfat_clr_alloc_bitmap(struct super_block *sb, unsigned int clu);
+int exfat_set_alloc_bitmap(struct inode *inode, unsigned int clu);
+void exfat_clr_alloc_bitmap(struct inode *inode, unsigned int clu);
 unsigned int exfat_test_alloc_bitmap(struct super_block *sb, unsigned int clu);
 int exfat_count_used_clusters(struct super_block *sb, unsigned int *ret_count);
 
@@ -480,14 +480,14 @@ void exfat_get_entry_time(struct exfat_dentry *p_entry,
 		struct exfat_timestamp *tp, unsigned char mode);
 void exfat_set_entry_time(struct exfat_dentry *p_entry,
 		struct exfat_timestamp *tp, unsigned char mode);
-int exfat_init_dir_entry(struct super_block *sb, struct exfat_chain *p_dir,
+int exfat_init_dir_entry(struct inode *inode, struct exfat_chain *p_dir,
 		int entry, unsigned int type, unsigned int start_clu,
 		unsigned long long size);
-int exfat_init_ext_entry(struct super_block *sb, struct exfat_chain *p_dir,
+int exfat_init_ext_entry(struct inode *inode, struct exfat_chain *p_dir,
 		int entry, int num_entries, struct exfat_uni_name *p_uniname);
-int exfat_remove_entries(struct super_block *sb, struct exfat_chain *p_dir,
+int exfat_remove_entries(struct inode *inode, struct exfat_chain *p_dir,
 		int entry, int order, int num_entries);
-int update_dir_chksum(struct super_block *sb, struct exfat_chain *p_dir,
+int update_dir_chksum(struct inode *inode, struct exfat_chain *p_dir,
 		int entry);
 int exfat_update_dir_chksum_with_entry_set(struct super_block *sb,
 		struct exfat_entry_set_cache *es, int sync);

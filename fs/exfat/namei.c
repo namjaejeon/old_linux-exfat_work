@@ -358,7 +358,7 @@ int exfat_find_empty_entry(struct inode *inode, struct exfat_chain *p_dir,
 		exfat_chain_set(&clu, last_clu + 1, 0, p_dir->flags);
 
 		/* allocate a cluster */
-		ret = exfat_alloc_cluster(sb, 1, &clu);
+		ret = exfat_alloc_cluster(inode, 1, &clu);
 		if (ret)
 			return ret;
 
@@ -404,9 +404,9 @@ int exfat_find_empty_entry(struct inode *inode, struct exfat_chain *p_dir,
 			ep->stream_valid_size = cpu_to_le64(size);
 			ep->stream_size = ep->stream_valid_size;
 			ep->stream_flags = p_dir->flags;
-			exfat_update_bh(sb, bh, 0);
+			exfat_update_bh(sb, bh, IS_DIRSYNC(inode));
 			brelse(bh);
-			if (update_dir_chksum(sb, &(ei->dir), ei->entry))
+			if (update_dir_chksum(inode, &(ei->dir), ei->entry))
 				return -EIO;
 		}
 
@@ -532,12 +532,12 @@ static int exfat_add_entry(struct inode *inode, const char *path,
 	/* fill the dos name directory entry information of the created file.
 	 * the first cluster is not determined yet. (0)
 	 */
-	ret = exfat_init_dir_entry(sb, p_dir, dentry, type,
+	ret = exfat_init_dir_entry(inode, p_dir, dentry, type,
 		start_clu, clu_size);
 	if (ret)
 		goto out;
 
-	ret = exfat_init_ext_entry(sb, p_dir, dentry, num_entries, &uniname);
+	ret = exfat_init_ext_entry(inode, p_dir, dentry, num_entries, &uniname);
 	if (ret)
 		goto out;
 
@@ -868,7 +868,7 @@ static int exfat_unlink(struct inode *dir, struct dentry *dentry)
 
 	exfat_set_vol_flags(sb, VOL_DIRTY);
 	/* update the directory entry */
-	if (exfat_remove_entries(sb, cdir, entry, 0, num_entries)) {
+	if (exfat_remove_entries(dir, cdir, entry, 0, num_entries)) {
 		err = -EIO;
 		goto out;
 	}
@@ -1042,7 +1042,7 @@ static int exfat_rmdir(struct inode *dir, struct dentry *dentry)
 	num_entries++;
 	brelse(bh);
 
-	err = exfat_remove_entries(sb, cdir, entry, 0, num_entries);
+	err = exfat_remove_entries(dir, cdir, entry, 0, num_entries);
 	if (err) {
 		exfat_msg(sb, KERN_ERR,
 				"failed to exfat_remove_entries : err(%d)",
@@ -1080,6 +1080,7 @@ static int exfat_rename_file(struct inode *inode, struct exfat_chain *p_dir,
 	struct exfat_dentry *epold, *epnew;
 	struct super_block *sb = inode->i_sb;
 	struct buffer_head *new_bh, *old_bh;
+	int sync = IS_DIRSYNC(inode);
 
 	epold = exfat_get_dentry(sb, p_dir, oldentry, &old_bh, &sector_old);
 	if (!epold)
@@ -1112,7 +1113,7 @@ static int exfat_rename_file(struct inode *inode, struct exfat_chain *p_dir,
 			epnew->file_attr |= ATTR_ARCHIVE_LE;
 			ei->attr |= ATTR_ARCHIVE;
 		}
-		exfat_update_bh(sb, new_bh, 0);
+		exfat_update_bh(sb, new_bh, sync);
 		brelse(old_bh);
 		brelse(new_bh);
 
@@ -1124,30 +1125,31 @@ static int exfat_rename_file(struct inode *inode, struct exfat_chain *p_dir,
 			return -EIO;
 
 		memcpy(epnew, epold, DENTRY_SIZE);
-		exfat_update_bh(sb, new_bh, 0);
+		exfat_update_bh(sb, new_bh, sync);
 		brelse(old_bh);
 		brelse(new_bh);
 
-		ret = exfat_init_ext_entry(sb, p_dir, newentry, num_new_entries,
-			p_uniname);
+		ret = exfat_init_ext_entry(inode, p_dir, newentry,
+			num_new_entries, p_uniname);
 		if (ret)
 			return ret;
 
-		exfat_remove_entries(sb, p_dir, oldentry, 0, num_old_entries);
+		exfat_remove_entries(inode, p_dir, oldentry, 0,
+			num_old_entries);
 		ei->entry = newentry;
 	} else {
 		if (exfat_get_entry_type(epold) == TYPE_FILE) {
 			epold->file_attr |= ATTR_ARCHIVE_LE;
 			ei->attr |= ATTR_ARCHIVE;
 		}
-		exfat_update_bh(sb, old_bh, 0);
+		exfat_update_bh(sb, old_bh, sync);
 		brelse(old_bh);
-		ret = exfat_init_ext_entry(sb, p_dir, oldentry, num_new_entries,
-			p_uniname);
+		ret = exfat_init_ext_entry(inode, p_dir, oldentry,
+			num_new_entries, p_uniname);
 		if (ret)
 			return ret;
 
-		exfat_remove_entries(sb, p_dir, oldentry, num_new_entries,
+		exfat_remove_entries(inode, p_dir, oldentry, num_new_entries,
 			num_old_entries);
 	}
 
@@ -1196,7 +1198,7 @@ static int exfat_move_file(struct inode *inode, struct exfat_chain *p_olddir,
 		epnew->file_attr |= ATTR_ARCHIVE_LE;
 		ei->attr |= ATTR_ARCHIVE;
 	}
-	exfat_update_bh(sb, new_bh, 0);
+	exfat_update_bh(sb, new_bh, IS_DIRSYNC(inode));
 	brelse(mov_bh);
 	brelse(new_bh);
 
@@ -1208,16 +1210,16 @@ static int exfat_move_file(struct inode *inode, struct exfat_chain *p_olddir,
 		return -EIO;
 
 	memcpy(epnew, epmov, DENTRY_SIZE);
-	exfat_update_bh(sb, new_bh, 0);
+	exfat_update_bh(sb, new_bh, IS_DIRSYNC(inode));
 	brelse(mov_bh);
 	brelse(new_bh);
 
-	ret = exfat_init_ext_entry(sb, p_newdir, newentry, num_new_entries,
+	ret = exfat_init_ext_entry(inode, p_newdir, newentry, num_new_entries,
 		p_uniname);
 	if (ret)
 		return ret;
 
-	exfat_remove_entries(sb, p_olddir, oldentry, 0, num_old_entries);
+	exfat_remove_entries(inode, p_olddir, oldentry, 0, num_old_entries);
 
 	exfat_chain_set(&ei->dir, p_newdir->dir, p_newdir->size,
 		p_newdir->flags);
@@ -1360,7 +1362,7 @@ static int __exfat_rename(struct inode *old_parent_inode,
 		}
 		brelse(new_bh);
 
-		if (exfat_remove_entries(sb, p_dir, new_entry, 0,
+		if (exfat_remove_entries(new_inode, p_dir, new_entry, 0,
 				num_entries + 1)) {
 			ret = -EIO;
 			goto del_out;
@@ -1375,7 +1377,7 @@ static int __exfat_rename(struct inode *old_parent_inode,
 				EXFAT_B_TO_CLU_ROUND_UP(i_size_read(new_inode),
 				sbi), new_ei->flags);
 
-			if (exfat_free_cluster(sb, &new_clu_to_free)) {
+			if (exfat_free_cluster(new_inode, &new_clu_to_free)) {
 				/* just set I/O error only */
 				ret = -EIO;
 			}

@@ -54,10 +54,7 @@ int exfat_ent_set(struct super_block *sb, unsigned int loc,
 
 	fat_entry = (__le32 *)&(bh->b_data[off]);
 	*fat_entry = cpu_to_le32(content);
-	if (sb->s_flags & SB_SYNCHRONOUS)
-		exfat_update_bh(sb, bh, 1);
-	else
-		exfat_update_bh(sb, bh, 0);
+	exfat_update_bh(sb, bh, sb->s_flags & SB_SYNCHRONOUS);
 	exfat_mirror_bh(sb, sec, bh);
 	brelse(bh);
 	return 0;
@@ -141,10 +138,11 @@ int exfat_chain_cont_cluster(struct super_block *sb, unsigned int chain,
 	return 0;
 }
 
-int exfat_free_cluster(struct super_block *sb, struct exfat_chain *p_chain)
+int exfat_free_cluster(struct inode *inode, struct exfat_chain *p_chain)
 {
 	unsigned int num_clusters = 0;
 	unsigned int clu;
+	struct super_block *sb = inode->i_sb;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 
 	/* invalid cluster number */
@@ -167,14 +165,14 @@ int exfat_free_cluster(struct super_block *sb, struct exfat_chain *p_chain)
 
 	if (p_chain->flags == 0x03) {
 		do {
-			exfat_clr_alloc_bitmap(sb, clu-2);
+			exfat_clr_alloc_bitmap(inode, clu-2);
 			clu++;
 
 			num_clusters++;
 		} while (num_clusters < p_chain->size);
 	} else {
 		do {
-			exfat_clr_alloc_bitmap(sb, (clu - BASE_CLUSTER));
+			exfat_clr_alloc_bitmap(inode, (clu - BASE_CLUSTER));
 
 			if (exfat_get_next_cluster(sb, &clu))
 				goto out;
@@ -300,12 +298,13 @@ error:
 	return err;
 }
 
-int exfat_alloc_cluster(struct super_block *sb, unsigned int num_alloc,
+int exfat_alloc_cluster(struct inode *inode, unsigned int num_alloc,
 		struct exfat_chain *p_chain)
 {
 	int ret = -ENOSPC;
 	unsigned int num_clusters = 0, total_cnt;
 	unsigned int hint_clu, new_clu, last_clu = EOF_CLUSTER;
+	struct super_block *sb = inode->i_sb;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 
 	/* Check if there are reserved clusters up to max. */
@@ -370,7 +369,7 @@ int exfat_alloc_cluster(struct super_block *sb, unsigned int num_alloc,
 		}
 
 		/* update allocation bitmap */
-		if (exfat_set_alloc_bitmap(sb, new_clu - BASE_CLUSTER)) {
+		if (exfat_set_alloc_bitmap(inode, new_clu - BASE_CLUSTER)) {
 			ret = -EIO;
 			goto error;
 		}
@@ -419,7 +418,7 @@ int exfat_alloc_cluster(struct super_block *sb, unsigned int num_alloc,
 	}
 error:
 	if (num_clusters)
-		exfat_free_cluster(sb, p_chain);
+		exfat_free_cluster(inode, p_chain);
 	return ret;
 }
 
