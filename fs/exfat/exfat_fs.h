@@ -258,7 +258,6 @@ struct exfat_sb_info {
 	unsigned int used_clusters; /* number of used clusters */
 
 	int reserved_clusters; /* # of reserved clusters (DA) */
-	void *amap; /* AU Allocation Map */
 
 	bool s_dirt;
 	struct mutex s_lock; /* superblock lock */

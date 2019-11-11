@@ -202,7 +202,6 @@ int __exfat_truncate(struct inode *inode, loff_t new_size)
 		    inode_needs_sync(inode)))
 			return -EIO;
 		exfat_release_dentry_set(es);
-
 	}
 
 	/* cut off from the FAT chain */
