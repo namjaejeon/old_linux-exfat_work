@@ -155,7 +155,6 @@ out:
 static void exfat_init_namebuf(struct exfat_dentry_namebuf *nb)
 {
 	nb->lfn = NULL;
-	nb->sfn = NULL;
 	nb->lfnbuf_len = 0;
 }
 
@@ -164,7 +163,6 @@ static int exfat_alloc_namebuf(struct exfat_dentry_namebuf *nb)
 	nb->lfn = __getname();
 	if (!nb->lfn)
 		return -ENOMEM;
-	nb->sfn = nb->lfn + MAX_VFSNAME_BUF_SIZE;
 	nb->lfnbuf_len = MAX_VFSNAME_BUF_SIZE;
 	return 0;
 }
@@ -184,11 +182,12 @@ static int exfat_iterate(struct file *filp, struct dir_context *ctx)
 {
 	struct inode *inode = filp->f_path.dentry->d_inode;
 	struct super_block *sb = inode->i_sb;
+	struct inode *tmp;
 	struct exfat_dir_entry de;
 	struct exfat_dentry_namebuf *nb = &(de.namebuf);
 	struct exfat_inode_info *ei = EXFAT_I(inode);
 	unsigned long inum;
-	loff_t cpos;
+	loff_t cpos, i_pos;
 	int err = 0, fake_offset = 0;
 
 	exfat_init_namebuf(nb);
@@ -238,21 +237,14 @@ get_new:
 	if (!nb->lfn[0])
 		goto end_of_dir;
 
-	if (!memcmp(nb->sfn, DOS_CUR_DIR_NAME, DOS_NAME_LENGTH)) {
-		inum = inode->i_ino;
-	} else if (!memcmp(nb->sfn, DOS_PAR_DIR_NAME, DOS_NAME_LENGTH)) {
-		inum = parent_ino(filp->f_path.dentry);
+	i_pos = ((loff_t)ei->start_clu << 32) |
+		((ei->rwoffset - 1) & 0xffffffff);
+	tmp = exfat_iget(sb, i_pos);
+	if (tmp) {
+		inum = tmp->i_ino;
+		iput(tmp);
 	} else {
-		loff_t i_pos = ((loff_t)ei->start_clu << 32) |
-			((ei->rwoffset - 1) & 0xffffffff);
-		struct inode *tmp = exfat_iget(sb, i_pos);
-
-		if (tmp) {
-			inum = tmp->i_ino;
-			iput(tmp);
-		} else {
-			inum = iunique(sb, EXFAT_ROOT_INO);
-		}
+		inum = iunique(sb, EXFAT_ROOT_INO);
 	}
 
 	/*

@@ -45,10 +45,6 @@ enum exfat_error_mode {
 #define EXFAT_HASH_BITS		8
 #define EXFAT_HASH_SIZE		(1UL << EXFAT_HASH_BITS)
 
-/* directory file name */
-#define DOS_CUR_DIR_NAME	".          "
-#define DOS_PAR_DIR_NAME	"..         "
-
 /*
  * Type Definitions
  */
@@ -80,9 +76,7 @@ enum exfat_error_mode {
 
 #define MAX_CHARSET_SIZE	6 /* max size of multi-byte character */
 #define MAX_NAME_LENGTH		255 /* max len of file name excluding NULL */
-#define DOS_NAME_LENGTH		11 /* DOS file name length excluding NULL */
 #define MAX_VFSNAME_BUF_SIZE	((MAX_NAME_LENGTH + 1) * MAX_CHARSET_SIZE)
-#define MAX_DOSNAME_BUF_SIZE	((DOS_NAME_LENGTH + 2) + 6)
 
 #define FAT_CACHE_SIZE		128
 #define FAT_CACHE_HASH_SIZE	64
@@ -139,7 +133,6 @@ struct exfat_date_time {
 
 struct exfat_dentry_namebuf {
 	char *lfn;
-	char *sfn;
 	int lfnbuf_len; /* usally MAX_UNINAME_BUF_SIZE */
 };
 
