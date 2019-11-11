@@ -95,7 +95,7 @@ static int exfat_sanitize_mode(const struct exfat_sb_info *sbi,
 /* resize the file length */
 int __exfat_truncate(struct inode *inode, loff_t new_size)
 {
-	unsigned int num_clusters_new, num_clusters_da, num_clusters_phys;
+	unsigned int num_clusters_new, num_clusters_phys;
 	unsigned int last_clu = FREE_CLUSTER;
 	struct exfat_chain clu;
 	struct exfat_timestamp tm;
@@ -112,9 +112,6 @@ int __exfat_truncate(struct inode *inode, loff_t new_size)
 
 	exfat_set_vol_flags(sb, VOL_DIRTY);
 
-	/* Reserved count update */
-	num_clusters_da =
-		EXFAT_B_TO_CLU_ROUND_UP(EXFAT_I(inode)->i_size_aligned, sbi);
 	num_clusters_new = EXFAT_B_TO_CLU_ROUND_UP(i_size_read(inode), sbi);
 	num_clusters_phys =
 		EXFAT_B_TO_CLU_ROUND_UP(EXFAT_I(inode)->i_size_ondisk, sbi);
