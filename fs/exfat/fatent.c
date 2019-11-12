@@ -254,7 +254,7 @@ int exfat_zeroed_cluster(struct inode *dir, unsigned int clu)
 	/* Zeroing the unused blocks on this cluster */
 	n = 0;
 	while (blknr < last_blknr) {
-		bhs[n] = sb_getblk(sb, (sector_t)blknr);
+		bhs[n] = sb_getblk(sb, blknr);
 		if (!bhs[n]) {
 			err = -ENOMEM;
 			goto error;
