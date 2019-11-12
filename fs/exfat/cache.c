@@ -17,8 +17,8 @@
 #include "exfat_raw.h"
 #include "exfat_fs.h"
 
-#define EXTENT_CACHE_VALID	0
-#define EXTENT_MAX_CACHE	16
+#define EXFAT_CACHE_VALID	0
+#define EXFAT_MAX_CACHE		16
 
 struct exfat_cache {
 	struct list_head cache_list;
@@ -67,7 +67,7 @@ void exfat_cache_init_inode(struct inode *inode)
 
 	spin_lock_init(&ei->cache_lru_lock);
 	ei->nr_caches = 0;
-	ei->cache_valid_id = EXTENT_CACHE_VALID + 1;
+	ei->cache_valid_id = EXFAT_CACHE_VALID + 1;
 	INIT_LIST_HEAD(&ei->cache_lru);
 }
 
@@ -155,13 +155,13 @@ static void exfat_cache_add(struct inode *inode,
 		return;
 
 	spin_lock(&ei->cache_lru_lock);
-	if (new->id != EXTENT_CACHE_VALID &&
+	if (new->id != EXFAT_CACHE_VALID &&
 	    new->id != ei->cache_valid_id)
 		goto out;	/* this cache was invalidated */
 
 	cache = exfat_cache_merge(inode, new);
 	if (cache == NULL) {
-		if (ei->nr_caches < EXTENT_MAX_CACHE) {
+		if (ei->nr_caches < EXFAT_MAX_CACHE) {
 			ei->nr_caches++;
 			spin_unlock(&ei->cache_lru_lock);
 
@@ -215,7 +215,7 @@ static void __exfat_cache_inval_inode(struct inode *inode)
 	}
 	/* Update. The copy of caches before this id is discarded. */
 	ei->cache_valid_id++;
-	if (ei->cache_valid_id == EXTENT_CACHE_VALID)
+	if (ei->cache_valid_id == EXFAT_CACHE_VALID)
 		ei->cache_valid_id++;
 }
 
@@ -238,7 +238,7 @@ static inline int cache_contiguous(struct exfat_cache_id *cid,
 static inline void cache_init(struct exfat_cache_id *cid,
 		unsigned int fclus, unsigned int dclus)
 {
-	cid->id = EXTENT_CACHE_VALID;
+	cid->id = EXFAT_CACHE_VALID;
 	cid->fcluster = fclus;
 	cid->dcluster = dclus;
 	cid->nr_contig = 0;
@@ -280,7 +280,7 @@ int exfat_get_cluster(struct inode *inode, unsigned int cluster,
 		 * dummy, always not contiguous
 		 * This is reinitialized by cache_init(), later.
 		 */
-		WARN_ON(cid.id != EXTENT_CACHE_VALID ||
+		WARN_ON(cid.id != EXFAT_CACHE_VALID ||
 			cid.fcluster != EOF_CLUSTER ||
 			cid.dcluster != EOF_CLUSTER ||
 			cid.nr_contig != 0);
