@@ -45,42 +45,14 @@ static const unsigned char used_bit[] = {
 /*
  *  Allocation Bitmap Management Functions
  */
-int exfat_load_alloc_bmp(struct super_block *sb)
+static int exfat_allocate_bitmap(struct super_block *sb,
+		struct exfat_dentry *ep)
 {
-	unsigned int i, j, type, need_map_size;
-	long long map_size;
-	sector_t sector;
-	struct exfat_chain clu;
-	struct exfat_dentry *ep = NULL;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
-	struct buffer_head *bh;
+	long long map_size;
+	unsigned int i, need_map_size;
+	sector_t sector;
 
-	exfat_chain_set(&clu, sbi->root_dir, 0, 0x01);
-
-	while (clu.dir != EOF_CLUSTER) {
-		for (i = 0; i < sbi->dentries_per_clu; i++) {
-			ep = exfat_get_dentry(sb, &clu, i, &bh, NULL);
-			if (!ep)
-				return -EIO;
-
-			type = exfat_get_entry_type(ep);
-			brelse(bh);
-			if (type == TYPE_UNUSED)
-				break;
-			if (type != TYPE_BITMAP)
-				continue;
-			if (ep->bitmap_flags == 0x0)
-				goto alloc;
-		}
-
-		if (exfat_get_next_cluster(sb, &clu.dir))
-			return -EIO;
-	}
-
-	if (!ep)
-		return -EIO;
-
-alloc:
 	sbi->map_clu = le32_to_cpu(ep->bitmap_start_clu);
 	map_size = le64_to_cpu(ep->bitmap_size);
 	need_map_size = (((sbi->num_clusters - BASE_CLUSTER) - 1) >> 3) + 1;
@@ -103,13 +75,14 @@ alloc:
 		return -ENOMEM;
 
 	sector = exfat_cluster_to_sector(sbi, sbi->map_clu);
-	for (j = 0; j < sbi->map_sectors; j++) {
-		sbi->vol_amap[j] = sb_bread(sb, sector+j);
-		if (!sbi->vol_amap[j]) {
+	for (i = 0; i < sbi->map_sectors; i++) {
+		sbi->vol_amap[i] = sb_bread(sb, sector + i);
+		if (!sbi->vol_amap[i]) {
 			/* release all buffers and free vol_amap */
-			i = 0;
-			while (i < j)
-				brelse(sbi->vol_amap[i++]);
+			int j = 0;
+
+			while (j < i)
+				brelse(sbi->vol_amap[j++]);
 
 			kfree(sbi->vol_amap);
 			sbi->vol_amap = NULL;
@@ -121,7 +94,44 @@ alloc:
 	return 0;
 }
 
-void exfat_free_alloc_bmp(struct super_block *sb)
+int exfat_load_bitmap(struct super_block *sb)
+{
+	unsigned int i, type;
+	struct exfat_chain clu;
+	struct exfat_dentry *ep = NULL;
+	struct exfat_sb_info *sbi = EXFAT_SB(sb);
+	struct buffer_head *bh;
+
+	exfat_chain_set(&clu, sbi->root_dir, 0, 0x01);
+
+	while (clu.dir != EOF_CLUSTER) {
+		for (i = 0; i < sbi->dentries_per_clu; i++) {
+			ep = exfat_get_dentry(sb, &clu, i, &bh, NULL);
+			if (!ep)
+				return -EIO;
+
+			type = exfat_get_entry_type(ep);
+			if (type == TYPE_UNUSED)
+				break;
+			if (type != TYPE_BITMAP)
+				continue;
+			if (ep->bitmap_flags == 0x0) {
+				int err;
+
+				err = exfat_allocate_bitmap(sb, ep);
+				brelse(bh);
+				return err;
+			}
+		}
+
+		if (exfat_get_next_cluster(sb, &clu.dir))
+			return -EIO;
+	}
+
+	return -EINVAL;
+}
+
+void exfat_free_bitmap(struct super_block *sb)
 {
 	int i;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
@@ -139,17 +149,15 @@ void exfat_free_alloc_bmp(struct super_block *sb)
  * If the value of "clu" is 0, it means cluster 2 which is the first cluster of
  * the cluster heap.
  */
-int exfat_set_alloc_bitmap(struct inode *inode, unsigned int clu)
+int exfat_set_bitmap(struct inode *inode, unsigned int clu)
 {
 	int i, b;
-	sector_t sector;
 	struct super_block *sb = inode->i_sb;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 
 	i = clu >> (sb->s_blocksize_bits + 3);
 	b = clu & ((sb->s_blocksize << 3) - 1);
 
-	sector = exfat_cluster_to_sector(sbi, sbi->map_clu) + i;
 	set_bit_le(b, sbi->vol_amap[i]->b_data);
 	exfat_update_bh(sb, sbi->vol_amap[i], IS_DIRSYNC(inode));
 
@@ -160,10 +168,9 @@ int exfat_set_alloc_bitmap(struct inode *inode, unsigned int clu)
  * If the value of "clu" is 0, it means cluster 2 which is the first cluster of
  * the cluster heap.
  */
-void exfat_clr_alloc_bitmap(struct inode *inode, unsigned int clu)
+void exfat_clear_bitmap(struct inode *inode, unsigned int clu)
 {
 	int i, b;
-	sector_t sector;
 	struct super_block *sb = inode->i_sb;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 	struct exfat_mount_options *opts = &sbi->options;
@@ -171,7 +178,6 @@ void exfat_clr_alloc_bitmap(struct inode *inode, unsigned int clu)
 	i = clu >> (sb->s_blocksize_bits + 3);
 	b = clu & ((sb->s_blocksize << 3) - 1);
 
-	sector = exfat_cluster_to_sector(sbi, sbi->map_clu) + i;
 	clear_bit_le(b, sbi->vol_amap[i]->b_data);
 	exfat_update_bh(sb, sbi->vol_amap[i], IS_DIRSYNC(inode));
 
@@ -194,7 +200,7 @@ void exfat_clr_alloc_bitmap(struct inode *inode, unsigned int clu)
  * If the value of "clu" is 0, it means cluster 2 which is the first cluster of
  * the cluster heap.
  */
-unsigned int exfat_test_alloc_bitmap(struct super_block *sb, unsigned int clu)
+unsigned int exfat_test_bitmap(struct super_block *sb, unsigned int clu)
 {
 	unsigned int i, map_i, map_b;
 	unsigned int clu_base, clu_free;
