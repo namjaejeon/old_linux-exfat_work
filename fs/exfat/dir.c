@@ -57,8 +57,10 @@ static int exfat_readdir(struct inode *inode, struct exfat_dir_entry *dir_entry)
 		}
 
 		while (clu_offset > 0) {
-			if (exfat_get_next_cluster(sb, &(clu->dir)))
-				return -EIO;
+			if (exfat_get_next_cluster(sb, &(clu->dir))) {
+				ret = -EIO;
+				goto out;
+			}
 
 			clu_offset--;
 		}
