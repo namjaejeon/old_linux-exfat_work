@@ -334,7 +334,7 @@ static int exfat_read_root(struct inode *inode)
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 	struct exfat_inode_info *ei = EXFAT_I(inode);
 	struct exfat_chain cdir;
-	int num_subdirs, num_clu;
+	int num_subdirs, num_clu = 0;
 
 	exfat_chain_set(&ei->dir, sbi->root_dir, 0, 0x01);
 	ei->entry = -1;

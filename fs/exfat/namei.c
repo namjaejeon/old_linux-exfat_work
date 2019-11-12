@@ -663,10 +663,11 @@ static int exfat_find(struct inode *dir, struct qstr *qname,
 
 	/* root directory itself */
 	if (unlikely(dentry == -EEXIST)) {
+		int num_clu = 0;
+
 		info->type = TYPE_DIR;
 		info->attr = ATTR_SUBDIR;
 		info->flags = 0x01;
-		info->size = 0;
 		info->start_clu = sbi->root_dir;
 		memset(&info->create_timestamp, 0,
 				sizeof(struct exfat_date_time));
@@ -676,6 +677,10 @@ static int exfat_find(struct inode *dir, struct qstr *qname,
 				sizeof(struct exfat_date_time));
 
 		exfat_chain_set(&cdir, sbi->root_dir, 0, 0x01);
+		if (exfat_count_num_clusters(sb, &cdir, &num_clu))
+			return -EIO;
+		info->size = num_clu << sbi->cluster_size_bits;
+
 		count = exfat_count_dir_entries(sb, &cdir);
 		if (count < 0)
 			return -EIO;
