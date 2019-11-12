@@ -1022,7 +1022,7 @@ int exfat_find_dir_entry(struct super_block *sb, struct exfat_inode_info *ei,
 	struct exfat_hint *hint_stat = &ei->hint_stat;
 	struct exfat_hint_femp candi_empty;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
-	struct buffer_head *bh;
+	struct buffer_head *bh = NULL;
 
 	dentries_per_clu = sbi->dentries_per_clu;
 
@@ -1053,7 +1053,6 @@ rewind:
 			}
 
 			entry_type = exfat_get_entry_type(ep);
-			brelse(bh);
 
 			if (entry_type == TYPE_UNUSED ||
 			    entry_type == TYPE_DELETED) {
@@ -1084,6 +1083,7 @@ rewind:
 					}
 				}
 
+				brelse(bh);
 				if (entry_type == TYPE_UNUSED)
 					goto not_found;
 				continue;
@@ -1098,6 +1098,7 @@ rewind:
 					num_ext = ep->file_num_ext;
 					step = DIRENT_STEP_STRM;
 				}
+				brelse(bh);
 				continue;
 			}
 
@@ -1106,6 +1107,7 @@ rewind:
 
 				if (step != DIRENT_STEP_STRM) {
 					step = DIRENT_STEP_FILE;
+					brelse(bh);
 					continue;
 				}
 				step = DIRENT_STEP_FILE;
@@ -1117,9 +1119,11 @@ rewind:
 					order = 1;
 					name_len = 0;
 				}
+				brelse(bh);
 				continue;
 			}
 
+			brelse(bh);
 			if (entry_type == TYPE_EXTEND) {
 				if (step != DIRENT_STEP_NAME) {
 					step = DIRENT_STEP_FILE;
