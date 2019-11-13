@@ -57,8 +57,10 @@ static int exfat_readdir(struct inode *inode, struct exfat_dir_entry *dir_entry)
 		}
 
 		while (clu_offset > 0) {
-			if (exfat_get_next_cluster(sb, &(clu->dir)))
-				return -EIO;
+			if (exfat_get_next_cluster(sb, &(clu->dir))) {
+				ret = -EIO;
+				goto out;
+			}
 
 			clu_offset--;
 		}
@@ -1305,14 +1307,14 @@ int exfat_count_dir_entries(struct super_block *sb, struct exfat_chain *p_dir)
 		for (i = 0; i < dentries_per_clu; i++) {
 			ep = exfat_get_dentry(sb, clu, i, &bh, NULL);
 			if (!ep) {
-				kfree(clu);
-				return -EIO;
+				count = -EIO;
+				goto out;
 			}
 			entry_type = exfat_get_entry_type(ep);
 			brelse(bh);
 
 			if (entry_type == TYPE_UNUSED)
-				return count;
+				goto out;
 			if (entry_type != TYPE_DIR)
 				continue;
 			count++;
@@ -1325,11 +1327,12 @@ int exfat_count_dir_entries(struct super_block *sb, struct exfat_chain *p_dir)
 				clu->dir = EOF_CLUSTER;
 		} else {
 			if (exfat_get_next_cluster(sb, &(clu->dir))) {
-				kfree(clu);
-				return -EIO;
+				count = -EIO;
+				goto out;
 			}
 		}
 	}
-
+out:
+	kfree(clu);
 	return count;
 }

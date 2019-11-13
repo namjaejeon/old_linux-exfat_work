@@ -368,7 +368,7 @@ int exfat_find_empty_entry(struct inode *inode, struct exfat_chain *p_dir,
 		/* append to the FAT chain */
 		if (clu.flags != p_dir->flags) {
 			/* no-fat-chain bit is disabled,
-			 * so fat-chain should be synced with alloc-bmp
+			 * so fat-chain should be synced with alloc-bitmap
 			 */
 			exfat_chain_cont_cluster(sb, p_dir->dir, p_dir->size);
 			p_dir->flags = 0x01;
@@ -663,10 +663,11 @@ static int exfat_find(struct inode *dir, struct qstr *qname,
 
 	/* root directory itself */
 	if (unlikely(dentry == -EEXIST)) {
+		int num_clu = 0;
+
 		info->type = TYPE_DIR;
 		info->attr = ATTR_SUBDIR;
 		info->flags = 0x01;
-		info->size = 0;
 		info->start_clu = sbi->root_dir;
 		memset(&info->create_timestamp, 0,
 				sizeof(struct exfat_date_time));
@@ -676,6 +677,10 @@ static int exfat_find(struct inode *dir, struct qstr *qname,
 				sizeof(struct exfat_date_time));
 
 		exfat_chain_set(&cdir, sbi->root_dir, 0, 0x01);
+		if (exfat_count_num_clusters(sb, &cdir, &num_clu))
+			return -EIO;
+		info->size = num_clu << sbi->cluster_size_bits;
+
 		count = exfat_count_dir_entries(sb, &cdir);
 		if (count < 0)
 			return -EIO;

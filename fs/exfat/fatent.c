@@ -165,14 +165,14 @@ int exfat_free_cluster(struct inode *inode, struct exfat_chain *p_chain)
 
 	if (p_chain->flags == 0x03) {
 		do {
-			exfat_clr_alloc_bitmap(inode, clu-2);
+			exfat_clear_bitmap(inode, clu-2);
 			clu++;
 
 			num_clusters++;
 		} while (num_clusters < p_chain->size);
 	} else {
 		do {
-			exfat_clr_alloc_bitmap(inode, (clu - BASE_CLUSTER));
+			exfat_clear_bitmap(inode, (clu - BASE_CLUSTER));
 
 			if (exfat_get_next_cluster(sb, &clu))
 				goto out;
@@ -254,7 +254,7 @@ int exfat_zeroed_cluster(struct inode *dir, unsigned int clu)
 	/* Zeroing the unused blocks on this cluster */
 	n = 0;
 	while (blknr < last_blknr) {
-		bhs[n] = sb_getblk(sb, (sector_t)blknr);
+		bhs[n] = sb_getblk(sb, blknr);
 		if (!bhs[n]) {
 			err = -ENOMEM;
 			goto error;
@@ -329,7 +329,7 @@ int exfat_alloc_cluster(struct inode *inode, unsigned int num_alloc,
 			sbi->clu_srch_ptr = BASE_CLUSTER;
 		}
 
-		hint_clu = exfat_test_alloc_bitmap(sb,
+		hint_clu = exfat_test_bitmap(sb,
 				sbi->clu_srch_ptr - BASE_CLUSTER);
 		if (hint_clu == EOF_CLUSTER)
 			return -ENOSPC;
@@ -352,7 +352,7 @@ int exfat_alloc_cluster(struct inode *inode, unsigned int num_alloc,
 
 	p_chain->dir = EOF_CLUSTER;
 
-	while ((new_clu = exfat_test_alloc_bitmap(sb,
+	while ((new_clu = exfat_test_bitmap(sb,
 			hint_clu - BASE_CLUSTER)) != EOF_CLUSTER) {
 		if (new_clu != hint_clu && p_chain->flags == 0x03) {
 			if (exfat_chain_cont_cluster(sb, p_chain->dir,
@@ -364,7 +364,7 @@ int exfat_alloc_cluster(struct inode *inode, unsigned int num_alloc,
 		}
 
 		/* update allocation bitmap */
-		if (exfat_set_alloc_bitmap(inode, new_clu - BASE_CLUSTER)) {
+		if (exfat_set_bitmap(inode, new_clu - BASE_CLUSTER)) {
 			ret = -EIO;
 			goto error;
 		}

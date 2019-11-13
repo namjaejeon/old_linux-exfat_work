@@ -108,7 +108,7 @@ enum exfat_error_mode {
  * helpers for block size to dentry size conversion.
  */
 #define EXFAT_B_TO_DEN_IDX(b, sbi)	\
-	((b) >> ((sbi)->cluster_size_bits - DENTRY_SIZE_BITS))
+	((b) << ((sbi)->cluster_size_bits - DENTRY_SIZE_BITS))
 #define EXFAT_B_TO_DEN(b)		((b) >> DENTRY_SIZE_BITS)
 #define EXFAT_DEN_TO_B(b)		((b) << DENTRY_SIZE_BITS)
 
@@ -425,11 +425,11 @@ int exfat_count_num_clusters(struct super_block *sb,
 int exfat_count_dir_entries(struct super_block *sb, struct exfat_chain *p_dir);
 
 /* balloc.c */
-int exfat_load_alloc_bmp(struct super_block *sb);
-void exfat_free_alloc_bmp(struct super_block *sb);
-int exfat_set_alloc_bitmap(struct inode *inode, unsigned int clu);
-void exfat_clr_alloc_bitmap(struct inode *inode, unsigned int clu);
-unsigned int exfat_test_alloc_bitmap(struct super_block *sb, unsigned int clu);
+int exfat_load_bitmap(struct super_block *sb);
+void exfat_free_bitmap(struct super_block *sb);
+int exfat_set_bitmap(struct inode *inode, unsigned int clu);
+void exfat_clear_bitmap(struct inode *inode, unsigned int clu);
+unsigned int exfat_test_bitmap(struct super_block *sb, unsigned int clu);
 int exfat_count_used_clusters(struct super_block *sb, unsigned int *ret_count);
 
 /* file.c */

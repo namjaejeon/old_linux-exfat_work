@@ -42,7 +42,7 @@ static void exfat_put_super(struct super_block *sb)
 	}
 	exfat_set_vol_flags(sb, VOL_CLEAN);
 	exfat_free_upcase_table(sb);
-	exfat_free_alloc_bmp(sb);
+	exfat_free_bitmap(sb);
 	mutex_unlock(&sbi->s_lock);
 
 	if (sbi->nls_io) {
@@ -334,7 +334,7 @@ static int exfat_read_root(struct inode *inode)
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 	struct exfat_inode_info *ei = EXFAT_I(inode);
 	struct exfat_chain cdir;
-	int num_subdirs, num_clu;
+	int num_subdirs, num_clu = 0;
 
 	exfat_chain_set(&ei->dir, sbi->root_dir, 0, 0x01);
 	ei->entry = -1;
@@ -531,7 +531,7 @@ static int __exfat_fill_super(struct super_block *sb)
 	}
 
 	/* allocate-bitmap is only for exFAT */
-	ret = exfat_load_alloc_bmp(sb);
+	ret = exfat_load_bitmap(sb);
 	if (ret) {
 		exfat_msg(sb, KERN_ERR, "failed to load alloc-bitmap");
 		goto free_upcase;
@@ -540,13 +540,13 @@ static int __exfat_fill_super(struct super_block *sb)
 	ret = exfat_count_used_clusters(sb, &sbi->used_clusters);
 	if (ret) {
 		exfat_msg(sb, KERN_ERR, "failed to scan clusters");
-		goto free_alloc_bmp;
+		goto free_alloc_bitmap;
 	}
 
 	return 0;
 
-free_alloc_bmp:
-	exfat_free_alloc_bmp(sb);
+free_alloc_bitmap:
+	exfat_free_bitmap(sb);
 free_upcase:
 	exfat_free_upcase_table(sb);
 free_bh:
@@ -636,7 +636,7 @@ static int exfat_fill_super(struct super_block *sb, struct fs_context *fc)
 
 failed_mount2:
 	exfat_free_upcase_table(sb);
-	exfat_free_alloc_bmp(sb);
+	exfat_free_bitmap(sb);
 
 failed_mount:
 	if (root_inode)
