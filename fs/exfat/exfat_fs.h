@@ -12,10 +12,11 @@
 #define EXFAT_SUPER_MAGIC       (0x2011BAB0UL)
 #define EXFAT_ROOT_INO		1
 
-/* time modes */
-#define TM_CREATE	0
-#define TM_MODIFY	1
-#define TM_ACCESS	2
+enum exfat_time_mode {
+	TM_CREATE,
+	TM_MODIFY,
+	TM_ACCESS,
+};
 
 /*
  * exfat error flags

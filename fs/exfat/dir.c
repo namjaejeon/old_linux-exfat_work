@@ -59,7 +59,7 @@ static int exfat_readdir(struct inode *inode, struct exfat_dir_entry *dir_entry)
 		while (clu_offset > 0) {
 			if (exfat_get_next_cluster(sb, &(clu->dir))) {
 				ret = -EIO;
-				goto out;
+				goto free_clu;
 			}
 
 			clu_offset--;
@@ -73,7 +73,7 @@ static int exfat_readdir(struct inode *inode, struct exfat_dir_entry *dir_entry)
 			ep = exfat_get_dentry(sb, clu, i, &bh, &sector);
 			if (!ep) {
 				ret = -EIO;
-				goto out;
+				goto free_clu;
 			}
 			type = exfat_get_entry_type(ep);
 
@@ -121,7 +121,7 @@ static int exfat_readdir(struct inode *inode, struct exfat_dir_entry *dir_entry)
 			ep = exfat_get_dentry(sb, clu, i + 1, &bh, NULL);
 			if (!ep) {
 				ret = -EIO;
-				goto out;
+				goto free_clu;
 			}
 			dir_entry->size = le64_to_cpu(ep->stream_valid_size);
 			brelse(bh);
@@ -130,7 +130,7 @@ static int exfat_readdir(struct inode *inode, struct exfat_dir_entry *dir_entry)
 			ei->hint_bmap.clu = clu->dir;
 
 			ei->rwoffset = ++dentry;
-			goto out;
+			goto free_clu;
 		}
 
 		if (clu->flags == 0x03) {
@@ -141,7 +141,7 @@ static int exfat_readdir(struct inode *inode, struct exfat_dir_entry *dir_entry)
 		} else {
 			if (exfat_get_next_cluster(sb, &(clu->dir))) {
 				ret = -EIO;
-				goto out;
+				goto free_clu;
 			}
 		}
 	}
@@ -149,7 +149,7 @@ static int exfat_readdir(struct inode *inode, struct exfat_dir_entry *dir_entry)
 	dir_entry->namebuf.lfn[0] = '\0';
 	ei->rwoffset = dentry;
 
-out:
+free_clu:
 	kfree(clu);
 	return ret;
 }
@@ -197,7 +197,7 @@ static int exfat_iterate(struct file *filp, struct dir_context *ctx)
 
 	cpos = ctx->pos;
 	if (!dir_emit_dots(filp, ctx))
-		goto out;
+		goto unlock;
 
 	if (ctx->pos == ITER_POS_FILLED_DOTS) {
 		cpos = 0;
@@ -206,13 +206,13 @@ static int exfat_iterate(struct file *filp, struct dir_context *ctx)
 
 	if (cpos & (DENTRY_SIZE - 1)) {
 		err = -ENOENT;
-		goto out;
+		goto unlock;
 	}
 
 	/* name buffer should be allocated before use */
 	err = exfat_alloc_namebuf(nb);
 	if (err)
-		goto out;
+		goto unlock;
 get_new:
 	ei->rwoffset = EXFAT_B_TO_DEN(cpos);
 
@@ -266,7 +266,7 @@ end_of_dir:
 	if (!cpos && fake_offset)
 		cpos = ITER_POS_FILLED_DOTS;
 	ctx->pos = cpos;
-out:
+unlock:
 	mutex_unlock(&EXFAT_SB(sb)->s_lock);
 out_unlocked:
 	/*
@@ -1308,13 +1308,13 @@ int exfat_count_dir_entries(struct super_block *sb, struct exfat_chain *p_dir)
 			ep = exfat_get_dentry(sb, clu, i, &bh, NULL);
 			if (!ep) {
 				count = -EIO;
-				goto out;
+				goto free_clu;
 			}
 			entry_type = exfat_get_entry_type(ep);
 			brelse(bh);
 
 			if (entry_type == TYPE_UNUSED)
-				goto out;
+				goto free_clu;
 			if (entry_type != TYPE_DIR)
 				continue;
 			count++;
@@ -1328,11 +1328,11 @@ int exfat_count_dir_entries(struct super_block *sb, struct exfat_chain *p_dir)
 		} else {
 			if (exfat_get_next_cluster(sb, &(clu->dir))) {
 				count = -EIO;
-				goto out;
+				goto free_clu;
 			}
 		}
 	}
-out:
+free_clu:
 	kfree(clu);
 	return count;
 }

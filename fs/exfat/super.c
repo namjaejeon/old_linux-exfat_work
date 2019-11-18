@@ -162,8 +162,7 @@ static int exfat_show_options(struct seq_file *m, struct dentry *root)
 	if (!gid_eq(opts->fs_gid, GLOBAL_ROOT_GID))
 		seq_printf(m, ",gid=%u",
 				from_kgid_munged(&init_user_ns, opts->fs_gid));
-	seq_printf(m, ",fmask=%04o", opts->fs_fmask);
-	seq_printf(m, ",dmask=%04o", opts->fs_dmask);
+	seq_printf(m, ",fmask=%04o,dmask=%04o", opts->fs_fmask, opts->fs_dmask);
 	if (opts->allow_utime)
 		seq_printf(m, ",allow_utime=%04o", opts->allow_utime);
 	if (sbi->nls_io)
@@ -453,8 +452,7 @@ static int __exfat_fill_super(struct super_block *sb)
 	bh = sb_bread(sb, 0);
 	if (!bh) {
 		exfat_msg(sb, KERN_ERR, "unable to read boot sector");
-		ret = -EIO;
-		goto out;
+		return -EIO;
 	}
 
 	/* PRB is read */
@@ -466,6 +464,7 @@ static int __exfat_fill_super(struct super_block *sb)
 		ret = -EINVAL;
 		goto free_bh;
 	}
+
 
 	/* check logical sector size */
 	p_pbr = exfat_read_pbr_with_logical_sector(sb, &bh);
@@ -527,7 +526,7 @@ static int __exfat_fill_super(struct super_block *sb)
 	ret = exfat_create_upcase_table(sb);
 	if (ret) {
 		exfat_msg(sb, KERN_ERR, "failed to load upcase table");
-		goto out;
+		goto free_bh;
 	}
 
 	/* allocate-bitmap is only for exFAT */
@@ -551,7 +550,7 @@ free_upcase:
 	exfat_free_upcase_table(sb);
 free_bh:
 	brelse(bh);
-out:
+
 	return ret;
 }
 
@@ -559,7 +558,7 @@ static int exfat_fill_super(struct super_block *sb, struct fs_context *fc)
 {
 	struct exfat_sb_info *sbi = sb->s_fs_info;
 	struct exfat_mount_options *opts = &sbi->options;
-	struct inode *root_inode = NULL;
+	struct inode *root_inode;
 	int err;
 
 	if (opts->allow_utime == -1)
@@ -598,19 +597,18 @@ static int exfat_fill_super(struct super_block *sb, struct fs_context *fc)
 	/* set up enough so that it can read an inode */
 	exfat_hash_init(sb);
 
-	err = -EINVAL;
-
 	sbi->nls_io = load_nls(sbi->options.iocharset);
 	if (!sbi->nls_io) {
 		exfat_msg(sb, KERN_ERR, "IO charset %s not found",
 				sbi->options.iocharset);
+		err = -EINVAL;
 		goto failed_mount2;
 	}
 
-	err = -ENOMEM;
 	root_inode = new_inode(sb);
 	if (!root_inode) {
 		exfat_msg(sb, KERN_ERR, "failed to allocate root inode.");
+		err = -ENOMEM;
 		goto failed_mount2;
 	}
 
@@ -619,30 +617,29 @@ static int exfat_fill_super(struct super_block *sb, struct fs_context *fc)
 	err = exfat_read_root(root_inode);
 	if (err) {
 		exfat_msg(sb, KERN_ERR, "failed to initialize root inode.");
-		goto failed_mount2;
+		goto failed_mount3;
 	}
 
 	exfat_hash_inode(root_inode, EXFAT_I(root_inode)->i_pos);
 	insert_inode_hash(root_inode);
 
-	err = -ENOMEM;
 	sb->s_root = d_make_root(root_inode);
 	if (!sb->s_root) {
 		exfat_msg(sb, KERN_ERR, "failed to get the root dentry");
-		goto failed_mount2;
+		err = -ENOMEM;
+		goto failed_mount3;
 	}
 
 	return 0;
+
+failed_mount3:
+	iput(root_inode);
 
 failed_mount2:
 	exfat_free_upcase_table(sb);
 	exfat_free_bitmap(sb);
 
 failed_mount:
-	if (root_inode)
-		iput(root_inode);
-	sb->s_root = NULL;
-
 	if (sbi->nls_io)
 		unload_nls(sbi->nls_io);
 	exfat_free_iocharset(sbi);
@@ -715,7 +712,7 @@ static int __init init_exfat_fs(void)
 
 	err = exfat_cache_init();
 	if (err)
-		goto error;
+		return err;
 
 	err = -ENOMEM;
 	exfat_inode_cachep = kmem_cache_create("exfat_inode_cache",
@@ -723,15 +720,17 @@ static int __init init_exfat_fs(void)
 			0, SLAB_RECLAIM_ACCOUNT | SLAB_MEM_SPREAD,
 			exfat_inode_init_once);
 	if (!exfat_inode_cachep)
-		goto error;
+		goto shutdown_cache;
 
 	err = register_filesystem(&exfat_fs_type);
 	if (err)
-		goto error;
+		goto destroy_cache;
 
 	return 0;
-error:
+
+destroy_cache:
 	kmem_cache_destroy(exfat_inode_cachep);
+shutdown_cache:
 	exfat_cache_shutdown();
 
 	return err;
