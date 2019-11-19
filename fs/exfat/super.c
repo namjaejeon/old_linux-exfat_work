@@ -37,7 +37,7 @@ static void exfat_put_super(struct super_block *sb)
 
 	mutex_lock(&sbi->s_lock);
 	if (READ_ONCE(sbi->s_dirt)) {
-		WRITE_ONCE(sbi->s_dirt, true);
+		WRITE_ONCE(sbi->s_dirt, false);
 		sync_blockdev(sb->s_bdev);
 	}
 	exfat_set_vol_flags(sb, VOL_CLEAN);
@@ -62,7 +62,7 @@ static int exfat_sync_fs(struct super_block *sb, int wait)
 	/* If there are some dirty buffers in the bdev inode */
 	mutex_lock(&sbi->s_lock);
 	if (READ_ONCE(sbi->s_dirt)) {
-		WRITE_ONCE(sbi->s_dirt, true);
+		WRITE_ONCE(sbi->s_dirt, false);
 		sync_blockdev(sb->s_bdev);
 		if (exfat_set_vol_flags(sb, VOL_CLEAN))
 			err = -EIO;
