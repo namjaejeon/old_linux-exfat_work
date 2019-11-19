@@ -634,6 +634,7 @@ static int exfat_fill_super(struct super_block *sb, struct fs_context *fc)
 
 failed_mount3:
 	iput(root_inode);
+	sb->s_root = NULL;
 
 failed_mount2:
 	exfat_free_upcase_table(sb);
