@@ -998,10 +998,12 @@ static int exfat_extract_uni_name(struct exfat_dentry *ep,
 
 }
 
-#define DIRENT_STEP_FILE	(0)
-#define DIRENT_STEP_STRM	(1)
-#define DIRENT_STEP_NAME	(2)
-#define DIRENT_STEP_SECD	(3)
+enum {
+	DIRENT_STEP_FILE,
+	DIRENT_STEP_STRM,
+	DIRENT_STEP_NAME,
+	DIRENT_STEP_SECD,
+};
 
 /*
  * return values:

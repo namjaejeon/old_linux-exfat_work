@@ -18,8 +18,10 @@
 #include "exfat_fs.h"
 
 /* 2-level option flag */
-#define BMAP_NOT_CREATE				0
-#define BMAP_ADD_CLUSTER			1
+enum {
+	BMAP_NOT_CREATE,
+	BMAP_ADD_CLUSTER,
+};
 
 static int __exfat_write_inode(struct inode *inode, int sync)
 {
