@@ -663,7 +663,7 @@ static int exfat_load_upcase_table(struct super_block *sb,
 		if (!bh) {
 			exfat_msg(sb, KERN_ERR,
 				"failed to read sector(0x%llx)\n", sector);
-			goto error;
+			goto release_bh;
 		}
 		sector++;
 		for (i = 0; i < sect_size && index <= 0xFFFF; i += 2) {
@@ -700,7 +700,7 @@ static int exfat_load_upcase_table(struct super_block *sb,
 			index, checksum, utbl_checksum);
 
 	ret = -EINVAL;
-error:
+release_bh:
 	brelse(bh);
 	exfat_free_upcase_table(sb);
 	return ret;

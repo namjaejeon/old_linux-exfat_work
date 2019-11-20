@@ -577,7 +577,7 @@ static int exfat_fill_super(struct super_block *sb, struct fs_context *fc)
 	err = __exfat_fill_super(sb);
 	if (err) {
 		exfat_msg(sb, KERN_ERR, "failed to recognize exfat type");
-		goto failed_mount;
+		goto check_nls_io;
 	}
 
 	/* set up enough so that it can read an inode */
@@ -588,14 +588,14 @@ static int exfat_fill_super(struct super_block *sb, struct fs_context *fc)
 		exfat_msg(sb, KERN_ERR, "IO charset %s not found",
 				sbi->options.iocharset);
 		err = -EINVAL;
-		goto failed_mount2;
+		goto free_table;
 	}
 
 	root_inode = new_inode(sb);
 	if (!root_inode) {
 		exfat_msg(sb, KERN_ERR, "failed to allocate root inode.");
 		err = -ENOMEM;
-		goto failed_mount2;
+		goto free_table;
 	}
 
 	root_inode->i_ino = EXFAT_ROOT_INO;
@@ -603,7 +603,7 @@ static int exfat_fill_super(struct super_block *sb, struct fs_context *fc)
 	err = exfat_read_root(root_inode);
 	if (err) {
 		exfat_msg(sb, KERN_ERR, "failed to initialize root inode.");
-		goto failed_mount3;
+		goto put_inode;
 	}
 
 	exfat_hash_inode(root_inode, EXFAT_I(root_inode)->i_pos);
@@ -613,20 +613,20 @@ static int exfat_fill_super(struct super_block *sb, struct fs_context *fc)
 	if (!sb->s_root) {
 		exfat_msg(sb, KERN_ERR, "failed to get the root dentry");
 		err = -ENOMEM;
-		goto failed_mount3;
+		goto put_inode;
 	}
 
 	return 0;
 
-failed_mount3:
+put_inode:
 	iput(root_inode);
 	sb->s_root = NULL;
 
-failed_mount2:
+free_table:
 	exfat_free_upcase_table(sb);
 	exfat_free_bitmap(sb);
 
-failed_mount:
+check_nls_io:
 	if (sbi->nls_io)
 		unload_nls(sbi->nls_io);
 	exfat_free_iocharset(sbi);

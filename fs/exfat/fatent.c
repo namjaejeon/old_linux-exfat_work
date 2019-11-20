@@ -256,7 +256,7 @@ int exfat_zeroed_cluster(struct inode *dir, unsigned int clu)
 		bhs[n] = sb_getblk(sb, blknr);
 		if (!bhs[n]) {
 			err = -ENOMEM;
-			goto error;
+			goto release_bhs;
 		}
 		memset(bhs[n]->b_data, 0, sb->s_blocksize);
 		exfat_update_bh(sb, bhs[n], 0);
@@ -268,7 +268,7 @@ int exfat_zeroed_cluster(struct inode *dir, unsigned int clu)
 			if (IS_DIRSYNC(dir)) {
 				err = exfat_sync_bhs(bhs, n);
 				if (err)
-					goto error;
+					goto release_bhs;
 			}
 
 			for (i = 0; i < n; i++)
@@ -280,7 +280,7 @@ int exfat_zeroed_cluster(struct inode *dir, unsigned int clu)
 	if (IS_DIRSYNC(dir)) {
 		err = exfat_sync_bhs(bhs, n);
 		if (err)
-			goto error;
+			goto release_bhs;
 	}
 
 	for (i = 0; i < n; i++)
@@ -288,7 +288,7 @@ int exfat_zeroed_cluster(struct inode *dir, unsigned int clu)
 
 	return 0;
 
-error:
+release_bhs:
 	exfat_msg(sb, KERN_ERR, "failed zeroed sect %llu\n",
 		(unsigned long long)blknr);
 	for (i = 0; i < n; i++)
@@ -356,7 +356,7 @@ int exfat_alloc_cluster(struct inode *inode, unsigned int num_alloc,
 			if (exfat_chain_cont_cluster(sb, p_chain->dir,
 					num_clusters)) {
 				ret = -EIO;
-				goto error;
+				goto free_cluster;
 			}
 			p_chain->flags = 0x01;
 		}
@@ -364,7 +364,7 @@ int exfat_alloc_cluster(struct inode *inode, unsigned int num_alloc,
 		/* update allocation bitmap */
 		if (exfat_set_bitmap(inode, new_clu - BASE_CLUSTER)) {
 			ret = -EIO;
-			goto error;
+			goto free_cluster;
 		}
 
 		num_clusters++;
@@ -373,7 +373,7 @@ int exfat_alloc_cluster(struct inode *inode, unsigned int num_alloc,
 		if (p_chain->flags == 0x01) {
 			if (exfat_ent_set(sb, new_clu, EOF_CLUSTER)) {
 				ret = -EIO;
-				goto error;
+				goto free_cluster;
 			}
 		}
 
@@ -382,7 +382,7 @@ int exfat_alloc_cluster(struct inode *inode, unsigned int num_alloc,
 		} else if (p_chain->flags == 0x01) {
 			if (exfat_ent_set(sb, last_clu, new_clu)) {
 				ret = -EIO;
-				goto error;
+				goto free_cluster;
 			}
 		}
 		last_clu = new_clu;
@@ -403,13 +403,13 @@ int exfat_alloc_cluster(struct inode *inode, unsigned int num_alloc,
 				if (exfat_chain_cont_cluster(sb, p_chain->dir,
 						num_clusters)) {
 					ret = -EIO;
-					goto error;
+					goto free_cluster;
 				}
 				p_chain->flags = 0x01;
 			}
 		}
 	}
-error:
+free_cluster:
 	if (num_clusters)
 		exfat_free_cluster(inode, p_chain);
 	return ret;
