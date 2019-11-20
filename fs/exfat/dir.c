@@ -917,11 +917,7 @@ struct exfat_entry_set_cache *exfat_get_dentry_set(struct super_block *sb,
 	if (entry_type != TYPE_FILE && entry_type != TYPE_DIR)
 		goto err_out;
 
-	if (type == ES_ALL_ENTRIES)
-		num_entries = ep->file_num_ext + 1;
-	else
-		num_entries = type;
-
+	num_entries = type == ES_ALL_ENTRIES ? ep->file_num_ext + 1 : type;
 	es = kmalloc(struct_size(es, entries, num_entries), GFP_KERNEL);
 	if (!es)
 		goto err_out;
@@ -1250,9 +1246,8 @@ int exfat_count_ext_entries(struct super_block *sb, struct exfat_chain *p_dir,
 		if (type == TYPE_EXTEND || type == TYPE_STREAM)
 			count++;
 		else
-			return count;
+			break;
 	}
-
 	return count;
 }
 

@@ -742,7 +742,6 @@ static int exfat_find(struct inode *dir, struct qstr *qname,
 			info->num_subdirs = count + EXFAT_MIN_SUBDIR;
 		}
 	}
-
 	return 0;
 }
 
@@ -897,7 +896,6 @@ static int exfat_unlink(struct inode *dir, struct dentry *dentry)
 unlock:
 	mutex_unlock(&EXFAT_SB(sb)->s_lock);
 	kfree(cdir);
-
 	return err;
 }
 
@@ -1157,7 +1155,6 @@ static int exfat_rename_file(struct inode *inode, struct exfat_chain *p_dir,
 		exfat_remove_entries(inode, p_dir, oldentry, num_new_entries,
 			num_old_entries);
 	}
-
 	return 0;
 }
 
@@ -1230,7 +1227,6 @@ static int exfat_move_file(struct inode *inode, struct exfat_chain *p_olddir,
 		p_newdir->flags);
 
 	ei->entry = newentry;
-
 	return 0;
 }
 

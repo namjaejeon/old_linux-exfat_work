@@ -160,7 +160,6 @@ int exfat_set_bitmap(struct inode *inode, unsigned int clu)
 
 	set_bit_le(b, sbi->vol_amap[i]->b_data);
 	exfat_update_bh(sb, sbi->vol_amap[i], IS_DIRSYNC(inode));
-
 	return 0;
 }
 
