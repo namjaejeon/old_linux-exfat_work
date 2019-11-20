@@ -427,7 +427,6 @@ static int exfat_convert_ch_to_uni(struct nls_table *nls,
 			return 1;
 		return 2;
 	}
-
 	return len;
 }
 
@@ -451,7 +450,6 @@ static int exfat_convert_uni_to_ch(struct nls_table *nls, unsigned short uni,
 		ch[0] = '_';
 		return 1;
 	}
-
 	return len;
 }
 
@@ -461,7 +459,6 @@ static unsigned short exfat_nls_upper(struct super_block *sb, unsigned short a)
 
 	if (!sbi->options.case_sensitive && sbi->vol_utbl[a])
 		return sbi->vol_utbl[a];
-
 	return a;
 }
 
@@ -472,7 +469,6 @@ static unsigned short *exfat_nls_wstrchr(unsigned short *str,
 		if (*(str++) == wchar)
 			return str;
 	}
-
 	return NULL;
 }
 
@@ -548,7 +544,6 @@ static int __exfat_nls_vfsname_to_utf16s(struct super_block *sb,
 
 	if (p_lossy)
 		*p_lossy = lossy;
-
 	return unilen;
 }
 
@@ -620,7 +615,6 @@ static int __exfat_nls_vfsname_to_uni16s(struct super_block *sb,
 
 	if (p_lossy)
 		*p_lossy = lossy;
-
 	return unilen;
 }
 
@@ -697,8 +691,7 @@ static int exfat_load_upcase_table(struct super_block *sb,
 	}
 
 	if (index >= 0xFFFF && utbl_checksum == checksum) {
-		if (bh)
-			brelse(bh);
+		brelse(bh);
 		return 0;
 	}
 
@@ -708,8 +701,7 @@ static int exfat_load_upcase_table(struct super_block *sb,
 
 	ret = -EINVAL;
 error:
-	if (bh)
-		brelse(bh);
+	brelse(bh);
 	exfat_free_upcase_table(sb);
 	return ret;
 }

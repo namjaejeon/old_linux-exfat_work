@@ -154,10 +154,8 @@ static int exfat_map_cluster(struct inode *inode, unsigned int clu_offset,
 		if (clu_offset > 0 && *clu != EOF_CLUSTER) {
 			last_clu += clu_offset - 1;
 
-			if (clu_offset == num_clusters)
-				*clu = EOF_CLUSTER;
-			else
-				*clu += clu_offset;
+			*clu = clu_offset == num_clusters ?
+				EOF_CLUSTER : *clu += clu_offset;
 		}
 	} else if (ei->type == TYPE_FILE) {
 		unsigned int fclus = 0;
