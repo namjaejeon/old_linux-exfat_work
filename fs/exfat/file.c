@@ -61,8 +61,11 @@ static int exfat_sanitize_mode(const struct exfat_sb_info *sbi,
 
 	i_mode = inode->i_mode;
 
-	mask = (S_ISREG(i_mode) || S_ISLNK(i_mode)) ?
-		sbi->options.fs_fmask : sbi->options.fs_dmask;
+	if (S_ISREG(i_mode) || S_ISLNK(i_mode))
+		mask = sbi->options.fs_fmask;
+	else
+		mask = sbi->options.fs_dmask;
+
 	perm = *mode_ptr & ~(S_IFMT | mask);
 
 	/* Of the r and x bits, all (subject to umask) must be present.*/

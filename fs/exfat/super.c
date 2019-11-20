@@ -65,6 +65,7 @@ static int exfat_sync_fs(struct super_block *sb, int wait)
 			err = -EIO;
 	}
 	mutex_unlock(&sbi->s_lock);
+
 	return err;
 }
 
@@ -91,6 +92,7 @@ static int exfat_statfs(struct dentry *dentry, struct kstatfs *buf)
 	buf->f_fsid.val[0] = (unsigned int)id;
 	buf->f_fsid.val[1] = (unsigned int)(id >> 32);
 	buf->f_namelen = 260;
+
 	return 0;
 }
 
@@ -176,6 +178,7 @@ static int exfat_show_options(struct seq_file *m, struct dentry *root)
 		seq_puts(m, ",errors=remount-ro");
 	if (opts->discard)
 		seq_puts(m, ",discard");
+
 	return 0;
 }
 
@@ -426,6 +429,7 @@ static struct pbr *exfat_read_pbr_with_logical_sector(struct super_block *sb,
 		*prev_bh = bh;
 		p_pbr = (struct pbr *) bh->b_data;
 	}
+
 	return p_pbr;
 }
 
@@ -487,9 +491,13 @@ static int __exfat_fill_super(struct super_block *sb)
 	sbi->cluster_size = 1 << sbi->cluster_size_bits;
 	sbi->num_FAT_sectors = le32_to_cpu(p_bpb->bsx.fat_length);
 	sbi->FAT1_start_sector = le32_to_cpu(p_bpb->bsx.fat_offset);
-	sbi->FAT2_start_sector = p_bpb->bsx.num_fats == 1 ?
-		sbi->FAT1_start_sector :
+
+	if (p_bpb->bsx.num_fats == 1)
+		sbi->FAT2_start_sector = sbi->FAT1_start_sector;
+	else
+		sbi->FAT2_start_sector =
 			sbi->FAT1_start_sector + sbi->num_FAT_sectors;
+
 	sbi->root_start_sector = le32_to_cpu(p_bpb->bsx.clu_offset);
 	sbi->data_start_sector = sbi->root_start_sector;
 	sbi->num_sectors = le64_to_cpu(p_bpb->bsx.vol_length);
@@ -522,7 +530,7 @@ static int __exfat_fill_super(struct super_block *sb)
 	ret = exfat_load_bitmap(sb);
 	if (ret) {
 		exfat_msg(sb, KERN_ERR, "failed to load alloc-bitmap");
-		goto free_upcase_table;
+		goto free_upcase;
 	}
 
 	ret = exfat_count_used_clusters(sb, &sbi->used_clusters);
@@ -535,10 +543,11 @@ static int __exfat_fill_super(struct super_block *sb)
 
 free_alloc_bitmap:
 	exfat_free_bitmap(sb);
-free_upcase_table:
+free_upcase:
 	exfat_free_upcase_table(sb);
 free_bh:
 	brelse(bh);
+
 	return ret;
 }
 
@@ -571,8 +580,10 @@ static int exfat_fill_super(struct super_block *sb, struct fs_context *fc)
 	sb->s_magic = EXFAT_SUPER_MAGIC;
 	sb->s_op = &exfat_sops;
 
-	sb->s_d_op = EXFAT_SB(sb)->options.case_sensitive ?
-			&exfat_dentry_ops : &exfat_ci_dentry_ops;
+	if (EXFAT_SB(sb)->options.case_sensitive)
+		sb->s_d_op = &exfat_dentry_ops;
+	else
+		sb->s_d_op = &exfat_ci_dentry_ops;
 
 	err = __exfat_fill_super(sb);
 	if (err) {
@@ -719,6 +730,7 @@ destroy_cache:
 	kmem_cache_destroy(exfat_inode_cachep);
 shutdown_cache:
 	exfat_cache_shutdown();
+
 	return err;
 }
 

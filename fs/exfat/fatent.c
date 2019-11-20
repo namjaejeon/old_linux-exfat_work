@@ -116,6 +116,7 @@ int exfat_ent_get(struct super_block *sb, unsigned int loc,
 			loc);
 		return -EIO;
 	}
+
 	return 0;
 }
 
@@ -293,6 +294,7 @@ error:
 		(unsigned long long)blknr);
 	for (i = 0; i < n; i++)
 		bforget(bhs[i]);
+
 	return err;
 }
 
