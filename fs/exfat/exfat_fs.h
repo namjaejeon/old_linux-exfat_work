@@ -115,6 +115,8 @@ enum {
 #define EXFAT_B_TO_DEN(b)		((b) >> DENTRY_SIZE_BITS)
 #define EXFAT_DEN_TO_B(b)		((b) << DENTRY_SIZE_BITS)
 
+#define EXFAT_SB_DIRTY		0
+
 struct exfat_timestamp {
 	unsigned short sec;	/* 0 ~ 59 */
 	unsigned short min;	/* 0 ~ 59 */
@@ -252,7 +254,7 @@ struct exfat_sb_info {
 	unsigned int clu_srch_ptr; /* cluster search pointer */
 	unsigned int used_clusters; /* number of used clusters */
 
-	bool s_dirt;
+	unsigned long s_state;
 	struct mutex s_lock; /* superblock lock */
 	struct super_block *host_sb; /* sb pointer */
 	struct exfat_mount_options options;

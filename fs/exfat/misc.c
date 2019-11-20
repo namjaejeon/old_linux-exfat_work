@@ -218,7 +218,7 @@ unsigned short exfat_calc_chksum_2byte(void *data, int len,
 
 void exfat_update_bh(struct super_block *sb, struct buffer_head *bh, int sync)
 {
-	WRITE_ONCE(EXFAT_SB(sb)->s_dirt, true);
+	set_bit(EXFAT_SB_DIRTY, &EXFAT_SB(sb)->s_state);
 	set_buffer_uptodate(bh);
 	mark_buffer_dirty(bh);
 

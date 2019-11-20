@@ -160,7 +160,7 @@ int exfat_free_cluster(struct inode *inode, struct exfat_chain *p_chain)
 		return -EIO;
 	}
 
-	WRITE_ONCE(sbi->s_dirt, true);
+	set_bit(EXFAT_SB_DIRTY, &sbi->s_state);
 	clu = p_chain->dir;
 
 	if (p_chain->flags == 0x03) {
@@ -348,7 +348,7 @@ int exfat_alloc_cluster(struct inode *inode, unsigned int num_alloc,
 		}
 	}
 
-	WRITE_ONCE(sbi->s_dirt, true);
+	set_bit(EXFAT_SB_DIRTY, &sbi->s_state);
 
 	p_chain->dir = EOF_CLUSTER;
 
