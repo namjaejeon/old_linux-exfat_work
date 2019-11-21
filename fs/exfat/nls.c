@@ -756,7 +756,7 @@ int exfat_create_upcase_table(struct super_block *sb)
 	struct buffer_head *bh;
 
 	clu.dir = sbi->root_dir;
-	clu.flags = 0x01;
+	clu.flags = ALLOC_FAT_CHAIN;
 
 	while (clu.dir != EOF_CLUSTER) {
 		for (i = 0; i < sbi->dentries_per_clu; i++) {

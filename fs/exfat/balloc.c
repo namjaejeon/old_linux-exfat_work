@@ -98,7 +98,6 @@ int exfat_load_bitmap(struct super_block *sb)
 {
 	unsigned int i, type;
 	struct exfat_chain clu;
-	struct exfat_dentry *ep = NULL;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 	struct buffer_head *bh;
 
@@ -106,6 +105,8 @@ int exfat_load_bitmap(struct super_block *sb)
 
 	while (clu.dir != EOF_CLUSTER) {
 		for (i = 0; i < sbi->dentries_per_clu; i++) {
+			struct exfat_dentry *ep;
+
 			ep = exfat_get_dentry(sb, &clu, i, &bh, NULL);
 			if (!ep)
 				return -EIO;
