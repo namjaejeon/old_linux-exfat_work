@@ -99,13 +99,13 @@ int exfat_load_bitmap(struct super_block *sb)
 	unsigned int i, type;
 	struct exfat_chain clu;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
-	struct buffer_head *bh;
 
 	exfat_chain_set(&clu, sbi->root_dir, 0, ALLOC_FAT_CHAIN);
 
 	while (clu.dir != EOF_CLUSTER) {
 		for (i = 0; i < sbi->dentries_per_clu; i++) {
 			struct exfat_dentry *ep;
+			struct buffer_head *bh;
 
 			ep = exfat_get_dentry(sb, &clu, i, &bh, NULL);
 			if (!ep)
@@ -123,6 +123,7 @@ int exfat_load_bitmap(struct super_block *sb)
 				brelse(bh);
 				return err;
 			}
+			brelse(bh);
 		}
 
 		if (exfat_get_next_cluster(sb, &clu.dir))
