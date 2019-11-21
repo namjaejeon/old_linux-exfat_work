@@ -39,7 +39,7 @@ static int exfat_cont_expand(struct inode *inode, loff_t size)
 	return filemap_fdatawait_range(mapping, start, start + count - 1);
 }
 
-static int exfat_allow_set_time(struct exfat_sb_info *sbi, struct inode *inode)
+static bool exfat_allow_set_time(struct exfat_sb_info *sbi, struct inode *inode)
 {
 	mode_t allow_utime = sbi->options.allow_utime;
 
