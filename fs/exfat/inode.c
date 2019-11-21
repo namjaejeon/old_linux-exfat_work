@@ -150,7 +150,7 @@ static int exfat_map_cluster(struct inode *inode, unsigned int clu_offset,
 
 	*clu = last_clu = ei->start_clu;
 
-	if (ei->flags == 0x03) {
+	if (ei->flags == ALLOC_NO_FAT_CHAIN) {
 		if (clu_offset > 0 && *clu != EOF_CLUSTER) {
 			last_clu += clu_offset - 1;
 
@@ -213,8 +213,8 @@ static int exfat_map_cluster(struct inode *inode, unsigned int clu_offset,
 
 		/* append to the FAT chain */
 		if (last_clu == EOF_CLUSTER) {
-			if (new_clu.flags == 0x01)
-				ei->flags = 0x01;
+			if (new_clu.flags == ALLOC_FAT_CHAIN)
+				ei->flags = ALLOC_FAT_CHAIN;
 			ei->start_clu = new_clu.dir;
 			modified = true;
 		} else {
@@ -225,10 +225,10 @@ static int exfat_map_cluster(struct inode *inode, unsigned int clu_offset,
 				 */
 				exfat_chain_cont_cluster(sb, ei->start_clu,
 					num_clusters);
-				ei->flags = 0x01;
+				ei->flags = ALLOC_FAT_CHAIN;
 				modified = true;
 			}
-			if (new_clu.flags == 0x01)
+			if (new_clu.flags == ALLOC_FAT_CHAIN)
 				if (exfat_ent_set(sb, last_clu, new_clu.dir))
 					return -EIO;
 		}
@@ -276,7 +276,7 @@ static int exfat_map_cluster(struct inode *inode, unsigned int clu_offset,
 		 * *clu = (the first cluster of the allocated chain) =>
 		 * (the last cluster of ...)
 		 */
-		if (ei->flags == 0x03) {
+		if (ei->flags == ALLOC_NO_FAT_CHAIN) {
 			*clu += num_to_be_allocated - 1;
 		} else {
 			while (num_to_be_allocated > 1) {

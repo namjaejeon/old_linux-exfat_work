@@ -13,6 +13,10 @@
 #define VOL_CLEAN		0x0000
 #define VOL_DIRTY		0x0002
 
+/* AllocationPossible and NoFatChain field in GeneralSecondaryFlags Field */
+#define ALLOC_FAT_CHAIN		0x01
+#define ALLOC_NO_FAT_CHAIN	0x03
+
 #define DENTRY_SIZE		32 /* directory entry size */
 #define DENTRY_SIZE_BITS	5
 /* exFAT allows 8388608(256MB) directory entries */

@@ -286,7 +286,7 @@ static int exfat_search_empty_slot(struct super_block *sb,
 			}
 		}
 
-		if (clu->flags == 0x03) {
+		if (clu->flags == ALLOC_NO_FAT_CHAIN) {
 			if (--clu->size > 0)
 				clu->dir++;
 			else
@@ -371,11 +371,11 @@ int exfat_find_empty_entry(struct inode *inode, struct exfat_chain *p_dir,
 			 * so fat-chain should be synced with alloc-bitmap
 			 */
 			exfat_chain_cont_cluster(sb, p_dir->dir, p_dir->size);
-			p_dir->flags = 0x01;
-			hint_femp.cur.flags = 0x01;
+			p_dir->flags = ALLOC_FAT_CHAIN;
+			hint_femp.cur.flags = ALLOC_FAT_CHAIN;
 		}
 
-		if (clu.flags == 0x01)
+		if (clu.flags == ALLOC_FAT_CHAIN)
 			if (exfat_ent_set(sb, last_clu, clu.dir))
 				return -EIO;
 
@@ -543,7 +543,7 @@ static int exfat_add_entry(struct inode *inode, const char *path,
 
 	memcpy(&info->dir, p_dir, sizeof(struct exfat_chain));
 	info->entry = dentry;
-	info->flags = 0x03;
+	info->flags = ALLOC_NO_FAT_CHAIN;
 	info->type = type;
 
 	if (type == TYPE_FILE) {
@@ -667,7 +667,7 @@ static int exfat_find(struct inode *dir, struct qstr *qname,
 
 		info->type = TYPE_DIR;
 		info->attr = ATTR_SUBDIR;
-		info->flags = 0x01;
+		info->flags = ALLOC_FAT_CHAIN;
 		info->start_clu = sbi->root_dir;
 		memset(&info->create_timestamp, 0,
 				sizeof(struct exfat_date_time));
@@ -676,7 +676,7 @@ static int exfat_find(struct inode *dir, struct qstr *qname,
 		memset(&info->access_timestamp, 0,
 				sizeof(struct exfat_date_time));
 
-		exfat_chain_set(&cdir, sbi->root_dir, 0, 0x01);
+		exfat_chain_set(&cdir, sbi->root_dir, 0, ALLOC_FAT_CHAIN);
 		if (exfat_count_num_clusters(sb, &cdir, &num_clu))
 			return -EIO;
 		info->size = num_clu << sbi->cluster_size_bits;
@@ -696,7 +696,7 @@ static int exfat_find(struct inode *dir, struct qstr *qname,
 		info->attr = le16_to_cpu(ep->file_attr);
 		info->size = le64_to_cpu(ep2->stream_valid_size);
 		if ((info->type == TYPE_FILE) && (info->size == 0)) {
-			info->flags = 0x03;
+			info->flags = ALLOC_NO_FAT_CHAIN;
 			info->start_clu = EOF_CLUSTER;
 		} else {
 			info->flags = ep2->stream_flags;
@@ -976,7 +976,7 @@ static int exfat_check_dir_empty(struct super_block *sb,
 			goto free_clu;
 		}
 
-		if (clu->flags == 0x03) {
+		if (clu->flags == ALLOC_NO_FAT_CHAIN) {
 			if (--clu->size > 0)
 				clu->dir++;
 			else
@@ -1385,7 +1385,7 @@ static int __exfat_rename(struct inode *old_parent_inode,
 
 			i_size_write(new_inode, 0);
 			new_ei->start_clu = EOF_CLUSTER;
-			new_ei->flags = 0x03;
+			new_ei->flags = ALLOC_NO_FAT_CHAIN;
 		}
 del_out:
 		/* Update new_inode ei

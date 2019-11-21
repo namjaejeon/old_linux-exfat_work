@@ -102,7 +102,7 @@ int exfat_load_bitmap(struct super_block *sb)
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 	struct buffer_head *bh;
 
-	exfat_chain_set(&clu, sbi->root_dir, 0, 0x01);
+	exfat_chain_set(&clu, sbi->root_dir, 0, ALLOC_FAT_CHAIN);
 
 	while (clu.dir != EOF_CLUSTER) {
 		for (i = 0; i < sbi->dentries_per_clu; i++) {

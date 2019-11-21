@@ -329,10 +329,10 @@ static int exfat_read_root(struct inode *inode)
 	struct exfat_chain cdir;
 	int num_subdirs, num_clu = 0;
 
-	exfat_chain_set(&ei->dir, sbi->root_dir, 0, 0x01);
+	exfat_chain_set(&ei->dir, sbi->root_dir, 0, ALLOC_FAT_CHAIN);
 	ei->entry = -1;
 	ei->start_clu = sbi->root_dir;
-	ei->flags = 0x01;
+	ei->flags = ALLOC_FAT_CHAIN;
 	ei->type = TYPE_DIR;
 	ei->version = 0;
 	ei->rwoffset = 0;
@@ -341,7 +341,7 @@ static int exfat_read_root(struct inode *inode)
 	ei->hint_stat.clu = sbi->root_dir;
 	ei->hint_femp.eidx = EXFAT_HINT_NONE;
 
-	exfat_chain_set(&cdir, sbi->root_dir, 0, 0x01);
+	exfat_chain_set(&cdir, sbi->root_dir, 0, ALLOC_FAT_CHAIN);
 	if (exfat_count_num_clusters(sb, &cdir, &num_clu))
 		return -EIO;
 	i_size_write(inode, num_clu << sbi->cluster_size_bits);
