@@ -98,14 +98,15 @@ int exfat_load_bitmap(struct super_block *sb)
 {
 	unsigned int i, type;
 	struct exfat_chain clu;
-	struct exfat_dentry *ep = NULL;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 	struct buffer_head *bh;
 
-	exfat_chain_set(&clu, sbi->root_dir, 0, 0x01);
+	exfat_chain_set(&clu, sbi->root_dir, 0, ALLOC_FAT_CHAIN);
 
 	while (clu.dir != EOF_CLUSTER) {
 		for (i = 0; i < sbi->dentries_per_clu; i++) {
+			struct exfat_dentry *ep;
+
 			ep = exfat_get_dentry(sb, &clu, i, &bh, NULL);
 			if (!ep)
 				return -EIO;
@@ -160,7 +161,6 @@ int exfat_set_bitmap(struct inode *inode, unsigned int clu)
 
 	set_bit_le(b, sbi->vol_amap[i]->b_data);
 	exfat_update_bh(sb, sbi->vol_amap[i], IS_DIRSYNC(inode));
-
 	return 0;
 }
 
@@ -241,26 +241,30 @@ unsigned int exfat_test_bitmap(struct super_block *sb, unsigned int clu)
 
 int exfat_count_used_clusters(struct super_block *sb, unsigned int *ret_count)
 {
-	unsigned int count = 0;
-	unsigned int i, map_i, map_b;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
+	unsigned int count = 0;
+	unsigned int i, map_i = 0, map_b = 0;
 	unsigned int total_clus = sbi->num_clusters - 2;
+	unsigned int last_mask = total_clus & 7;
+	unsigned char clu_bits;
+	const unsigned char last_bit_mask[] = {0, 0b00000001, 0b00000011,
+		0b00000111, 0b00001111, 0b00011111, 0b00111111, 0b01111111};
 
-	map_i = map_b = 0;
-
+	total_clus &= ~last_mask;
 	for (i = 0; i < total_clus; i += 8) {
-		unsigned char k = *(sbi->vol_amap[map_i]->b_data + map_b);
-
-		count += used_bit[k];
+		clu_bits = *(sbi->vol_amap[map_i]->b_data + map_b);
+		count += used_bit[clu_bits];
 		if (++map_b >= (unsigned int)sb->s_blocksize) {
 			map_i++;
 			map_b = 0;
 		}
 	}
 
-	/* FIXME : abnormal bitmap count should be handled as more smart */
-	if (total_clus < count)
-		count = total_clus;
+	if (last_mask) {
+		clu_bits = *(sbi->vol_amap[map_i]->b_data + map_b);
+		clu_bits &= last_bit_mask[last_mask];
+		count += used_bit[clu_bits];
+	}
 
 	*ret_count = count;
 	return 0;

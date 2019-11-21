@@ -157,7 +157,7 @@ static void exfat_cache_add(struct inode *inode,
 	spin_lock(&ei->cache_lru_lock);
 	if (new->id != EXFAT_CACHE_VALID &&
 	    new->id != ei->cache_valid_id)
-		goto out;	/* this cache was invalidated */
+		goto unlock;	/* this cache was invalidated */
 
 	cache = exfat_cache_merge(inode, new);
 	if (cache == NULL) {
@@ -193,7 +193,7 @@ static void exfat_cache_add(struct inode *inode,
 	}
 out_update_lru:
 	exfat_cache_update_lru(inode, cache);
-out:
+unlock:
 	spin_unlock(&ei->cache_lru_lock);
 }
 

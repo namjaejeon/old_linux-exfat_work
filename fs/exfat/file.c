@@ -39,7 +39,7 @@ static int exfat_cont_expand(struct inode *inode, loff_t size)
 	return filemap_fdatawait_range(mapping, start, start + count - 1);
 }
 
-static int exfat_allow_set_time(struct exfat_sb_info *sbi, struct inode *inode)
+static bool exfat_allow_set_time(struct exfat_sb_info *sbi, struct inode *inode)
 {
 	mode_t allow_utime = sbi->options.allow_utime;
 
@@ -61,11 +61,8 @@ static int exfat_sanitize_mode(const struct exfat_sb_info *sbi,
 
 	i_mode = inode->i_mode;
 
-	if (S_ISREG(i_mode) || S_ISLNK(i_mode))
-		mask = sbi->options.fs_fmask;
-	else
-		mask = sbi->options.fs_dmask;
-
+	mask = (S_ISREG(i_mode) || S_ISLNK(i_mode)) ?
+		sbi->options.fs_fmask : sbi->options.fs_dmask;
 	perm = *mode_ptr & ~(S_IFMT | mask);
 
 	/* Of the r and x bits, all (subject to umask) must be present.*/
@@ -131,7 +128,7 @@ int __exfat_truncate(struct inode *inode, loff_t new_size)
 		 * Follow FAT chain
 		 * (defensive coding - works fine even with corrupted FAT table
 		 */
-		if (clu.flags == 0x03) {
+		if (clu.flags == ALLOC_NO_FAT_CHAIN) {
 			clu.dir += num_clusters;
 			clu.size -= num_clusters;
 		} else {
@@ -145,7 +142,7 @@ int __exfat_truncate(struct inode *inode, loff_t new_size)
 			}
 		}
 	} else {
-		ei->flags = 0x03;
+		ei->flags = ALLOC_NO_FAT_CHAIN;
 		ei->start_clu = EOF_CLUSTER;
 	}
 
@@ -178,7 +175,7 @@ int __exfat_truncate(struct inode *inode, loff_t new_size)
 			/* Any directory can not be truncated to zero */
 			WARN_ON(ei->type != TYPE_FILE);
 
-			ep2->stream_flags = 0x01;
+			ep2->stream_flags = ALLOC_FAT_CHAIN;
 			ep2->stream_start_clu = FREE_CLUSTER;
 		}
 
@@ -189,7 +186,7 @@ int __exfat_truncate(struct inode *inode, loff_t new_size)
 	}
 
 	/* cut off from the FAT chain */
-	if (ei->flags == 0x01 && last_clu != FREE_CLUSTER &&
+	if (ei->flags == ALLOC_FAT_CHAIN && last_clu != FREE_CLUSTER &&
 			last_clu != EOF_CLUSTER) {
 		if (exfat_ent_set(sb, last_clu, EOF_CLUSTER))
 			return -EIO;

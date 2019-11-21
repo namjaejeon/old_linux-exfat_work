@@ -12,10 +12,11 @@
 #define EXFAT_SUPER_MAGIC       (0x2011BAB0UL)
 #define EXFAT_ROOT_INO		1
 
-/* time modes */
-#define TM_CREATE	0
-#define TM_MODIFY	1
-#define TM_ACCESS	2
+enum exfat_time_mode {
+	TM_CREATE,
+	TM_MODIFY,
+	TM_ACCESS,
+};
 
 /*
  * exfat error flags
@@ -29,9 +30,11 @@ enum exfat_error_mode {
 /*
  * exfat nls lossy flag
  */
-#define NLS_NAME_NO_LOSSY	(0x00) /* no lossy */
-#define NLS_NAME_LOSSY		(0x01) /* just detected incorrect filename(s) */
-#define NLS_NAME_OVERLEN	(0x02) /* the length is over than its limit */
+enum {
+	NLS_NAME_NO_LOSSY,	/* no lossy */
+	NLS_NAME_LOSSY,		/* just detected incorrect filename(s) */
+	NLS_NAME_OVERLEN,	/* the length is over than its limit */
+};
 
 /*
  * exfat common MACRO
@@ -111,6 +114,8 @@ enum exfat_error_mode {
 	((b) << ((sbi)->cluster_size_bits - DENTRY_SIZE_BITS))
 #define EXFAT_B_TO_DEN(b)		((b) >> DENTRY_SIZE_BITS)
 #define EXFAT_DEN_TO_B(b)		((b) << DENTRY_SIZE_BITS)
+
+#define EXFAT_SB_DIRTY		0
 
 struct exfat_timestamp {
 	unsigned short sec;	/* 0 ~ 59 */
@@ -249,7 +254,7 @@ struct exfat_sb_info {
 	unsigned int clu_srch_ptr; /* cluster search pointer */
 	unsigned int used_clusters; /* number of used clusters */
 
-	bool s_dirt;
+	unsigned long s_state;
 	struct mutex s_lock; /* superblock lock */
 	struct super_block *host_sb; /* sb pointer */
 	struct exfat_mount_options options;

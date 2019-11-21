@@ -116,7 +116,6 @@ int exfat_ent_get(struct super_block *sb, unsigned int loc,
 			loc);
 		return -EIO;
 	}
-
 	return 0;
 }
 
@@ -160,10 +159,10 @@ int exfat_free_cluster(struct inode *inode, struct exfat_chain *p_chain)
 		return -EIO;
 	}
 
-	WRITE_ONCE(sbi->s_dirt, true);
+	set_bit(EXFAT_SB_DIRTY, &sbi->s_state);
 	clu = p_chain->dir;
 
-	if (p_chain->flags == 0x03) {
+	if (p_chain->flags == ALLOC_NO_FAT_CHAIN) {
 		do {
 			exfat_clear_bitmap(inode, clu-2);
 			clu++;
@@ -193,7 +192,7 @@ int exfat_find_last_cluster(struct super_block *sb, struct exfat_chain *p_chain,
 	unsigned int count = 0;
 
 	next = p_chain->dir;
-	if (p_chain->flags == 0x03) {
+	if (p_chain->flags == ALLOC_NO_FAT_CHAIN) {
 		*ret_clu = next + p_chain->size - 1;
 		return 0;
 	}
@@ -257,7 +256,7 @@ int exfat_zeroed_cluster(struct inode *dir, unsigned int clu)
 		bhs[n] = sb_getblk(sb, blknr);
 		if (!bhs[n]) {
 			err = -ENOMEM;
-			goto error;
+			goto release_bhs;
 		}
 		memset(bhs[n]->b_data, 0, sb->s_blocksize);
 		exfat_update_bh(sb, bhs[n], 0);
@@ -269,7 +268,7 @@ int exfat_zeroed_cluster(struct inode *dir, unsigned int clu)
 			if (IS_DIRSYNC(dir)) {
 				err = exfat_sync_bhs(bhs, n);
 				if (err)
-					goto error;
+					goto release_bhs;
 			}
 
 			for (i = 0; i < n; i++)
@@ -281,7 +280,7 @@ int exfat_zeroed_cluster(struct inode *dir, unsigned int clu)
 	if (IS_DIRSYNC(dir)) {
 		err = exfat_sync_bhs(bhs, n);
 		if (err)
-			goto error;
+			goto release_bhs;
 	}
 
 	for (i = 0; i < n; i++)
@@ -289,12 +288,11 @@ int exfat_zeroed_cluster(struct inode *dir, unsigned int clu)
 
 	return 0;
 
-error:
+release_bhs:
 	exfat_msg(sb, KERN_ERR, "failed zeroed sect %llu\n",
 		(unsigned long long)blknr);
 	for (i = 0; i < n; i++)
 		bforget(bhs[i]);
-
 	return err;
 }
 
@@ -340,51 +338,52 @@ int exfat_alloc_cluster(struct inode *inode, unsigned int num_alloc,
 		exfat_msg(sb, KERN_ERR, "hint_cluster is invalid (%u)\n",
 			hint_clu);
 		hint_clu = BASE_CLUSTER;
-		if (p_chain->flags == 0x03) {
+		if (p_chain->flags == ALLOC_NO_FAT_CHAIN) {
 			if (exfat_chain_cont_cluster(sb, p_chain->dir,
 					num_clusters))
 				return -EIO;
-			p_chain->flags = 0x01;
+			p_chain->flags = ALLOC_FAT_CHAIN;
 		}
 	}
 
-	WRITE_ONCE(sbi->s_dirt, true);
+	set_bit(EXFAT_SB_DIRTY, &sbi->s_state);
 
 	p_chain->dir = EOF_CLUSTER;
 
 	while ((new_clu = exfat_test_bitmap(sb,
 			hint_clu - BASE_CLUSTER)) != EOF_CLUSTER) {
-		if (new_clu != hint_clu && p_chain->flags == 0x03) {
+		if (new_clu != hint_clu &&
+		    p_chain->flags == ALLOC_NO_FAT_CHAIN) {
 			if (exfat_chain_cont_cluster(sb, p_chain->dir,
 					num_clusters)) {
 				ret = -EIO;
-				goto error;
+				goto free_cluster;
 			}
-			p_chain->flags = 0x01;
+			p_chain->flags = ALLOC_FAT_CHAIN;
 		}
 
 		/* update allocation bitmap */
 		if (exfat_set_bitmap(inode, new_clu - BASE_CLUSTER)) {
 			ret = -EIO;
-			goto error;
+			goto free_cluster;
 		}
 
 		num_clusters++;
 
 		/* update FAT table */
-		if (p_chain->flags == 0x01) {
+		if (p_chain->flags == ALLOC_FAT_CHAIN) {
 			if (exfat_ent_set(sb, new_clu, EOF_CLUSTER)) {
 				ret = -EIO;
-				goto error;
+				goto free_cluster;
 			}
 		}
 
 		if (p_chain->dir == EOF_CLUSTER) {
 			p_chain->dir = new_clu;
-		} else if (p_chain->flags == 0x01) {
+		} else if (p_chain->flags == ALLOC_FAT_CHAIN) {
 			if (exfat_ent_set(sb, last_clu, new_clu)) {
 				ret = -EIO;
-				goto error;
+				goto free_cluster;
 			}
 		}
 		last_clu = new_clu;
@@ -401,17 +400,17 @@ int exfat_alloc_cluster(struct inode *inode, unsigned int num_alloc,
 		if (hint_clu >= sbi->num_clusters) {
 			hint_clu = BASE_CLUSTER;
 
-			if (p_chain->flags == 0x03) {
+			if (p_chain->flags == ALLOC_NO_FAT_CHAIN) {
 				if (exfat_chain_cont_cluster(sb, p_chain->dir,
 						num_clusters)) {
 					ret = -EIO;
-					goto error;
+					goto free_cluster;
 				}
-				p_chain->flags = 0x01;
+				p_chain->flags = ALLOC_FAT_CHAIN;
 			}
 		}
 	}
-error:
+free_cluster:
 	if (num_clusters)
 		exfat_free_cluster(inode, p_chain);
 	return ret;
@@ -429,7 +428,7 @@ int exfat_count_num_clusters(struct super_block *sb,
 		return 0;
 	}
 
-	if (p_chain->flags == 0x03) {
+	if (p_chain->flags == ALLOC_NO_FAT_CHAIN) {
 		*ret_count = p_chain->size;
 		return 0;
 	}

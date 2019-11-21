@@ -427,7 +427,6 @@ static int exfat_convert_ch_to_uni(struct nls_table *nls,
 			return 1;
 		return 2;
 	}
-
 	return len;
 }
 
@@ -451,7 +450,6 @@ static int exfat_convert_uni_to_ch(struct nls_table *nls, unsigned short uni,
 		ch[0] = '_';
 		return 1;
 	}
-
 	return len;
 }
 
@@ -461,7 +459,6 @@ static unsigned short exfat_nls_upper(struct super_block *sb, unsigned short a)
 
 	if (!sbi->options.case_sensitive && sbi->vol_utbl[a])
 		return sbi->vol_utbl[a];
-
 	return a;
 }
 
@@ -472,7 +469,6 @@ static unsigned short *exfat_nls_wstrchr(unsigned short *str,
 		if (*(str++) == wchar)
 			return str;
 	}
-
 	return NULL;
 }
 
@@ -548,7 +544,6 @@ static int __exfat_nls_vfsname_to_utf16s(struct super_block *sb,
 
 	if (p_lossy)
 		*p_lossy = lossy;
-
 	return unilen;
 }
 
@@ -620,7 +615,6 @@ static int __exfat_nls_vfsname_to_uni16s(struct super_block *sb,
 
 	if (p_lossy)
 		*p_lossy = lossy;
-
 	return unilen;
 }
 
@@ -669,7 +663,7 @@ static int exfat_load_upcase_table(struct super_block *sb,
 		if (!bh) {
 			exfat_msg(sb, KERN_ERR,
 				"failed to read sector(0x%llx)\n", sector);
-			goto error;
+			goto release_bh;
 		}
 		sector++;
 		for (i = 0; i < sect_size && index <= 0xFFFF; i += 2) {
@@ -697,8 +691,7 @@ static int exfat_load_upcase_table(struct super_block *sb,
 	}
 
 	if (index >= 0xFFFF && utbl_checksum == checksum) {
-		if (bh)
-			brelse(bh);
+		brelse(bh);
 		return 0;
 	}
 
@@ -707,9 +700,8 @@ static int exfat_load_upcase_table(struct super_block *sb,
 			index, checksum, utbl_checksum);
 
 	ret = -EINVAL;
-error:
-	if (bh)
-		brelse(bh);
+release_bh:
+	brelse(bh);
 	exfat_free_upcase_table(sb);
 	return ret;
 }
@@ -764,7 +756,7 @@ int exfat_create_upcase_table(struct super_block *sb)
 	struct buffer_head *bh;
 
 	clu.dir = sbi->root_dir;
-	clu.flags = 0x01;
+	clu.flags = ALLOC_FAT_CHAIN;
 
 	while (clu.dir != EOF_CLUSTER) {
 		for (i = 0; i < sbi->dentries_per_clu; i++) {
