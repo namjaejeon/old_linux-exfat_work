@@ -701,13 +701,14 @@ static int __init init_exfat_fs(void)
 	if (err)
 		return err;
 
-	err = -ENOMEM;
 	exfat_inode_cachep = kmem_cache_create("exfat_inode_cache",
 			sizeof(struct exfat_inode_info),
 			0, SLAB_RECLAIM_ACCOUNT | SLAB_MEM_SPREAD,
 			exfat_inode_init_once);
-	if (!exfat_inode_cachep)
+	if (!exfat_inode_cachep) {
+		err = -ENOMEM;
 		goto shutdown_cache;
+	}
 
 	err = register_filesystem(&exfat_fs_type);
 	if (err)

@@ -174,13 +174,13 @@ int exfat_free_cluster(struct inode *inode, struct exfat_chain *p_chain)
 			exfat_clear_bitmap(inode, (clu - BASE_CLUSTER));
 
 			if (exfat_get_next_cluster(sb, &clu))
-				goto out;
+				goto dec_used_clus;
 
 			num_clusters++;
 		} while (clu != EOF_CLUSTER);
 	}
 
-out:
+dec_used_clus:
 	sbi->used_clusters -= num_clusters;
 	return 0;
 }
@@ -458,10 +458,8 @@ int exfat_mirror_bh(struct super_block *sb, sector_t sec,
 	if (sbi->FAT2_start_sector != sbi->FAT1_start_sector) {
 		sec2 = sec - sbi->FAT1_start_sector + sbi->FAT2_start_sector;
 		c_bh = sb_getblk(sb, sec2);
-		if (!c_bh) {
-			err = -ENOMEM;
-			goto out;
-		}
+		if (!c_bh)
+			return -ENOMEM;
 		memcpy(c_bh->b_data, bh->b_data, sb->s_blocksize);
 		set_buffer_uptodate(c_bh);
 		mark_buffer_dirty(c_bh);
@@ -469,6 +467,6 @@ int exfat_mirror_bh(struct super_block *sb, sector_t sec,
 			err = sync_dirty_buffer(c_bh);
 		brelse(c_bh);
 	}
-out:
+
 	return err;
 }
