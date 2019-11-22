@@ -372,7 +372,7 @@ static void exfat_set_entry_type(struct exfat_dentry *ep, unsigned int type)
 	if (type == TYPE_UNUSED) {
 		ep->type = EXFAT_UNUSED;
 	} else if (type == TYPE_DELETED) {
-		ep->type &= EXFAT_DELETE_MASK;
+		ep->type &= EXFAT_DELETE;
 	} else if (type == TYPE_STREAM) {
 		ep->type = EXFAT_STREAM;
 	} else if (type == TYPE_EXTEND) {
