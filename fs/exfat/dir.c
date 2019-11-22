@@ -68,8 +68,8 @@ static int exfat_readdir(struct inode *inode, struct exfat_dir_entry *dir_entry)
 			ep = exfat_get_dentry(sb, &clu, i, &bh, &sector);
 			if (!ep)
 				return -EIO;
-			type = exfat_get_entry_type(ep);
 
+			type = exfat_get_entry_type(ep);
 			if (type == TYPE_UNUSED) {
 				brelse(bh);
 				break;
