@@ -137,7 +137,6 @@ static int exfat_readdir(struct inode *inode, struct exfat_dir_entry *dir_entry)
 
 	dir_entry->namebuf.lfn[0] = '\0';
 	ei->rwoffset = dentry;
-
 	return 0;
 }
 
