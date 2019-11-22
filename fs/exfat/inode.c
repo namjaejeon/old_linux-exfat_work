@@ -315,7 +315,7 @@ static int exfat_bmap(struct inode *inode, sector_t sector, sector_t *phys,
 	clu_offset = sector >> sbi->sect_per_clus_bits;  /* cluster offset */
 
 	err = exfat_map_cluster(inode, clu_offset, &cluster,
-				*create & BMAP_ADD_CLUSTER);
+		*create & BMAP_ADD_CLUSTER);
 	if (err) {
 		if (err != -ENOSPC)
 			return -EIO;
