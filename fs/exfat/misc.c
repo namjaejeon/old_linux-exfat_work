@@ -234,14 +234,7 @@ void exfat_chain_set(struct exfat_chain *ec, unsigned int dir,
 	ec->flags = flags;
 }
 
-struct exfat_chain *exfat_chain_dup(struct exfat_chain *ec)
+void exfat_chain_dup(struct exfat_chain *dup, struct exfat_chain *ec)
 {
-	struct exfat_chain *dup;
-
-	dup = kmalloc(sizeof(struct exfat_chain), GFP_KERNEL);
-	if (!dup)
-		return NULL;
-
-	exfat_chain_set(dup, ec->dir, ec->size, ec->flags);
-	return dup;
+	return exfat_chain_set(dup, ec->dir, ec->size, ec->flags);
 }

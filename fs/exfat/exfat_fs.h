@@ -533,6 +533,6 @@ unsigned short exfat_calc_chksum_2byte(void *data, int len,
 void exfat_update_bh(struct super_block *sb, struct buffer_head *bh, int sync);
 void exfat_chain_set(struct exfat_chain *ec, unsigned int dir,
 		unsigned int size, unsigned char flags);
-struct exfat_chain *exfat_chain_dup(struct exfat_chain *dir);
+void exfat_chain_dup(struct exfat_chain *dup, struct exfat_chain *ec);
 
 #endif /* !_EXFAT_H */
