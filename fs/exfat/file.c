@@ -47,11 +47,11 @@ static bool exfat_allow_set_time(struct exfat_sb_info *sbi, struct inode *inode)
 		if (in_group_p(inode->i_gid))
 			allow_utime >>= 3;
 		if (allow_utime & MAY_WRITE)
-			return 1;
+			return true;
 	}
 
 	/* use a default check */
-	return 0;
+	return false;
 }
 
 static int exfat_sanitize_mode(const struct exfat_sb_info *sbi,
