@@ -809,8 +809,6 @@ static struct dentry *exfat_lookup(struct inode *dir, struct dentry *dentry,
 	}
 	dput(alias);
 out:
-	/* initialize d_time even though it is positive dentry */
-	dentry->d_time = inode_peek_iversion_raw(dir);
 	mutex_unlock(&EXFAT_SB(sb)->s_lock);
 	if (!inode)
 		exfat_d_version_set(dentry, inode_query_iversion(dir));
@@ -877,7 +875,6 @@ static int exfat_unlink(struct inode *dir, struct dentry *dentry)
 	clear_nlink(inode);
 	inode->i_mtime = inode->i_atime = current_time(inode);
 	exfat_unhash_inode(inode);
-	dentry->d_time = inode_peek_iversion_raw(dir);
 	exfat_d_version_set(dentry, inode_query_iversion(dir));
 unlock:
 	mutex_unlock(&EXFAT_SB(sb)->s_lock);
@@ -1043,7 +1040,6 @@ static int exfat_rmdir(struct inode *dir, struct dentry *dentry)
 	clear_nlink(inode);
 	inode->i_mtime = inode->i_atime = current_time(inode);
 	exfat_unhash_inode(inode);
-	dentry->d_time = inode_peek_iversion_raw(dir);
 	exfat_d_version_set(dentry, inode_query_iversion(dir));
 unlock:
 	mutex_unlock(&EXFAT_SB(inode->i_sb)->s_lock);
