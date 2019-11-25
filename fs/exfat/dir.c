@@ -1002,13 +1002,11 @@ int exfat_find_dir_entry(struct super_block *sb, struct exfat_inode_info *ei,
 	int order, step, name_len = 0;
 	int dentries_per_clu, num_empty = 0;
 	unsigned int entry_type;
-	unsigned short entry_uniname[16], *uniname = NULL, unichar;
+	unsigned short *uniname = NULL;
 	struct exfat_chain clu;
-	struct exfat_dentry *ep;
 	struct exfat_hint *hint_stat = &ei->hint_stat;
 	struct exfat_hint_femp candi_empty;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
-	struct buffer_head *bh = NULL;
 
 	dentries_per_clu = sbi->dentries_per_clu;
 
@@ -1027,6 +1025,9 @@ rewind:
 	while (clu.dir != EOF_CLUSTER) {
 		i = dentry & (dentries_per_clu - 1);
 		for (; i < dentries_per_clu; i++, dentry++) {
+			struct exfat_dentry *ep;
+			struct buffer_head *bh;
+
 			if (rewind && dentry == end_eidx)
 				goto not_found;
 
@@ -1106,6 +1107,8 @@ rewind:
 
 			brelse(bh);
 			if (entry_type == TYPE_EXTEND) {
+				unsigned short entry_uniname[16], unichar;
+
 				if (step != DIRENT_STEP_NAME) {
 					step = DIRENT_STEP_FILE;
 					continue;
