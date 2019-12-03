@@ -47,11 +47,11 @@ static bool exfat_allow_set_time(struct exfat_sb_info *sbi, struct inode *inode)
 		if (in_group_p(inode->i_gid))
 			allow_utime >>= 3;
 		if (allow_utime & MAY_WRITE)
-			return 1;
+			return true;
 	}
 
 	/* use a default check */
-	return 0;
+	return false;
 }
 
 static int exfat_sanitize_mode(const struct exfat_sb_info *sbi,
@@ -230,12 +230,12 @@ void exfat_truncate(struct inode *inode, loff_t size)
 		 * Empty start_clu != ~0 (not allocated)
 		 */
 		exfat_fs_error(sb, "tried to truncate zeroed cluster.");
-		goto out;
+		goto write_size;
 	}
 
 	err = __exfat_truncate(inode, i_size_read(inode));
 	if (err)
-		goto out;
+		goto write_size;
 
 	inode->i_ctime = inode->i_mtime = current_time(inode);
 	if (IS_DIRSYNC(inode))
@@ -245,7 +245,7 @@ void exfat_truncate(struct inode *inode, loff_t size)
 
 	inode->i_blocks = ((i_size_read(inode) + (sbi->cluster_size - 1)) &
 			~(sbi->cluster_size - 1)) >> inode->i_blkbits;
-out:
+write_size:
 	aligned_size = i_size_read(inode);
 	if (aligned_size & (blocksize - 1)) {
 		aligned_size |= (blocksize - 1);

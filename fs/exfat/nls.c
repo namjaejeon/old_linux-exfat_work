@@ -600,7 +600,7 @@ static int __exfat_nls_vfsname_to_uni16s(struct super_block *sb,
 		    exfat_nls_wstrchr(bad_uni_chars, *uniname))
 			lossy |= NLS_NAME_LOSSY;
 
-		upname[unilen] = exfat_nls_upper(sb, *uniname);
+		upname[unilen] = *uniname;
 		uniname++;
 		unilen++;
 	}
@@ -644,10 +644,9 @@ static int exfat_load_upcase_table(struct super_block *sb,
 		unsigned int utbl_checksum)
 {
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
-	struct buffer_head *bh = NULL;
 	unsigned int sect_size = sb->s_blocksize;
 	unsigned int i, index = 0, checksum = 0;
-	int ret = -EIO;
+	int ret;
 	unsigned char skip = false;
 	unsigned short *upcase_table;
 
@@ -659,11 +658,14 @@ static int exfat_load_upcase_table(struct super_block *sb,
 	num_sectors += sector;
 
 	while (sector < num_sectors) {
+		struct buffer_head *bh;
+
 		bh = sb_bread(sb, sector);
 		if (!bh) {
 			exfat_msg(sb, KERN_ERR,
 				"failed to read sector(0x%llx)\n", sector);
-			goto release_bh;
+			ret = -EIO;
+			goto free_table;
 		}
 		sector++;
 		for (i = 0; i < sect_size && index <= 0xFFFF; i += 2) {
@@ -688,20 +690,17 @@ static int exfat_load_upcase_table(struct super_block *sb,
 				index++;
 			}
 		}
+		brelse(bh);
 	}
 
-	if (index >= 0xFFFF && utbl_checksum == checksum) {
-		brelse(bh);
+	if (index >= 0xFFFF && utbl_checksum == checksum)
 		return 0;
-	}
 
 	exfat_msg(sb, KERN_ERR,
 			"failed to load upcase table (idx : 0x%08x, chksum : 0x%08x, utbl_chksum : 0x%08x)\n",
 			index, checksum, utbl_checksum);
-
 	ret = -EINVAL;
-release_bh:
-	brelse(bh);
+free_table:
 	exfat_free_upcase_table(sb);
 	return ret;
 }
