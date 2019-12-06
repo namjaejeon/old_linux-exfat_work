@@ -600,7 +600,7 @@ static int __exfat_nls_vfsname_to_uni16s(struct super_block *sb,
 		    exfat_nls_wstrchr(bad_uni_chars, *uniname))
 			lossy |= NLS_NAME_LOSSY;
 
-		upname[unilen] = *uniname;
+		upname[unilen] = exfat_nls_upper(sb, *uniname);
 		uniname++;
 		unilen++;
 	}
