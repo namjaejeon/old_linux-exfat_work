@@ -549,7 +549,7 @@ static int exfat_fill_super(struct super_block *sb, struct fs_context *fc)
 	struct inode *root_inode;
 	int err;
 
-	if (opts->allow_utime == -1)
+	if (opts->allow_utime == (unsigned short)-1)
 		opts->allow_utime = ~opts->fs_dmask & 0022;
 
 	if (opts->utf8 && strcmp(opts->iocharset, exfat_iocharset_with_utf8)) {
