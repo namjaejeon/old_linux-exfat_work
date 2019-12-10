@@ -55,7 +55,7 @@ static int exfat_allocate_bitmap(struct super_block *sb,
 
 	sbi->map_clu = le32_to_cpu(ep->bitmap_start_clu);
 	map_size = le64_to_cpu(ep->bitmap_size);
-	need_map_size = (((sbi->num_clusters - EXFAT_FIRST_CLUSTER) - 1) >> 3) + 1;
+	need_map_size = ((EXFAT_DATA_CLUSTER_COUNT(sbi) - 1) >> 3) + 1;
 	if (need_map_size != map_size) {
 		exfat_msg(sb, KERN_ERR,
 				"bogus allocation bitmap size(need : %u, cur : %lld)",
@@ -214,7 +214,7 @@ unsigned int exfat_test_bitmap(struct super_block *sb, unsigned int clu)
 	map_i = clu >> (sb->s_blocksize_bits + 3);
 	map_b = (clu >> 3) & (unsigned int)(sb->s_blocksize - 1);
 
-	for (i = 2; i < sbi->num_clusters; i += 8) {
+	for (i = EXFAT_FIRST_CLUSTER; i < sbi->num_clusters; i += 8) {
 		k = *(sbi->vol_amap[map_i]->b_data + map_b);
 		if (clu_mask > 0) {
 			k |= clu_mask;
@@ -245,7 +245,7 @@ int exfat_count_used_clusters(struct super_block *sb, unsigned int *ret_count)
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 	unsigned int count = 0;
 	unsigned int i, map_i = 0, map_b = 0;
-	unsigned int total_clus = sbi->num_clusters - 2;
+	unsigned int total_clus = EXFAT_DATA_CLUSTER_COUNT(sbi);
 	unsigned int last_mask = total_clus & 7;
 	unsigned char clu_bits;
 	const unsigned char last_bit_mask[] = {0, 0b00000001, 0b00000011,

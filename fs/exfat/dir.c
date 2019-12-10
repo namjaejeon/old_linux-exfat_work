@@ -292,7 +292,7 @@ int exfat_calc_num_entries(struct exfat_uni_name *p_uniname)
 		return -EINVAL;
 
 	/* 1 file entry + 1 stream entry + name entries */
-	return ((len - 1) / 15 + 3);
+	return ((len - 1) / EXFAT_FILE_NAME_LEN + 3);
 }
 
 unsigned int exfat_get_entry_type(struct exfat_dentry *ep)
@@ -303,7 +303,7 @@ unsigned int exfat_get_entry_type(struct exfat_dentry *ep)
 		return TYPE_DELETED;
 	if (ep->type == EXFAT_INVAL)
 		return TYPE_INVALID;
-	if (ep->type < 0xA0) {
+	if (IS_EXFAT_CRITICAL_PRI(ep->type)) {
 		if (ep->type == EXFAT_BITMAP)
 			return TYPE_BITMAP;
 		if (ep->type == EXFAT_UPCASE)
@@ -317,7 +317,7 @@ unsigned int exfat_get_entry_type(struct exfat_dentry *ep)
 		}
 		return TYPE_CRITICAL_PRI;
 	}
-	if (ep->type < 0xC0) {
+	if (IS_EXFAT_BENIGN_PRI(ep->type)) {
 		if (ep->type == EXFAT_GUID)
 			return TYPE_GUID;
 		if (ep->type == EXFAT_PADDING)
@@ -326,7 +326,7 @@ unsigned int exfat_get_entry_type(struct exfat_dentry *ep)
 			return TYPE_ACLTAB;
 		return TYPE_BENIGN_PRI;
 	}
-	if (ep->type < 0xE0) {
+	if (IS_EXFAT_CRITICAL_SEC(ep->type)) {
 		if (ep->type == EXFAT_STREAM)
 			return TYPE_STREAM;
 		if (ep->type == EXFAT_NAME)
@@ -450,7 +450,7 @@ static void exfat_init_name_entry(struct exfat_dentry *ep,
 	exfat_set_entry_type(ep, TYPE_EXTEND);
 	ep->name_flags = 0x0;
 
-	for (i = 0; i < 15; i++) {
+	for (i = 0; i < EXFAT_FILE_NAME_LEN; i++) {
 		ep->name_unicode[i] = cpu_to_le16(*uniname);
 		if (*uniname == 0x0)
 			break;
@@ -558,7 +558,7 @@ int exfat_init_ext_entry(struct inode *inode, struct exfat_chain *p_dir,
 	exfat_update_bh(sb, bh, sync);
 	brelse(bh);
 
-	for (i = 2; i < num_entries; i++) {
+	for (i = EXFAT_FIRST_CLUSTER; i < num_entries; i++) {
 		ep = exfat_get_dentry(sb, p_dir, entry + i, &bh, &sector);
 		if (!ep)
 			return -EIO;
@@ -566,7 +566,7 @@ int exfat_init_ext_entry(struct inode *inode, struct exfat_chain *p_dir,
 		exfat_init_name_entry(ep, uniname);
 		exfat_update_bh(sb, bh, sync);
 		brelse(bh);
-		uniname += 15;
+		uniname += EXFAT_FILE_NAME_LEN;
 	}
 
 	update_dir_chksum(inode, p_dir, entry);
@@ -952,7 +952,7 @@ static int exfat_extract_uni_name(struct exfat_dentry *ep,
 {
 	int i, len = 0;
 
-	for (i = 0; i < 15; i++) {
+	for (i = 0; i < EXFAT_FILE_NAME_LEN; i++) {
 		*uniname = le16_to_cpu(ep->name_unicode[i]);
 		if (*uniname == 0x0)
 			return len;
@@ -1102,7 +1102,7 @@ rewind:
 				if (++order == 2)
 					uniname = p_uniname->name;
 				else
-					uniname += 15;
+					uniname += EXFAT_FILE_NAME_LEN;
 
 				len = exfat_extract_uni_name(
 						ep, entry_uniname);
@@ -1244,7 +1244,7 @@ void exfat_get_uniname_from_ext_entry(struct super_block *sb,
 			goto free_es;
 
 		exfat_extract_uni_name(ep, uniname);
-		uniname += 15;
+		uniname += EXFAT_FILE_NAME_LEN;
 	}
 
 free_es:

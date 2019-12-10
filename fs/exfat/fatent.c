@@ -147,7 +147,8 @@ int exfat_free_cluster(struct inode *inode, struct exfat_chain *p_chain)
 
 	/* invalid cluster number */
 	if (p_chain->dir == EXFAT_FREE_CLUSTER ||
-	    p_chain->dir == EXFAT_EOF_CLUSTER)
+	    p_chain->dir == EXFAT_EOF_CLUSTER ||
+	    p_chain->dir < EXFAT_FIRST_CLUSTER)
 		return 0;
 
 	/* no cluster to truncate */
@@ -166,14 +167,14 @@ int exfat_free_cluster(struct inode *inode, struct exfat_chain *p_chain)
 
 	if (p_chain->flags == ALLOC_NO_FAT_CHAIN) {
 		do {
-			exfat_clear_bitmap(inode, clu-2);
+			exfat_clear_bitmap(inode, clu - EXFAT_RESERVED_CLUSTER_COUNT);
 			clu++;
 
 			num_clusters++;
 		} while (num_clusters < p_chain->size);
 	} else {
 		do {
-			exfat_clear_bitmap(inode, (clu - EXFAT_FIRST_CLUSTER));
+			exfat_clear_bitmap(inode, (clu - EXFAT_RESERVED_CLUSTER_COUNT));
 
 			if (exfat_get_next_cluster(sb, &clu))
 				goto dec_used_clus;
@@ -307,7 +308,7 @@ int exfat_alloc_cluster(struct inode *inode, unsigned int num_alloc,
 	struct super_block *sb = inode->i_sb;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 
-	total_cnt = sbi->num_clusters - EXFAT_FIRST_CLUSTER;
+	total_cnt = EXFAT_DATA_CLUSTER_COUNT(sbi);
 
 	if (unlikely(total_cnt < sbi->used_clusters)) {
 		exfat_fs_error_ratelimit(sb,

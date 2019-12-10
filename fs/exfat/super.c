@@ -91,7 +91,7 @@ static int exfat_statfs(struct dentry *dentry, struct kstatfs *buf)
 	buf->f_fsid.val[0] = (unsigned int)id;
 	buf->f_fsid.val[1] = (unsigned int)(id >> 32);
 	/* Unicode utf16 255 characters */
-	buf->f_namelen = EXFAT_FILE_LEN * NLS_MAX_CHARSET_SIZE;
+	buf->f_namelen = EXFAT_MAX_FILE_LEN * NLS_MAX_CHARSET_SIZE;
 	return 0;
 }
 
@@ -487,7 +487,8 @@ static int __exfat_fill_super(struct super_block *sb)
 	sbi->data_start_sector = sbi->root_start_sector;
 	sbi->num_sectors = le64_to_cpu(p_bpb->bsx.vol_length);
 	/* because the cluster index starts with 2 */
-	sbi->num_clusters = le32_to_cpu(p_bpb->bsx.clu_count) + 2;
+	sbi->num_clusters = le32_to_cpu(p_bpb->bsx.clu_count) +
+		EXFAT_RESERVED_CLUSTER_COUNT;
 
 	sbi->vol_id = le32_to_cpu(p_bpb->bsx.vol_serial);
 	sbi->root_dir = le32_to_cpu(p_bpb->bsx.root_cluster);
