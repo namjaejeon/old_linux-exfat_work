@@ -12,6 +12,8 @@
 #define EXFAT_SUPER_MAGIC       (0x2011BAB0UL)
 #define EXFAT_ROOT_INO		1
 
+#define EXFAT_SB_DIRTY		0
+
 enum exfat_time_mode {
 	TM_CREATE,
 	TM_MODIFY,
@@ -39,22 +41,24 @@ enum {
 /*
  * exfat common MACRO
  */
-#define CLUSTER_32(x)	((unsigned int)((x) & 0xFFFFFFFFU))
-#define EOF_CLUSTER	CLUSTER_32(~0)
-#define BAD_CLUSTER	(0xFFFFFFF7U)
-#define FREE_CLUSTER	(0)
-#define BASE_CLUSTER	(2)
+#define CLUSTER_32(x)			((unsigned int)((x) & 0xFFFFFFFFU))
+#define EXFAT_EOF_CLUSTER		CLUSTER_32(~0)
+#define EXFAT_BAD_CLUSTER		(0xFFFFFFF7U)
+#define EXFAT_FREE_CLUSTER		(0)
+/* Cluster 0, 1 are reserved, the first cluster is 2 in the cluster heap. */
+#define EXFAT_FIRST_CLUSTER		(2)
+#define EXFAT_DATA_CLUSTER_COUNT	((sbi)->num_clusters - FIRST_CLUSTER)
 
-#define EXFAT_HASH_BITS		8
-#define EXFAT_HASH_SIZE		(1UL << EXFAT_HASH_BITS)
+#define EXFAT_HASH_BITS			8
+#define EXFAT_HASH_SIZE			(1UL << EXFAT_HASH_BITS)
 
 /*
  * Type Definitions
  */
-#define ES_2_ENTRIES	2
-#define ES_ALL_ENTRIES	0
+#define ES_2_ENTRIES			2
+#define ES_ALL_ENTRIES			0
 
-#define DIR_DELETED	0xFFFF0321
+#define DIR_DELETED			0xFFFF0321
 
 /* type values */
 #define TYPE_UNUSED		0x0000
@@ -114,8 +118,6 @@ enum {
 	((b) << ((sbi)->cluster_size_bits - DENTRY_SIZE_BITS))
 #define EXFAT_B_TO_DEN(b)		((b) >> DENTRY_SIZE_BITS)
 #define EXFAT_DEN_TO_B(b)		((b) << DENTRY_SIZE_BITS)
-
-#define EXFAT_SB_DIRTY		0
 
 struct exfat_timestamp {
 	unsigned short sec;	/* 0 ~ 59 */
@@ -384,7 +386,7 @@ static inline bool exfat_is_last_sector_in_cluster(struct exfat_sb_info *sbi,
 static inline sector_t exfat_cluster_to_sector(struct exfat_sb_info *sbi,
 		unsigned int clus)
 {
-	return ((clus - BASE_CLUSTER) << sbi->sect_per_clus_bits)
+	return ((clus - EXFAT_FIRST_CLUSTER) << sbi->sect_per_clus_bits)
 			+ sbi->data_start_sector;
 }
 
@@ -392,7 +394,7 @@ static inline int exfat_sector_to_cluster(struct exfat_sb_info *sbi,
 		sector_t sec)
 {
 	return ((sec - sbi->data_start_sector) >> sbi->sect_per_clus_bits) +
-			BASE_CLUSTER;
+			EXFAT_FIRST_CLUSTER;
 }
 
 /* super.c */
@@ -481,7 +483,7 @@ int update_dir_chksum(struct inode *inode, struct exfat_chain *p_dir,
 		int entry);
 int exfat_update_dir_chksum_with_entry_set(struct super_block *sb,
 		struct exfat_entry_set_cache *es, int sync);
-int exfat_get_num_entries(struct exfat_uni_name *p_uniname);
+int exfat_calc_num_entries(struct exfat_uni_name *p_uniname);
 int exfat_find_dir_entry(struct super_block *sb, struct exfat_inode_info *ei,
 		struct exfat_chain *p_dir, struct exfat_uni_name *p_uniname,
 		int num_entries, unsigned int type);

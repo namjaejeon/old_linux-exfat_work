@@ -94,7 +94,7 @@ static int exfat_sanitize_mode(const struct exfat_sb_info *sbi,
 int __exfat_truncate(struct inode *inode, loff_t new_size)
 {
 	unsigned int num_clusters_new, num_clusters_phys;
-	unsigned int last_clu = FREE_CLUSTER;
+	unsigned int last_clu = EXFAT_FREE_CLUSTER;
 	struct exfat_chain clu;
 	struct exfat_timestamp tm;
 	struct exfat_dentry *ep, *ep2;
@@ -143,7 +143,7 @@ int __exfat_truncate(struct inode *inode, loff_t new_size)
 		}
 	} else {
 		ei->flags = ALLOC_NO_FAT_CHAIN;
-		ei->start_clu = EOF_CLUSTER;
+		ei->start_clu = EXFAT_EOF_CLUSTER;
 	}
 
 	i_size_write(inode, new_size);
@@ -164,7 +164,7 @@ int __exfat_truncate(struct inode *inode, loff_t new_size)
 		ep->file_attr = cpu_to_le16(ei->attr);
 
 		/* File size should be zero if there is no cluster allocated */
-		if (ei->start_clu == EOF_CLUSTER)
+		if (ei->start_clu == EXFAT_EOF_CLUSTER)
 			ep->stream_valid_size = ep->stream_size = 0;
 		else {
 			ep->stream_valid_size = cpu_to_le64(new_size);
@@ -176,7 +176,7 @@ int __exfat_truncate(struct inode *inode, loff_t new_size)
 			WARN_ON(ei->type != TYPE_FILE);
 
 			ep2->stream_flags = ALLOC_FAT_CHAIN;
-			ep2->stream_start_clu = FREE_CLUSTER;
+			ep2->stream_start_clu = EXFAT_FREE_CLUSTER;
 		}
 
 		if (exfat_update_dir_chksum_with_entry_set(sb, es,
@@ -186,9 +186,9 @@ int __exfat_truncate(struct inode *inode, loff_t new_size)
 	}
 
 	/* cut off from the FAT chain */
-	if (ei->flags == ALLOC_FAT_CHAIN && last_clu != FREE_CLUSTER &&
-			last_clu != EOF_CLUSTER) {
-		if (exfat_ent_set(sb, last_clu, EOF_CLUSTER))
+	if (ei->flags == ALLOC_FAT_CHAIN && last_clu != EXFAT_FREE_CLUSTER &&
+			last_clu != EXFAT_EOF_CLUSTER) {
+		if (exfat_ent_set(sb, last_clu, EXFAT_EOF_CLUSTER))
 			return -EIO;
 	}
 
@@ -197,8 +197,8 @@ int __exfat_truncate(struct inode *inode, loff_t new_size)
 	exfat_cache_inval_inode(inode);
 
 	/* hint information */
-	ei->hint_bmap.off = EOF_CLUSTER;
-	ei->hint_bmap.clu = EOF_CLUSTER;
+	ei->hint_bmap.off = EXFAT_EOF_CLUSTER;
+	ei->hint_bmap.clu = EXFAT_EOF_CLUSTER;
 	if (ei->rwoffset > new_size)
 		ei->rwoffset = new_size;
 

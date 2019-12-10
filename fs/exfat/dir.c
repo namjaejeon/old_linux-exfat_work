@@ -47,7 +47,7 @@ static int exfat_readdir(struct inode *inode, struct exfat_dir_entry *dir_entry)
 		clu.size -= clu_offset;
 	} else {
 		/* hint_information */
-		if (clu_offset > 0 && ei->hint_bmap.off != EOF_CLUSTER &&
+		if (clu_offset > 0 && ei->hint_bmap.off != EXFAT_EOF_CLUSTER &&
 		    ei->hint_bmap.off > 0 && clu_offset >= ei->hint_bmap.off) {
 			clu_offset -= ei->hint_bmap.off;
 			clu.dir = ei->hint_bmap.clu;
@@ -61,7 +61,7 @@ static int exfat_readdir(struct inode *inode, struct exfat_dir_entry *dir_entry)
 		}
 	}
 
-	while (clu.dir != EOF_CLUSTER) {
+	while (clu.dir != EXFAT_EOF_CLUSTER) {
 		i = dentry & (dentries_per_clu - 1);
 
 		for ( ; i < dentries_per_clu; i++, dentry++) {
@@ -128,7 +128,7 @@ static int exfat_readdir(struct inode *inode, struct exfat_dir_entry *dir_entry)
 			if (--clu.size > 0)
 				clu.dir++;
 			else
-				clu.dir = EOF_CLUSTER;
+				clu.dir = EXFAT_EOF_CLUSTER;
 		} else {
 			if (exfat_get_next_cluster(sb, &(clu.dir)))
 				return -EIO;
@@ -274,7 +274,7 @@ int exfat_alloc_new_dir(struct inode *inode, struct exfat_chain *clu)
 {
 	int ret;
 
-	exfat_chain_set(clu, EOF_CLUSTER, 0, ALLOC_NO_FAT_CHAIN);
+	exfat_chain_set(clu, EXFAT_EOF_CLUSTER, 0, ALLOC_NO_FAT_CHAIN);
 
 	ret = exfat_alloc_cluster(inode, 1, clu);
 	if (ret)
@@ -283,31 +283,16 @@ int exfat_alloc_new_dir(struct inode *inode, struct exfat_chain *clu)
 	return exfat_zeroed_cluster(inode, clu->dir);
 }
 
-static int exfat_calc_num_entries(struct exfat_uni_name *p_uniname)
+int exfat_calc_num_entries(struct exfat_uni_name *p_uniname)
 {
 	int len;
 
 	len = p_uniname->name_len;
 	if (len == 0)
-		return 0;
+		return -EINVAL;
 
 	/* 1 file entry + 1 stream entry + name entries */
 	return ((len - 1) / 15 + 3);
-}
-
-/*
- * input  : dir, uni_name
- * output : num_of_entry
- */
-int exfat_get_num_entries(struct exfat_uni_name *p_uniname)
-{
-	int num_entries;
-
-	num_entries = exfat_calc_num_entries(p_uniname);
-	if (num_entries == 0)
-		return -EINVAL;
-
-	return num_entries;
 }
 
 unsigned int exfat_get_entry_type(struct exfat_dentry *ep)
@@ -685,7 +670,7 @@ static int exfat_walk_fat_chain(struct super_block *sb,
 		while (clu_offset > 0) {
 			if (exfat_get_next_cluster(sb, &cur_clu))
 				return -EIO;
-			if (cur_clu == EOF_CLUSTER) {
+			if (cur_clu == EXFAT_EOF_CLUSTER) {
 				exfat_fs_error(sb,
 					"invalid dentry access beyond EOF (clu : %u, eidx : %d)",
 					p_dir->dir,
@@ -777,7 +762,7 @@ struct exfat_dentry *exfat_get_dentry(struct super_block *sb,
 	if (exfat_find_location(sb, p_dir, entry, &sec, &off))
 		return NULL;
 
-	if (p_dir->dir != FREE_CLUSTER &&
+	if (p_dir->dir != EXFAT_FREE_CLUSTER &&
 			!(entry & (dentries_per_page - 1)))
 		exfat_dir_readahead(sb, sec);
 
@@ -1022,7 +1007,7 @@ int exfat_find_dir_entry(struct super_block *sb, struct exfat_inode_info *ei,
 rewind:
 	order = 0;
 	step = DIRENT_STEP_FILE;
-	while (clu.dir != EOF_CLUSTER) {
+	while (clu.dir != EXFAT_EOF_CLUSTER) {
 		i = dentry & (dentries_per_clu - 1);
 		for (; i < dentries_per_clu; i++, dentry++) {
 			struct exfat_dentry *ep;
@@ -1154,7 +1139,7 @@ rewind:
 			if (--clu.size > 0)
 				clu.dir++;
 			else
-				clu.dir = EOF_CLUSTER;
+				clu.dir = EXFAT_EOF_CLUSTER;
 		} else {
 			if (exfat_get_next_cluster(sb, &clu.dir))
 				return -EIO;
@@ -1190,12 +1175,12 @@ found:
 			if (--clu.size > 0)
 				clu.dir++;
 			else
-				clu.dir = EOF_CLUSTER;
+				clu.dir = EXFAT_EOF_CLUSTER;
 		} else {
 			ret = exfat_get_next_cluster(sb, &clu.dir);
 		}
 
-		if (ret || clu.dir != EOF_CLUSTER) {
+		if (ret || clu.dir != EXFAT_EOF_CLUSTER) {
 			/* just initialized hint_stat */
 			hint_stat->clu = p_dir->dir;
 			hint_stat->eidx = 0;
@@ -1280,7 +1265,7 @@ int exfat_count_dir_entries(struct super_block *sb, struct exfat_chain *p_dir)
 
 	exfat_chain_dup(&clu, p_dir);
 
-	while (clu.dir != EOF_CLUSTER) {
+	while (clu.dir != EXFAT_EOF_CLUSTER) {
 		for (i = 0; i < dentries_per_clu; i++) {
 			ep = exfat_get_dentry(sb, &clu, i, &bh, NULL);
 			if (!ep)
@@ -1299,7 +1284,7 @@ int exfat_count_dir_entries(struct super_block *sb, struct exfat_chain *p_dir)
 			if (--clu.size > 0)
 				clu.dir++;
 			else
-				clu.dir = EOF_CLUSTER;
+				clu.dir = EXFAT_EOF_CLUSTER;
 		} else {
 			if (exfat_get_next_cluster(sb, &(clu.dir)))
 				return -EIO;

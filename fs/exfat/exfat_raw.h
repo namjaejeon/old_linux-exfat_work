@@ -10,6 +10,8 @@
 
 #define PBR_SIGNATURE		0xAA55
 
+#define EXFAT_FILE_LEN		255
+
 #define VOL_CLEAN		0x0000
 #define VOL_DIRTY		0x0002
 
@@ -64,11 +66,15 @@
 #define ATTR_SUBDIR_LE		cpu_to_le16(0x0010)
 #define ATTR_ARCHIVE_LE		cpu_to_le16(0x0020)
 
+#define JUMP_BOOT_LEN		3
+#define OEM_NAME_LEN		8
+#define MUST_BE_ZERO_LEN		53
+
 /* EXFAT BIOS parameter block (64 bytes) */
 struct bpb64 {
-	__u8 jmp_boot[3];
-	__u8 oem_name[8];
-	__u8 res_zero[53];
+	__u8 jmp_boot[JUMP_BOOT_LEN];
+	__u8 oem_name[OEM_NAME_LEN];
+	__u8 res_zero[MUST_BE_ZERO_LEN];
 };
 
 /* EXFAT EXTEND BIOS parameter block (56 bytes) */
