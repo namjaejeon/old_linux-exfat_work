@@ -8,6 +8,7 @@
 
 #include <linux/fs.h>
 #include <linux/ratelimit.h>
+#include <linux/bits.h>
 
 #define EXFAT_SUPER_MAGIC       (0x2011BAB0UL)
 #define EXFAT_ROOT_INO		1
@@ -46,9 +47,9 @@ enum {
 #define EXFAT_BAD_CLUSTER		(0xFFFFFFF7U)
 #define EXFAT_FREE_CLUSTER		(0)
 /* Cluster 0, 1 are reserved, the first cluster is 2 in the cluster heap. */
-#define EXFAT_RESERVED_CLUSTER_COUNT	(2)
+#define EXFAT_RESERVED_CLUSTERS		(2)
 #define EXFAT_FIRST_CLUSTER		(2)
-#define EXFAT_DATA_CLUSTER_COUNT(sbi)	((sbi)->num_clusters - EXFAT_RESERVED_CLUSTER_COUNT)
+#define EXFAT_DATA_CLUSTER_COUNT(sbi)	((sbi)->num_clusters - EXFAT_RESERVED_CLUSTERS)
 
 #define EXFAT_HASH_BITS			8
 #define EXFAT_HASH_SIZE			(1UL << EXFAT_HASH_BITS)
@@ -119,6 +120,28 @@ enum {
 	((b) << ((sbi)->cluster_size_bits - DENTRY_SIZE_BITS))
 #define EXFAT_B_TO_DEN(b)		((b) >> DENTRY_SIZE_BITS)
 #define EXFAT_DEN_TO_B(b)		((b) << DENTRY_SIZE_BITS)
+
+/*
+ * helpers for fat entry.
+ */
+#define FAT_ENT_SIZE (4)
+#define FAT_ENT_SIZE_BITS (2)
+#define FAT_ENT_OFFSET_SECTOR(sb, loc) (EXFAT_SB(sb)->FAT1_start_sector + \
+	(((u64)loc << FAT_ENT_SIZE_BITS) >> sb->s_blocksize_bits))
+#define FAT_ENT_OFFSET_BYTE_IN_SECTOR(sb, loc)	\
+	((loc << FAT_ENT_SIZE_BITS) & (sb->s_blocksize - 1))
+
+/*
+ * helpers for bitmap.
+ */
+#define BITS_PER_SECTOR(sb) ((sb)->s_blocksize * BITS_PER_BYTE)
+#define BITS_PER_SECTOR_MASK(sb) (BITS_PER_SECTOR(sb) - 1)
+#define BITMAP_OFFSET_SECTOR_INDEX(sb, clu) \
+	((clu / BITS_PER_BYTE) >> (sb)->s_blocksize_bits)
+#define BITMAP_OFFSET_BIT_IN_SECTOR(sb, clu) (clu & BITS_PER_SECTOR_MASK(sb))
+#define BITMAP_OFFSET_BYTE_IN_SECTOR(sb, clu) \
+	((clu / BITS_PER_BYTE) & ((sb)->s_blocksize - 1))
+#define BYTE_BIT_MASK	(0x7)
 
 struct exfat_timestamp {
 	unsigned short sec;	/* 0 ~ 59 */
@@ -381,21 +404,21 @@ static inline bool exfat_is_last_sector_in_cluster(struct exfat_sb_info *sbi,
 		sector_t sec)
 {
 	return ((sec - sbi->data_start_sector + 1) &
-			((1 << sbi->sect_per_clus_bits) - 1)) == 0;
+		((1 << sbi->sect_per_clus_bits) - 1)) == 0;
 }
 
 static inline sector_t exfat_cluster_to_sector(struct exfat_sb_info *sbi,
 		unsigned int clus)
 {
-	return ((clus - EXFAT_FIRST_CLUSTER) << sbi->sect_per_clus_bits)
-			+ sbi->data_start_sector;
+	return ((clus - EXFAT_RESERVED_CLUSTERS) << sbi->sect_per_clus_bits)
+		+ sbi->data_start_sector;
 }
 
 static inline int exfat_sector_to_cluster(struct exfat_sb_info *sbi,
 		sector_t sec)
 {
 	return ((sec - sbi->data_start_sector) >> sbi->sect_per_clus_bits) +
-			EXFAT_FIRST_CLUSTER;
+		EXFAT_RESERVED_CLUSTERS;
 }
 
 /* super.c */

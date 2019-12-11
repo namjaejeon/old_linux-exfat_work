@@ -488,7 +488,7 @@ static int __exfat_fill_super(struct super_block *sb)
 	sbi->num_sectors = le64_to_cpu(p_bpb->bsx.vol_length);
 	/* because the cluster index starts with 2 */
 	sbi->num_clusters = le32_to_cpu(p_bpb->bsx.clu_count) +
-		EXFAT_RESERVED_CLUSTER_COUNT;
+		EXFAT_RESERVED_CLUSTERS;
 
 	sbi->vol_id = le32_to_cpu(p_bpb->bsx.vol_serial);
 	sbi->root_dir = le32_to_cpu(p_bpb->bsx.root_cluster);

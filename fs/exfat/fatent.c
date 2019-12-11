@@ -15,11 +15,10 @@ static int __exfat_ent_get(struct super_block *sb, unsigned int loc,
 {
 	unsigned int off, _content;
 	sector_t sec;
-	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 	struct buffer_head *bh;
 
-	sec = sbi->FAT1_start_sector + (loc >> (sb->s_blocksize_bits-2));
-	off = (loc << 2) & (sb->s_blocksize - 1);
+	sec = FAT_ENT_OFFSET_SECTOR(sb, loc);
+	off = FAT_ENT_OFFSET_BYTE_IN_SECTOR(sb, loc);
 
 	bh = sb_bread(sb, sec);
 	if (!bh)
@@ -42,11 +41,10 @@ int exfat_ent_set(struct super_block *sb, unsigned int loc,
 	unsigned int off;
 	sector_t sec;
 	__le32 *fat_entry;
-	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 	struct buffer_head *bh;
 
-	sec = sbi->FAT1_start_sector + (loc >> (sb->s_blocksize_bits-2));
-	off = (loc << 2) & (sb->s_blocksize - 1);
+	sec = FAT_ENT_OFFSET_SECTOR(sb, loc);
+	off = FAT_ENT_OFFSET_BYTE_IN_SECTOR(sb, loc);
 
 	bh = sb_bread(sb, sec);
 	if (!bh)
@@ -167,14 +165,14 @@ int exfat_free_cluster(struct inode *inode, struct exfat_chain *p_chain)
 
 	if (p_chain->flags == ALLOC_NO_FAT_CHAIN) {
 		do {
-			exfat_clear_bitmap(inode, clu - EXFAT_RESERVED_CLUSTER_COUNT);
+			exfat_clear_bitmap(inode, clu - EXFAT_RESERVED_CLUSTERS);
 			clu++;
 
 			num_clusters++;
 		} while (num_clusters < p_chain->size);
 	} else {
 		do {
-			exfat_clear_bitmap(inode, (clu - EXFAT_RESERVED_CLUSTER_COUNT));
+			exfat_clear_bitmap(inode, (clu - EXFAT_RESERVED_CLUSTERS));
 
 			if (exfat_get_next_cluster(sb, &clu))
 				goto dec_used_clus;
@@ -354,7 +352,7 @@ int exfat_alloc_cluster(struct inode *inode, unsigned int num_alloc,
 	p_chain->dir = EXFAT_EOF_CLUSTER;
 
 	while ((new_clu = exfat_test_bitmap(sb,
-			hint_clu - EXFAT_FIRST_CLUSTER)) != EXFAT_EOF_CLUSTER) {
+		hint_clu - EXFAT_RESERVED_CLUSTERS)) != EXFAT_EOF_CLUSTER) {
 		if (new_clu != hint_clu &&
 		    p_chain->flags == ALLOC_NO_FAT_CHAIN) {
 			if (exfat_chain_cont_cluster(sb, p_chain->dir,
@@ -366,7 +364,8 @@ int exfat_alloc_cluster(struct inode *inode, unsigned int num_alloc,
 		}
 
 		/* update allocation bitmap */
-		if (exfat_set_bitmap(inode, new_clu - EXFAT_FIRST_CLUSTER)) {
+		if (exfat_set_bitmap(inode, new_clu -
+				     EXFAT_RESERVED_CLUSTERS)) {
 			ret = -EIO;
 			goto free_cluster;
 		}
