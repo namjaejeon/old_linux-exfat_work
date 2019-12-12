@@ -10,6 +10,8 @@
 
 #define PBR_SIGNATURE		0xAA55
 
+#define EXFAT_MAX_FILE_LEN	255
+
 #define VOL_CLEAN		0x0000
 #define VOL_DIRTY		0x0002
 
@@ -38,6 +40,10 @@
 #define EXFAT_NAME		0xC1	/* file name entry */
 #define EXFAT_ACL		0xC2	/* stream entry */
 
+#define IS_EXFAT_CRITICAL_PRI(x)	(x < 0xA0)
+#define IS_EXFAT_BENIGN_PRI(x)		(x < 0xC0)
+#define IS_EXFAT_CRITICAL_SEC(x)	(x < 0xE0)
+
 /* checksum types */
 #define CS_DIR_ENTRY		0
 #define CS_PBR_SECTOR		1
@@ -64,11 +70,16 @@
 #define ATTR_SUBDIR_LE		cpu_to_le16(0x0010)
 #define ATTR_ARCHIVE_LE		cpu_to_le16(0x0020)
 
+#define JUMP_BOOT_LEN			3
+#define OEM_NAME_LEN			8
+#define MUST_BE_ZERO_LEN		53
+#define EXFAT_FILE_NAME_LEN		15
+
 /* EXFAT BIOS parameter block (64 bytes) */
 struct bpb64 {
-	__u8 jmp_boot[3];
-	__u8 oem_name[8];
-	__u8 res_zero[53];
+	__u8 jmp_boot[JUMP_BOOT_LEN];
+	__u8 oem_name[OEM_NAME_LEN];
+	__u8 res_zero[MUST_BE_ZERO_LEN];
 };
 
 /* EXFAT EXTEND BIOS parameter block (56 bytes) */
@@ -143,7 +154,7 @@ struct exfat_dentry {
 		} __packed stream; /* stream extension directory entry */
 		struct {
 			__u8 flags;
-			__le16 unicode_0_14[15];
+			__le16 unicode_0_14[EXFAT_FILE_NAME_LEN];
 		} __packed name; /* file name directory entry */
 		struct {
 			__u8 flags;

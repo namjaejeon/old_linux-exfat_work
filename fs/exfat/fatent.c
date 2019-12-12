@@ -15,11 +15,10 @@ static int __exfat_ent_get(struct super_block *sb, unsigned int loc,
 {
 	unsigned int off, _content;
 	sector_t sec;
-	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 	struct buffer_head *bh;
 
-	sec = sbi->FAT1_start_sector + (loc >> (sb->s_blocksize_bits-2));
-	off = (loc << 2) & (sb->s_blocksize - 1);
+	sec = FAT_ENT_OFFSET_SECTOR(sb, loc);
+	off = FAT_ENT_OFFSET_BYTE_IN_SECTOR(sb, loc);
 
 	bh = sb_bread(sb, sec);
 	if (!bh)
@@ -29,7 +28,7 @@ static int __exfat_ent_get(struct super_block *sb, unsigned int loc,
 
 	/* remap reserved clusters to simplify code */
 	if (_content >= CLUSTER_32(0xFFFFFFF8))
-		_content = EOF_CLUSTER;
+		_content = EXFAT_EOF_CLUSTER;
 
 	*content = CLUSTER_32(_content);
 	brelse(bh);
@@ -42,11 +41,10 @@ int exfat_ent_set(struct super_block *sb, unsigned int loc,
 	unsigned int off;
 	sector_t sec;
 	__le32 *fat_entry;
-	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 	struct buffer_head *bh;
 
-	sec = sbi->FAT1_start_sector + (loc >> (sb->s_blocksize_bits-2));
-	off = (loc << 2) & (sb->s_blocksize - 1);
+	sec = FAT_ENT_OFFSET_SECTOR(sb, loc);
+	off = FAT_ENT_OFFSET_BYTE_IN_SECTOR(sb, loc);
 
 	bh = sb_bread(sb, sec);
 	if (!bh)
@@ -62,7 +60,8 @@ int exfat_ent_set(struct super_block *sb, unsigned int loc,
 
 static inline bool is_reserved_cluster(unsigned int clus)
 {
-	if (clus == FREE_CLUSTER || clus == EOF_CLUSTER || clus == BAD_CLUSTER)
+	if (clus == EXFAT_FREE_CLUSTER || clus == EXFAT_EOF_CLUSTER ||
+	    clus == EXFAT_BAD_CLUSTER)
 		return true;
 	return false;
 }
@@ -70,7 +69,7 @@ static inline bool is_reserved_cluster(unsigned int clus)
 static inline bool is_valid_cluster(struct exfat_sb_info *sbi,
 		unsigned int clus)
 {
-	if (clus < BASE_CLUSTER || sbi->num_clusters <= clus)
+	if (clus < EXFAT_FIRST_CLUSTER || sbi->num_clusters <= clus)
 		return false;
 	return true;
 }
@@ -103,14 +102,14 @@ int exfat_ent_get(struct super_block *sb, unsigned int loc,
 		return -EIO;
 	}
 
-	if (*content == FREE_CLUSTER) {
+	if (*content == EXFAT_FREE_CLUSTER) {
 		exfat_fs_error(sb,
 			"invalid access to FAT free cluster (entry 0x%08x)",
 			loc);
 		return -EIO;
 	}
 
-	if (*content == BAD_CLUSTER) {
+	if (*content == EXFAT_BAD_CLUSTER) {
 		exfat_fs_error(sb,
 			"invalid access to FAT bad cluster (entry 0x%08x)",
 			loc);
@@ -132,7 +131,7 @@ int exfat_chain_cont_cluster(struct super_block *sb, unsigned int chain,
 		len--;
 	}
 
-	if (exfat_ent_set(sb, chain, EOF_CLUSTER))
+	if (exfat_ent_set(sb, chain, EXFAT_EOF_CLUSTER))
 		return -EIO;
 	return 0;
 }
@@ -145,7 +144,9 @@ int exfat_free_cluster(struct inode *inode, struct exfat_chain *p_chain)
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 
 	/* invalid cluster number */
-	if (p_chain->dir == FREE_CLUSTER || p_chain->dir == EOF_CLUSTER)
+	if (p_chain->dir == EXFAT_FREE_CLUSTER ||
+	    p_chain->dir == EXFAT_EOF_CLUSTER ||
+	    p_chain->dir < EXFAT_FIRST_CLUSTER)
 		return 0;
 
 	/* no cluster to truncate */
@@ -164,20 +165,20 @@ int exfat_free_cluster(struct inode *inode, struct exfat_chain *p_chain)
 
 	if (p_chain->flags == ALLOC_NO_FAT_CHAIN) {
 		do {
-			exfat_clear_bitmap(inode, clu-2);
+			exfat_clear_bitmap(inode, clu);
 			clu++;
 
 			num_clusters++;
 		} while (num_clusters < p_chain->size);
 	} else {
 		do {
-			exfat_clear_bitmap(inode, (clu - BASE_CLUSTER));
+			exfat_clear_bitmap(inode, clu);
 
 			if (exfat_get_next_cluster(sb, &clu))
 				goto dec_used_clus;
 
 			num_clusters++;
-		} while (clu != EOF_CLUSTER);
+		} while (clu != EXFAT_EOF_CLUSTER);
 	}
 
 dec_used_clus:
@@ -202,7 +203,7 @@ int exfat_find_last_cluster(struct super_block *sb, struct exfat_chain *p_chain,
 		clu = next;
 		if (exfat_ent_get(sb, clu, &next))
 			return -EIO;
-	} while (next != EOF_CLUSTER);
+	} while (next != EXFAT_EOF_CLUSTER);
 
 	if (p_chain->size != count) {
 		exfat_fs_error(sb,
@@ -301,11 +302,11 @@ int exfat_alloc_cluster(struct inode *inode, unsigned int num_alloc,
 {
 	int ret = -ENOSPC;
 	unsigned int num_clusters = 0, total_cnt;
-	unsigned int hint_clu, new_clu, last_clu = EOF_CLUSTER;
+	unsigned int hint_clu, new_clu, last_clu = EXFAT_EOF_CLUSTER;
 	struct super_block *sb = inode->i_sb;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 
-	total_cnt = sbi->num_clusters - BASE_CLUSTER;
+	total_cnt = EXFAT_DATA_CLUSTER_COUNT(sbi);
 
 	if (unlikely(total_cnt < sbi->used_clusters)) {
 		exfat_fs_error_ratelimit(sb,
@@ -319,25 +320,24 @@ int exfat_alloc_cluster(struct inode *inode, unsigned int num_alloc,
 
 	hint_clu = p_chain->dir;
 	/* find new cluster */
-	if (hint_clu == EOF_CLUSTER) {
-		if (sbi->clu_srch_ptr < BASE_CLUSTER) {
+	if (hint_clu == EXFAT_EOF_CLUSTER) {
+		if (sbi->clu_srch_ptr < EXFAT_FIRST_CLUSTER) {
 			exfat_msg(sb, KERN_ERR,
 				"sbi->clu_srch_ptr is invalid (%u)\n",
 				sbi->clu_srch_ptr);
-			sbi->clu_srch_ptr = BASE_CLUSTER;
+			sbi->clu_srch_ptr = EXFAT_FIRST_CLUSTER;
 		}
 
-		hint_clu = exfat_test_bitmap(sb,
-				sbi->clu_srch_ptr - BASE_CLUSTER);
-		if (hint_clu == EOF_CLUSTER)
+		hint_clu = exfat_find_free_bitmap(sb, sbi->clu_srch_ptr);
+		if (hint_clu == EXFAT_EOF_CLUSTER)
 			return -ENOSPC;
 	}
 
 	/* check cluster validation */
-	if (hint_clu < BASE_CLUSTER && hint_clu >= sbi->num_clusters) {
+	if (hint_clu < EXFAT_FIRST_CLUSTER && hint_clu >= sbi->num_clusters) {
 		exfat_msg(sb, KERN_ERR, "hint_cluster is invalid (%u)\n",
 			hint_clu);
-		hint_clu = BASE_CLUSTER;
+		hint_clu = EXFAT_FIRST_CLUSTER;
 		if (p_chain->flags == ALLOC_NO_FAT_CHAIN) {
 			if (exfat_chain_cont_cluster(sb, p_chain->dir,
 					num_clusters))
@@ -348,10 +348,10 @@ int exfat_alloc_cluster(struct inode *inode, unsigned int num_alloc,
 
 	set_bit(EXFAT_SB_DIRTY, &sbi->s_state);
 
-	p_chain->dir = EOF_CLUSTER;
+	p_chain->dir = EXFAT_EOF_CLUSTER;
 
-	while ((new_clu = exfat_test_bitmap(sb,
-			hint_clu - BASE_CLUSTER)) != EOF_CLUSTER) {
+	while ((new_clu = exfat_find_free_bitmap(sb, hint_clu)) !=
+	       EXFAT_EOF_CLUSTER) {
 		if (new_clu != hint_clu &&
 		    p_chain->flags == ALLOC_NO_FAT_CHAIN) {
 			if (exfat_chain_cont_cluster(sb, p_chain->dir,
@@ -363,7 +363,7 @@ int exfat_alloc_cluster(struct inode *inode, unsigned int num_alloc,
 		}
 
 		/* update allocation bitmap */
-		if (exfat_set_bitmap(inode, new_clu - BASE_CLUSTER)) {
+		if (exfat_set_bitmap(inode, new_clu)) {
 			ret = -EIO;
 			goto free_cluster;
 		}
@@ -372,13 +372,13 @@ int exfat_alloc_cluster(struct inode *inode, unsigned int num_alloc,
 
 		/* update FAT table */
 		if (p_chain->flags == ALLOC_FAT_CHAIN) {
-			if (exfat_ent_set(sb, new_clu, EOF_CLUSTER)) {
+			if (exfat_ent_set(sb, new_clu, EXFAT_EOF_CLUSTER)) {
 				ret = -EIO;
 				goto free_cluster;
 			}
 		}
 
-		if (p_chain->dir == EOF_CLUSTER) {
+		if (p_chain->dir == EXFAT_EOF_CLUSTER) {
 			p_chain->dir = new_clu;
 		} else if (p_chain->flags == ALLOC_FAT_CHAIN) {
 			if (exfat_ent_set(sb, last_clu, new_clu)) {
@@ -398,7 +398,7 @@ int exfat_alloc_cluster(struct inode *inode, unsigned int num_alloc,
 
 		hint_clu = new_clu + 1;
 		if (hint_clu >= sbi->num_clusters) {
-			hint_clu = BASE_CLUSTER;
+			hint_clu = EXFAT_FIRST_CLUSTER;
 
 			if (p_chain->flags == ALLOC_NO_FAT_CHAIN) {
 				if (exfat_chain_cont_cluster(sb, p_chain->dir,
@@ -423,7 +423,7 @@ int exfat_count_num_clusters(struct super_block *sb,
 	unsigned int clu;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 
-	if (!p_chain->dir || p_chain->dir == EOF_CLUSTER) {
+	if (!p_chain->dir || p_chain->dir == EXFAT_EOF_CLUSTER) {
 		*ret_count = 0;
 		return 0;
 	}
@@ -435,11 +435,11 @@ int exfat_count_num_clusters(struct super_block *sb,
 
 	clu = p_chain->dir;
 	count = 0;
-	for (i = BASE_CLUSTER; i < sbi->num_clusters; i++) {
+	for (i = EXFAT_FIRST_CLUSTER; i < sbi->num_clusters; i++) {
 		count++;
 		if (exfat_ent_get(sb, clu, &clu))
 			return -EIO;
-		if (clu == EOF_CLUSTER)
+		if (clu == EXFAT_EOF_CLUSTER)
 			break;
 	}
 

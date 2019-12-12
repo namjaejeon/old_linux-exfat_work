@@ -33,7 +33,7 @@ static int __exfat_write_inode(struct inode *inode, int sync)
 	struct super_block *sb = inode->i_sb;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 	struct exfat_inode_info *ei = EXFAT_I(inode);
-	unsigned char is_dir = (ei->type == TYPE_DIR) ? 1 : 0;
+	bool is_dir = (ei->type == TYPE_DIR) ? true : false;
 	struct exfat_dir_entry info;
 
 	if (inode->i_ino == EXFAT_ROOT_INO)
@@ -86,7 +86,7 @@ static int __exfat_write_inode(struct inode *inode, int sync)
 	/* File size should be zero if there is no cluster allocated */
 	on_disk_size = info.size;
 
-	if (ei->start_clu == EOF_CLUSTER)
+	if (ei->start_clu == EXFAT_EOF_CLUSTER)
 		on_disk_size = 0;
 
 	ep2->stream_valid_size = cpu_to_le64(on_disk_size);
@@ -144,18 +144,18 @@ static int exfat_map_cluster(struct inode *inode, unsigned int clu_offset,
 		num_to_be_allocated = clu_offset - num_clusters + 1;
 
 	if (!create && (num_to_be_allocated > 0)) {
-		*clu = EOF_CLUSTER;
+		*clu = EXFAT_EOF_CLUSTER;
 		return 0;
 	}
 
 	*clu = last_clu = ei->start_clu;
 
 	if (ei->flags == ALLOC_NO_FAT_CHAIN) {
-		if (clu_offset > 0 && *clu != EOF_CLUSTER) {
+		if (clu_offset > 0 && *clu != EXFAT_EOF_CLUSTER) {
 			last_clu += clu_offset - 1;
 
 			if (clu_offset == num_clusters)
-				*clu = EOF_CLUSTER;
+				*clu = EXFAT_EOF_CLUSTER;
 			else
 				*clu += clu_offset;
 		}
@@ -169,7 +169,7 @@ static int exfat_map_cluster(struct inode *inode, unsigned int clu_offset,
 		clu_offset -= fclus;
 	} else {
 		/* hint information */
-		if (clu_offset > 0 && ei->hint_bmap.off != EOF_CLUSTER &&
+		if (clu_offset > 0 && ei->hint_bmap.off != EXFAT_EOF_CLUSTER &&
 		    ei->hint_bmap.off > 0 && clu_offset >= ei->hint_bmap.off) {
 			clu_offset -= ei->hint_bmap.off;
 			/* hint_bmap.clu should be valid */
@@ -177,7 +177,7 @@ static int exfat_map_cluster(struct inode *inode, unsigned int clu_offset,
 			*clu = ei->hint_bmap.clu;
 		}
 
-		while (clu_offset > 0 && *clu != EOF_CLUSTER) {
+		while (clu_offset > 0 && *clu != EXFAT_EOF_CLUSTER) {
 			last_clu = *clu;
 			if (exfat_get_next_cluster(sb, clu))
 				return -EIO;
@@ -185,11 +185,11 @@ static int exfat_map_cluster(struct inode *inode, unsigned int clu_offset,
 		}
 	}
 
-	if (*clu == EOF_CLUSTER) {
+	if (*clu == EXFAT_EOF_CLUSTER) {
 		exfat_set_vol_flags(sb, VOL_DIRTY);
 
-		new_clu.dir = (last_clu == EOF_CLUSTER) ?
-				EOF_CLUSTER : last_clu + 1;
+		new_clu.dir = (last_clu == EXFAT_EOF_CLUSTER) ?
+				EXFAT_EOF_CLUSTER : last_clu + 1;
 		new_clu.size = 0;
 		new_clu.flags = ei->flags;
 
@@ -204,7 +204,7 @@ static int exfat_map_cluster(struct inode *inode, unsigned int clu_offset,
 		if (ret)
 			return ret;
 
-		if (new_clu.dir == EOF_CLUSTER || new_clu.dir == FREE_CLUSTER) {
+		if (new_clu.dir == EXFAT_EOF_CLUSTER || new_clu.dir == EXFAT_FREE_CLUSTER) {
 			exfat_fs_error(sb,
 				"bogus cluster new allocated (last_clu : %u, new_clu : %u)",
 				last_clu, new_clu.dir);
@@ -212,7 +212,7 @@ static int exfat_map_cluster(struct inode *inode, unsigned int clu_offset,
 		}
 
 		/* append to the FAT chain */
-		if (last_clu == EOF_CLUSTER) {
+		if (last_clu == EXFAT_EOF_CLUSTER) {
 			if (new_clu.flags == ALLOC_FAT_CHAIN)
 				ei->flags = ALLOC_FAT_CHAIN;
 			ei->start_clu = new_clu.dir;
@@ -322,7 +322,7 @@ static int exfat_bmap(struct inode *inode, sector_t sector, sector_t *phys,
 		return err;
 	}
 
-	if (cluster != EOF_CLUSTER) {
+	if (cluster != EXFAT_EOF_CLUSTER) {
 		/* sector offset in cluster */
 		sec_offset = sector & (sbi->sect_per_clus - 1);
 
@@ -599,7 +599,7 @@ static int exfat_fill_inode(struct inode *inode, struct exfat_dir_entry *info)
 	ei->hint_stat.clu = info->start_clu;
 	ei->hint_femp.eidx = EXFAT_HINT_NONE;
 	ei->rwoffset = 0;
-	ei->hint_bmap.off = EOF_CLUSTER;
+	ei->hint_bmap.off = EXFAT_EOF_CLUSTER;
 	ei->i_pos = 0;
 
 	inode->i_uid = sbi->options.fs_uid;

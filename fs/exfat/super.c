@@ -90,16 +90,16 @@ static int exfat_statfs(struct dentry *dentry, struct kstatfs *buf)
 	buf->f_bavail = buf->f_bfree;
 	buf->f_fsid.val[0] = (unsigned int)id;
 	buf->f_fsid.val[1] = (unsigned int)(id >> 32);
-	buf->f_namelen = 260;
+	/* Unicode utf16 255 characters */
+	buf->f_namelen = EXFAT_MAX_FILE_LEN * NLS_MAX_CHARSET_SIZE;
 	return 0;
 }
 
-static int __exfat_set_vol_flags(struct super_block *sb,
-		unsigned short new_flag, int always_sync)
+int exfat_set_vol_flags(struct super_block *sb, unsigned short new_flag)
 {
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 	struct pbr64 *bpb;
-	int sync = 0;
+	bool sync = 0;
 
 	/* flags are not changed */
 	if (sbi->vol_flag == new_flag)
@@ -124,12 +124,10 @@ static int __exfat_set_vol_flags(struct super_block *sb,
 	bpb = (struct pbr64 *)sbi->pbr_bh->b_data;
 	bpb->bsx.vol_flags = cpu_to_le16(new_flag);
 
-	if (always_sync)
-		sync = 1;
-	else if ((new_flag == VOL_DIRTY) && (!buffer_dirty(sbi->pbr_bh)))
-		sync = 1;
+	if ((new_flag == VOL_DIRTY) && (!buffer_dirty(sbi->pbr_bh)))
+		sync = true;
 	else
-		sync = 0;
+		sync = false;
 
 	set_buffer_uptodate(sbi->pbr_bh);
 	mark_buffer_dirty(sbi->pbr_bh);
@@ -137,11 +135,6 @@ static int __exfat_set_vol_flags(struct super_block *sb,
 	if (sync)
 		sync_dirty_buffer(sbi->pbr_bh);
 	return 0;
-}
-
-int exfat_set_vol_flags(struct super_block *sb, unsigned short new_flag)
-{
-	return __exfat_set_vol_flags(sb, new_flag, 0);
 }
 
 static int exfat_show_options(struct seq_file *m, struct dentry *root)
@@ -336,7 +329,7 @@ static int exfat_read_root(struct inode *inode)
 	ei->type = TYPE_DIR;
 	ei->version = 0;
 	ei->rwoffset = 0;
-	ei->hint_bmap.off = EOF_CLUSTER;
+	ei->hint_bmap.off = EXFAT_EOF_CLUSTER;
 	ei->hint_stat.eidx = 0;
 	ei->hint_stat.clu = sbi->root_dir;
 	ei->hint_femp.eidx = EXFAT_HINT_NONE;
@@ -373,7 +366,7 @@ static int exfat_read_root(struct inode *inode)
 
 static bool is_exfat(struct pbr *pbr)
 {
-	int i = 53;
+	int i = MUST_BE_ZERO_LEN;
 
 	do {
 		if (pbr->bpb.f64.res_zero[i - 1])
@@ -494,7 +487,8 @@ static int __exfat_fill_super(struct super_block *sb)
 	sbi->data_start_sector = sbi->root_start_sector;
 	sbi->num_sectors = le64_to_cpu(p_bpb->bsx.vol_length);
 	/* because the cluster index starts with 2 */
-	sbi->num_clusters = le32_to_cpu(p_bpb->bsx.clu_count) + 2;
+	sbi->num_clusters = le32_to_cpu(p_bpb->bsx.clu_count) +
+		EXFAT_RESERVED_CLUSTERS;
 
 	sbi->vol_id = le32_to_cpu(p_bpb->bsx.vol_serial);
 	sbi->root_dir = le32_to_cpu(p_bpb->bsx.root_cluster);
@@ -503,7 +497,7 @@ static int __exfat_fill_super(struct super_block *sb)
 		(sbi->cluster_size_bits - DENTRY_SIZE_BITS);
 
 	sbi->vol_flag = le16_to_cpu(p_bpb->bsx.vol_flags);
-	sbi->clu_srch_ptr = BASE_CLUSTER;
+	sbi->clu_srch_ptr = EXFAT_FIRST_CLUSTER;
 	sbi->used_clusters = ~0u;
 
 	if (le16_to_cpu(p_bpb->bsx.vol_flags) & VOL_DIRTY) {

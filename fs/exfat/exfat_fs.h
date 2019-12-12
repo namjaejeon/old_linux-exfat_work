@@ -8,9 +8,12 @@
 
 #include <linux/fs.h>
 #include <linux/ratelimit.h>
+#include <linux/bits.h>
 
 #define EXFAT_SUPER_MAGIC       (0x2011BAB0UL)
 #define EXFAT_ROOT_INO		1
+
+#define EXFAT_SB_DIRTY		0
 
 enum exfat_time_mode {
 	TM_CREATE,
@@ -39,22 +42,25 @@ enum {
 /*
  * exfat common MACRO
  */
-#define CLUSTER_32(x)	((unsigned int)((x) & 0xFFFFFFFFU))
-#define EOF_CLUSTER	CLUSTER_32(~0)
-#define BAD_CLUSTER	(0xFFFFFFF7U)
-#define FREE_CLUSTER	(0)
-#define BASE_CLUSTER	(2)
+#define CLUSTER_32(x)			((unsigned int)((x) & 0xFFFFFFFFU))
+#define EXFAT_EOF_CLUSTER		CLUSTER_32(~0)
+#define EXFAT_BAD_CLUSTER		(0xFFFFFFF7U)
+#define EXFAT_FREE_CLUSTER		(0)
+/* Cluster 0, 1 are reserved, the first cluster is 2 in the cluster heap. */
+#define EXFAT_RESERVED_CLUSTERS		(2)
+#define EXFAT_FIRST_CLUSTER		(2)
+#define EXFAT_DATA_CLUSTER_COUNT(sbi)	((sbi)->num_clusters - EXFAT_RESERVED_CLUSTERS)
 
-#define EXFAT_HASH_BITS		8
-#define EXFAT_HASH_SIZE		(1UL << EXFAT_HASH_BITS)
+#define EXFAT_HASH_BITS			8
+#define EXFAT_HASH_SIZE			(1UL << EXFAT_HASH_BITS)
 
 /*
  * Type Definitions
  */
-#define ES_2_ENTRIES	2
-#define ES_ALL_ENTRIES	0
+#define ES_2_ENTRIES			2
+#define ES_ALL_ENTRIES			0
 
-#define DIR_DELETED	0xFFFF0321
+#define DIR_DELETED			0xFFFF0321
 
 /* type values */
 #define TYPE_UNUSED		0x0000
@@ -115,7 +121,30 @@ enum {
 #define EXFAT_B_TO_DEN(b)		((b) >> DENTRY_SIZE_BITS)
 #define EXFAT_DEN_TO_B(b)		((b) << DENTRY_SIZE_BITS)
 
-#define EXFAT_SB_DIRTY		0
+/*
+ * helpers for fat entry.
+ */
+#define FAT_ENT_SIZE (4)
+#define FAT_ENT_SIZE_BITS (2)
+#define FAT_ENT_OFFSET_SECTOR(sb, loc) (EXFAT_SB(sb)->FAT1_start_sector + \
+	(((u64)loc << FAT_ENT_SIZE_BITS) >> sb->s_blocksize_bits))
+#define FAT_ENT_OFFSET_BYTE_IN_SECTOR(sb, loc)	\
+	((loc << FAT_ENT_SIZE_BITS) & (sb->s_blocksize - 1))
+
+/*
+ * helpers for bitmap.
+ */
+#define CLUSTER_TO_BITMAP_ENT(clu) ((clu) - EXFAT_RESERVED_CLUSTERS)
+#define BITMAP_ENT_TO_CLUSTER(ent) ((ent) + EXFAT_RESERVED_CLUSTERS)
+#define BITS_PER_SECTOR(sb) ((sb)->s_blocksize * BITS_PER_BYTE)
+#define BITS_PER_SECTOR_MASK(sb) (BITS_PER_SECTOR(sb) - 1)
+#define BITMAP_OFFSET_SECTOR_INDEX(sb, ent) \
+	((ent / BITS_PER_BYTE) >> (sb)->s_blocksize_bits)
+#define BITMAP_OFFSET_BIT_IN_SECTOR(sb, ent) (ent & BITS_PER_SECTOR_MASK(sb))
+#define BITMAP_OFFSET_BYTE_IN_SECTOR(sb, ent) \
+	((ent / BITS_PER_BYTE) & ((sb)->s_blocksize - 1))
+#define BITS_PER_BYTE_MASK	(0x7)
+#define IGNORED_BITS_REMAINED(clu, clu_base) ((1 << ((clu) - (clu_base))) - 1)
 
 struct exfat_timestamp {
 	unsigned short sec;	/* 0 ~ 59 */
@@ -378,21 +407,21 @@ static inline bool exfat_is_last_sector_in_cluster(struct exfat_sb_info *sbi,
 		sector_t sec)
 {
 	return ((sec - sbi->data_start_sector + 1) &
-			((1 << sbi->sect_per_clus_bits) - 1)) == 0;
+		((1 << sbi->sect_per_clus_bits) - 1)) == 0;
 }
 
 static inline sector_t exfat_cluster_to_sector(struct exfat_sb_info *sbi,
 		unsigned int clus)
 {
-	return ((clus - BASE_CLUSTER) << sbi->sect_per_clus_bits)
-			+ sbi->data_start_sector;
+	return ((clus - EXFAT_RESERVED_CLUSTERS) << sbi->sect_per_clus_bits)
+		+ sbi->data_start_sector;
 }
 
 static inline int exfat_sector_to_cluster(struct exfat_sb_info *sbi,
 		sector_t sec)
 {
 	return ((sec - sbi->data_start_sector) >> sbi->sect_per_clus_bits) +
-			BASE_CLUSTER;
+		EXFAT_RESERVED_CLUSTERS;
 }
 
 /* super.c */
@@ -434,7 +463,7 @@ int exfat_load_bitmap(struct super_block *sb);
 void exfat_free_bitmap(struct super_block *sb);
 int exfat_set_bitmap(struct inode *inode, unsigned int clu);
 void exfat_clear_bitmap(struct inode *inode, unsigned int clu);
-unsigned int exfat_test_bitmap(struct super_block *sb, unsigned int clu);
+unsigned int exfat_find_free_bitmap(struct super_block *sb, unsigned int clu);
 int exfat_count_used_clusters(struct super_block *sb, unsigned int *ret_count);
 
 /* file.c */
@@ -481,7 +510,7 @@ int update_dir_chksum(struct inode *inode, struct exfat_chain *p_dir,
 		int entry);
 int exfat_update_dir_chksum_with_entry_set(struct super_block *sb,
 		struct exfat_entry_set_cache *es, int sync);
-int exfat_get_num_entries(struct exfat_uni_name *p_uniname);
+int exfat_calc_num_entries(struct exfat_uni_name *p_uniname);
 int exfat_find_dir_entry(struct super_block *sb, struct exfat_inode_info *ei,
 		struct exfat_chain *p_dir, struct exfat_uni_name *p_uniname,
 		int num_entries, unsigned int type);
