@@ -134,14 +134,17 @@ enum {
 /*
  * helpers for bitmap.
  */
+#define CLUSTER_TO_BITMAP_ENT(clu) ((clu) - EXFAT_RESERVED_CLUSTERS)
+#define BITMAP_ENT_TO_CLUSTER(ent) ((ent) + EXFAT_RESERVED_CLUSTERS)
 #define BITS_PER_SECTOR(sb) ((sb)->s_blocksize * BITS_PER_BYTE)
 #define BITS_PER_SECTOR_MASK(sb) (BITS_PER_SECTOR(sb) - 1)
-#define BITMAP_OFFSET_SECTOR_INDEX(sb, clu) \
-	((clu / BITS_PER_BYTE) >> (sb)->s_blocksize_bits)
-#define BITMAP_OFFSET_BIT_IN_SECTOR(sb, clu) (clu & BITS_PER_SECTOR_MASK(sb))
-#define BITMAP_OFFSET_BYTE_IN_SECTOR(sb, clu) \
-	((clu / BITS_PER_BYTE) & ((sb)->s_blocksize - 1))
-#define BYTE_BIT_MASK	(0x7)
+#define BITMAP_OFFSET_SECTOR_INDEX(sb, ent) \
+	((ent / BITS_PER_BYTE) >> (sb)->s_blocksize_bits)
+#define BITMAP_OFFSET_BIT_IN_SECTOR(sb, ent) (ent & BITS_PER_SECTOR_MASK(sb))
+#define BITMAP_OFFSET_BYTE_IN_SECTOR(sb, ent) \
+	((ent / BITS_PER_BYTE) & ((sb)->s_blocksize - 1))
+#define BITS_PER_BYTE_MASK	(0x7)
+#define IGNORED_BITS_REMAINED(clu, clu_base) ((1 << ((clu) - (clu_base))) - 1)
 
 struct exfat_timestamp {
 	unsigned short sec;	/* 0 ~ 59 */
@@ -460,7 +463,7 @@ int exfat_load_bitmap(struct super_block *sb);
 void exfat_free_bitmap(struct super_block *sb);
 int exfat_set_bitmap(struct inode *inode, unsigned int clu);
 void exfat_clear_bitmap(struct inode *inode, unsigned int clu);
-unsigned int exfat_test_bitmap(struct super_block *sb, unsigned int clu);
+unsigned int exfat_find_free_bitmap(struct super_block *sb, unsigned int clu);
 int exfat_count_used_clusters(struct super_block *sb, unsigned int *ret_count);
 
 /* file.c */

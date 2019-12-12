@@ -102,7 +102,6 @@ int exfat_load_bitmap(struct super_block *sb)
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 
 	exfat_chain_set(&clu, sbi->root_dir, 0, ALLOC_FAT_CHAIN);
-
 	while (clu.dir != EXFAT_EOF_CLUSTER) {
 		for (i = 0; i < sbi->dentries_per_clu; i++) {
 			struct exfat_dentry *ep;
@@ -155,11 +154,14 @@ void exfat_free_bitmap(struct super_block *sb)
 int exfat_set_bitmap(struct inode *inode, unsigned int clu)
 {
 	int i, b;
+	unsigned int ent_idx;
 	struct super_block *sb = inode->i_sb;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 
-	i = BITMAP_OFFSET_SECTOR_INDEX(sb, clu);
-	b = BITMAP_OFFSET_BIT_IN_SECTOR(sb, clu);
+	WARN_ON(clu < EXFAT_FIRST_CLUSTER);
+	ent_idx = CLUSTER_TO_BITMAP_ENT(clu);
+	i = BITMAP_OFFSET_SECTOR_INDEX(sb, ent_idx);
+	b = BITMAP_OFFSET_BIT_IN_SECTOR(sb, ent_idx);
 
 	set_bit_le(b, sbi->vol_amap[i]->b_data);
 	exfat_update_bh(sb, sbi->vol_amap[i], IS_DIRSYNC(inode));
@@ -173,12 +175,15 @@ int exfat_set_bitmap(struct inode *inode, unsigned int clu)
 void exfat_clear_bitmap(struct inode *inode, unsigned int clu)
 {
 	int i, b;
+	unsigned int ent_idx;
 	struct super_block *sb = inode->i_sb;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 	struct exfat_mount_options *opts = &sbi->options;
 
-	i = BITMAP_OFFSET_SECTOR_INDEX(sb, clu);
-	b = BITMAP_OFFSET_BIT_IN_SECTOR(sb, clu);
+	WARN_ON(clu < EXFAT_FIRST_CLUSTER);
+	ent_idx = CLUSTER_TO_BITMAP_ENT(clu);
+	i = BITMAP_OFFSET_SECTOR_INDEX(sb, ent_idx);
+	b = BITMAP_OFFSET_BIT_IN_SECTOR(sb, ent_idx);
 
 	clear_bit_le(b, sbi->vol_amap[i]->b_data);
 	exfat_update_bh(sb, sbi->vol_amap[i], IS_DIRSYNC(inode));
@@ -203,18 +208,20 @@ void exfat_clear_bitmap(struct inode *inode, unsigned int clu)
  * If the value of "clu" is 0, it means cluster 2 which is the first cluster of
  * the cluster heap.
  */
-unsigned int exfat_test_bitmap(struct super_block *sb, unsigned int clu)
+unsigned int exfat_find_free_bitmap(struct super_block *sb, unsigned int clu)
 {
-	unsigned int i, map_i, map_b;
+	unsigned int i, map_i, map_b, ent_idx;
 	unsigned int clu_base, clu_free;
 	unsigned char k, clu_mask;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 
-	clu_base = (clu & ~(BYTE_BIT_MASK)) + EXFAT_RESERVED_CLUSTERS;
-	clu_mask = (1 << (clu - clu_base + EXFAT_RESERVED_CLUSTERS)) - 1;
+	WARN_ON(clu < EXFAT_FIRST_CLUSTER);
+	ent_idx = CLUSTER_TO_BITMAP_ENT(clu);
+        clu_base = BITMAP_ENT_TO_CLUSTER(ent_idx & ~(BITS_PER_BYTE_MASK));
+        clu_mask = IGNORED_BITS_REMAINED(clu, clu_base);
 
-	map_i = BITMAP_OFFSET_SECTOR_INDEX(sb, clu);
-	map_b = BITMAP_OFFSET_BYTE_IN_SECTOR(sb, clu);
+	map_i = BITMAP_OFFSET_SECTOR_INDEX(sb, ent_idx);
+	map_b = BITMAP_OFFSET_BYTE_IN_SECTOR(sb, ent_idx);
 
 	for (i = EXFAT_FIRST_CLUSTER; i < sbi->num_clusters;
 	     i += BITS_PER_BYTE) {
@@ -249,7 +256,7 @@ int exfat_count_used_clusters(struct super_block *sb, unsigned int *ret_count)
 	unsigned int count = 0;
 	unsigned int i, map_i = 0, map_b = 0;
 	unsigned int total_clus = EXFAT_DATA_CLUSTER_COUNT(sbi);
-	unsigned int last_mask = total_clus & BYTE_BIT_MASK;
+	unsigned int last_mask = total_clus & BITS_PER_BYTE_MASK;
 	unsigned char clu_bits;
 	const unsigned char last_bit_mask[] = {0, 0b00000001, 0b00000011,
 		0b00000111, 0b00001111, 0b00011111, 0b00111111, 0b01111111};
