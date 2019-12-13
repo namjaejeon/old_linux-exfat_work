@@ -217,8 +217,8 @@ unsigned int exfat_find_free_bitmap(struct super_block *sb, unsigned int clu)
 
 	WARN_ON(clu < EXFAT_FIRST_CLUSTER);
 	ent_idx = CLUSTER_TO_BITMAP_ENT(clu);
-        clu_base = BITMAP_ENT_TO_CLUSTER(ent_idx & ~(BITS_PER_BYTE_MASK));
-        clu_mask = IGNORED_BITS_REMAINED(clu, clu_base);
+	clu_base = BITMAP_ENT_TO_CLUSTER(ent_idx & ~(BITS_PER_BYTE_MASK));
+	clu_mask = IGNORED_BITS_REMAINED(clu, clu_base);
 
 	map_i = BITMAP_OFFSET_SECTOR_INDEX(sb, ent_idx);
 	map_b = BITMAP_OFFSET_BYTE_IN_SECTOR(sb, ent_idx);
