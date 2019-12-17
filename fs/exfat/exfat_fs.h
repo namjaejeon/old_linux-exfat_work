@@ -457,7 +457,6 @@ int exfat_mirror_bh(struct super_block *sb, sector_t sec,
 		struct buffer_head *bh);
 int exfat_count_num_clusters(struct super_block *sb,
 		struct exfat_chain *p_chain, unsigned int *ret_count);
-int exfat_count_dir_entries(struct super_block *sb, struct exfat_chain *p_dir);
 
 /* balloc.c */
 int exfat_load_bitmap(struct super_block *sb);
@@ -516,6 +515,7 @@ int exfat_find_dir_entry(struct super_block *sb, struct exfat_inode_info *ei,
 		struct exfat_chain *p_dir, struct exfat_uni_name *p_uniname,
 		int num_entries, unsigned int type);
 int exfat_alloc_new_dir(struct inode *inode, struct exfat_chain *clu);
+int exfat_count_dir_entries(struct super_block *sb, struct exfat_chain *p_dir);
 
 /* inode.c */
 extern const struct inode_operations exfat_file_inode_operations;
