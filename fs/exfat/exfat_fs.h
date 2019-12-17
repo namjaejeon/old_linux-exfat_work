@@ -49,7 +49,8 @@ enum {
 /* Cluster 0, 1 are reserved, the first cluster is 2 in the cluster heap. */
 #define EXFAT_RESERVED_CLUSTERS		(2)
 #define EXFAT_FIRST_CLUSTER		(2)
-#define EXFAT_DATA_CLUSTER_COUNT(sbi)	((sbi)->num_clusters - EXFAT_RESERVED_CLUSTERS)
+#define EXFAT_DATA_CLUSTER_COUNT(sbi)	\
+	((sbi)->num_clusters - EXFAT_RESERVED_CLUSTERS)
 
 #define EXFAT_HASH_BITS			8
 #define EXFAT_HASH_SIZE			(1UL << EXFAT_HASH_BITS)
@@ -441,22 +442,11 @@ int exfat_count_ext_entries(struct super_block *sb, struct exfat_chain *p_dir,
 		int entry, struct exfat_dentry *p_entry);
 int exfat_chain_cont_cluster(struct super_block *sb, unsigned int chain,
 		unsigned int len);
-struct exfat_dentry *exfat_get_dentry(struct super_block *sb,
-		struct exfat_chain *p_dir, int entry, struct buffer_head **bh,
-		sector_t *sector);
-struct exfat_entry_set_cache *exfat_get_dentry_set(struct super_block *sb,
-		struct exfat_chain *p_dir, int entry, unsigned int type,
-		struct exfat_dentry **file_ep);
 int exfat_zeroed_cluster(struct inode *dir, unsigned int clu);
-int exfat_find_location(struct super_block *sb, struct exfat_chain *p_dir,
-		int entry, sector_t *sector, int *offset);
 int exfat_find_last_cluster(struct super_block *sb, struct exfat_chain *p_chain,
 		unsigned int *ret_clu);
-int exfat_mirror_bh(struct super_block *sb, sector_t sec,
-		struct buffer_head *bh);
 int exfat_count_num_clusters(struct super_block *sb,
 		struct exfat_chain *p_chain, unsigned int *ret_count);
-int exfat_count_dir_entries(struct super_block *sb, struct exfat_chain *p_dir);
 
 /* balloc.c */
 int exfat_load_bitmap(struct super_block *sb);
@@ -477,8 +467,6 @@ int exfat_getattr(const struct path *path, struct kstat *stat,
 /* namei.c */
 extern const struct dentry_operations exfat_dentry_ops;
 extern const struct dentry_operations exfat_ci_dentry_ops;
-int exfat_find_empty_entry(struct inode *inode, struct exfat_chain *p_dir,
-		int num_entries);
 
 /* cache.c */
 int exfat_cache_init(void);
@@ -492,8 +480,6 @@ int exfat_get_cluster(struct inode *inode, unsigned int cluster,
 /* dir.c */
 extern const struct inode_operations exfat_dir_inode_operations;
 extern const struct file_operations exfat_dir_operations;
-void exfat_get_uniname_from_ext_entry(struct super_block *sb,
-		struct exfat_chain *p_dir, int entry, unsigned short *uniname);
 unsigned int exfat_get_entry_type(struct exfat_dentry *p_entry);
 void exfat_get_entry_time(struct exfat_dentry *p_entry,
 		struct exfat_timestamp *tp, unsigned char mode);
@@ -515,6 +501,15 @@ int exfat_find_dir_entry(struct super_block *sb, struct exfat_inode_info *ei,
 		struct exfat_chain *p_dir, struct exfat_uni_name *p_uniname,
 		int num_entries, unsigned int type);
 int exfat_alloc_new_dir(struct inode *inode, struct exfat_chain *clu);
+int exfat_find_location(struct super_block *sb, struct exfat_chain *p_dir,
+		int entry, sector_t *sector, int *offset);
+struct exfat_dentry *exfat_get_dentry(struct super_block *sb,
+		struct exfat_chain *p_dir, int entry, struct buffer_head **bh,
+		sector_t *sector);
+struct exfat_entry_set_cache *exfat_get_dentry_set(struct super_block *sb,
+		struct exfat_chain *p_dir, int entry, unsigned int type,
+		struct exfat_dentry **file_ep);
+int exfat_count_dir_entries(struct super_block *sb, struct exfat_chain *p_dir);
 
 /* inode.c */
 extern const struct inode_operations exfat_file_inode_operations;
@@ -523,11 +518,9 @@ struct inode *exfat_build_inode(struct super_block *sb,
 		struct exfat_dir_entry *info, loff_t i_pos);
 void exfat_hash_inode(struct inode *inode, loff_t i_pos);
 void exfat_unhash_inode(struct inode *inode);
-void exfat_truncate(struct inode *inode, loff_t size);
 struct inode *exfat_iget(struct super_block *sb, loff_t i_pos);
 int exfat_write_inode(struct inode *inode, struct writeback_control *wbc);
 void exfat_evict_inode(struct inode *inode);
-int exfat_read_inode(struct inode *inode, struct exfat_dir_entry *info);
 
 /* exfat/nls.c */
 int exfat_nls_cmp_uniname(struct super_block *sb, unsigned short *a,

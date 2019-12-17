@@ -204,7 +204,8 @@ static int exfat_map_cluster(struct inode *inode, unsigned int clu_offset,
 		if (ret)
 			return ret;
 
-		if (new_clu.dir == EXFAT_EOF_CLUSTER || new_clu.dir == EXFAT_FREE_CLUSTER) {
+		if (new_clu.dir == EXFAT_EOF_CLUSTER ||
+		    new_clu.dir == EXFAT_FREE_CLUSTER) {
 			exfat_fs_error(sb,
 				"bogus cluster new allocated (last_clu : %u, new_clu : %u)",
 				last_clu, new_clu.dir);

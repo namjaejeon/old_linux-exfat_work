@@ -10,6 +10,59 @@
 #include "exfat_raw.h"
 #include "exfat_fs.h"
 
+static int exfat_extract_uni_name(struct exfat_dentry *ep,
+		unsigned short *uniname)
+{
+	int i, len = 0;
+
+	for (i = 0; i < EXFAT_FILE_NAME_LEN; i++) {
+		*uniname = le16_to_cpu(ep->name_unicode[i]);
+		if (*uniname == 0x0)
+			return len;
+		uniname++;
+		len++;
+	}
+
+	*uniname = 0x0;
+	return len;
+
+}
+
+static void exfat_get_uniname_from_ext_entry(struct super_block *sb,
+		struct exfat_chain *p_dir, int entry, unsigned short *uniname)
+{
+	int i;
+	struct exfat_dentry *ep;
+	struct exfat_entry_set_cache *es;
+
+	es = exfat_get_dentry_set(sb, p_dir, entry, ES_ALL_ENTRIES, &ep);
+	if (!es)
+		return;
+
+	if (es->num_entries < 3)
+		goto free_es;
+
+	ep += 2;
+
+	/*
+	 * First entry  : file entry
+	 * Second entry : stream-extension entry
+	 * Third entry  : first file-name entry
+	 * So, the index of first file-name dentry should start from 2.
+	 */
+	for (i = 2; i < es->num_entries; i++, ep++) {
+		/* end of name entry */
+		if (exfat_get_entry_type(ep) != TYPE_EXTEND)
+			goto free_es;
+
+		exfat_extract_uni_name(ep, uniname);
+		uniname += EXFAT_FILE_NAME_LEN;
+	}
+
+free_es:
+	kfree(es);
+}
+
 /* read a directory entry from the opened directory */
 static int exfat_readdir(struct inode *inode, struct exfat_dir_entry *dir_entry)
 {
@@ -947,24 +1000,6 @@ release_bh:
 	return NULL;
 }
 
-static int exfat_extract_uni_name(struct exfat_dentry *ep,
-		unsigned short *uniname)
-{
-	int i, len = 0;
-
-	for (i = 0; i < EXFAT_FILE_NAME_LEN; i++) {
-		*uniname = le16_to_cpu(ep->name_unicode[i]);
-		if (*uniname == 0x0)
-			return len;
-		uniname++;
-		len++;
-	}
-
-	*uniname = 0x0;
-	return len;
-
-}
-
 enum {
 	DIRENT_STEP_FILE,
 	DIRENT_STEP_STRM,
@@ -1214,41 +1249,6 @@ int exfat_count_ext_entries(struct super_block *sb, struct exfat_chain *p_dir,
 			break;
 	}
 	return count;
-}
-
-void exfat_get_uniname_from_ext_entry(struct super_block *sb,
-		struct exfat_chain *p_dir, int entry, unsigned short *uniname)
-{
-	int i;
-	struct exfat_dentry *ep;
-	struct exfat_entry_set_cache *es;
-
-	es = exfat_get_dentry_set(sb, p_dir, entry, ES_ALL_ENTRIES, &ep);
-	if (!es)
-		return;
-
-	if (es->num_entries < 3)
-		goto free_es;
-
-	ep += 2;
-
-	/*
-	 * First entry  : file entry
-	 * Second entry : stream-extension entry
-	 * Third entry  : first file-name entry
-	 * So, the index of first file-name dentry should start from 2.
-	 */
-	for (i = 2; i < es->num_entries; i++, ep++) {
-		/* end of name entry */
-		if (exfat_get_entry_type(ep) != TYPE_EXTEND)
-			goto free_es;
-
-		exfat_extract_uni_name(ep, uniname);
-		uniname += EXFAT_FILE_NAME_LEN;
-	}
-
-free_es:
-	kfree(es);
 }
 
 int exfat_count_dir_entries(struct super_block *sb, struct exfat_chain *p_dir)
