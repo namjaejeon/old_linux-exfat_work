@@ -316,6 +316,10 @@ int exfat_setattr(struct dentry *dentry, struct iattr *attr)
 	}
 
 	if (attr->ia_valid & ATTR_SIZE) {
+		error = exfat_block_truncate_page(inode, attr->ia_size);
+		if (error)
+			goto out;
+
 		down_write(&EXFAT_I(inode)->truncate_lock);
 		truncate_setsize(inode, attr->ia_size);
 		exfat_truncate(inode, attr->ia_size);
@@ -325,6 +329,7 @@ int exfat_setattr(struct dentry *dentry, struct iattr *attr)
 	setattr_copy(inode, attr);
 	mark_inode_dirty(inode);
 
+out:
 	return error;
 }
 
