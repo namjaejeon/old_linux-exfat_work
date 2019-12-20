@@ -663,7 +663,8 @@ static int exfat_load_upcase_table(struct super_block *sb,
 		bh = sb_bread(sb, sector);
 		if (!bh) {
 			exfat_msg(sb, KERN_ERR,
-				"failed to read sector(0x%llx)\n", sector);
+				"failed to read sector(0x%llx)\n",
+				(unsigned long long)sector);
 			ret = -EIO;
 			goto free_table;
 		}
