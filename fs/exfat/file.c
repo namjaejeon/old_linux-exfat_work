@@ -296,15 +296,17 @@ int exfat_setattr(struct dentry *dentry, struct iattr *attr)
 	error = setattr_prepare(dentry, attr);
 	attr->ia_valid = ia_valid;
 	if (error)
-		return error;
+		goto out;
 
 	if (((attr->ia_valid & ATTR_UID) &&
 	     !uid_eq(attr->ia_uid, sbi->options.fs_uid)) ||
 	    ((attr->ia_valid & ATTR_GID) &&
 	     !gid_eq(attr->ia_gid, sbi->options.fs_gid)) ||
 	    ((attr->ia_valid & ATTR_MODE) &&
-	     (attr->ia_mode & ~(S_IFREG | S_IFLNK | S_IFDIR | 0777))))
-		return -EPERM;
+	     (attr->ia_mode & ~(S_IFREG | S_IFLNK | S_IFDIR | 0777)))) {
+		error = -EPERM;
+		goto out;
+	}
 
 	/*
 	 * We don't return -EPERM here. Yes, strange, but this is too
