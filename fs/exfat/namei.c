@@ -310,8 +310,8 @@ static int exfat_check_max_dentries(struct inode *inode)
 /* find empty directory entry.
  * if there isn't any empty slot, expand cluster chain.
  */
-static int exfat_find_empty_entry(struct inode *inode, struct exfat_chain *p_dir,
-		int num_entries)
+static int exfat_find_empty_entry(struct inode *inode,
+		struct exfat_chain *p_dir, int num_entries)
 {
 	int dentry;
 	unsigned int ret, last_clu;
