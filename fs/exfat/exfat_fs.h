@@ -146,6 +146,14 @@ enum {
 #define BITS_PER_BYTE_MASK	(0x7)
 #define IGNORED_BITS_REMAINED(clu, clu_base) ((1 << ((clu) - (clu_base))) - 1)
 
+union exfat_timezone {
+	struct {
+		unsigned char off : 7;
+		unsigned char valid : 1;
+	};
+	unsigned char value;
+};
+
 struct exfat_timestamp {
 	unsigned short sec;	/* 0 ~ 59 */
 	unsigned short min;	/* 0 ~ 59 */
@@ -153,6 +161,7 @@ struct exfat_timestamp {
 	unsigned short day;	/* 1 ~ 31 */
 	unsigned short mon;	/* 1 ~ 12 */
 	unsigned short year;	/* 0 ~ 127 (since 1980) */
+	union exfat_timezone tz;
 };
 
 struct exfat_date_time {
@@ -163,6 +172,7 @@ struct exfat_date_time {
 	unsigned short minute;
 	unsigned short second;
 	unsigned short milli_second;
+	union exfat_timezone timezone;
 };
 
 struct exfat_dentry_namebuf {

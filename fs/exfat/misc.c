@@ -96,6 +96,7 @@ static time_t accum_days_in_year[] = {
 	0, 0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334, 0, 0, 0,
 };
 
+#define TIMEZONE_SEC(x)	((x) * 15 * SECS_PER_MIN)
 /* Convert a FAT time/date pair to a UNIX date (seconds since 1 1 70). */
 void exfat_time_fat2unix(struct exfat_sb_info *sbi, struct timespec64 *ts,
 		struct exfat_date_time *tp)
@@ -108,17 +109,31 @@ void exfat_time_fat2unix(struct exfat_sb_info *sbi, struct timespec64 *ts,
 	if (IS_LEAP_YEAR(year) && (tp->month) > 2)
 		ld++;
 
-	ts->tv_sec =  tp->second  + tp->minute * SECS_PER_MIN
-			+ tp->hour * SECS_PER_HOUR
-			+ (year * 365 + ld + accum_days_in_year[tp->month]
-			+ (tp->day - 1) + DAYS_DELTA_DECADE) * SECS_PER_DAY;
-
-	if (!sbi->options.tz_utc)
-		ts->tv_sec += sys_tz.tz_minuteswest * SECS_PER_MIN;
+	ts->tv_sec =  tp->second  + tp->minute * SECS_PER_MIN +
+		tp->hour * SECS_PER_HOUR +
+		(year * 365 + ld + accum_days_in_year[tp->month] +
+		(tp->day - 1) + DAYS_DELTA_DECADE) * SECS_PER_DAY;
 
 	ts->tv_nsec = 0;
+
+	/* Treat as local time */
+	if (!sbi->options.tz_utc && !tp->timezone.valid) {
+		ts->tv_sec += sys_tz.tz_minuteswest * SECS_PER_MIN;
+		return;
+	}
+
+	/* Treat as UTC time */
+	if (!tp->timezone.valid)
+		return;
+
+	/* Treat as UTC time, but need to adjust timezone to UTC0 */
+	if (tp->timezone.off <= 0x3F)
+		ts->tv_sec -= TIMEZONE_SEC(tp->timezone.off);
+	else /* 0x40 <= (tp->timezone & 0x7F) <=0x7F */
+		ts->tv_sec += TIMEZONE_SEC(0x80 - tp->timezone.off);
 }
 
+#define TIMEZONE_CUR_OFFSET()	((sys_tz.tz_minuteswest / (-15)) & 0x7F)
 /* Convert linear UNIX date to a FAT time/date pair. */
 void exfat_time_unix2fat(struct exfat_sb_info *sbi, struct timespec64 *ts,
 		struct exfat_date_time *tp)
@@ -127,8 +142,14 @@ void exfat_time_unix2fat(struct exfat_sb_info *sbi, struct timespec64 *ts,
 	time_t day, month, year;
 	time_t ld; /* leap day */
 
-	if (!sbi->options.tz_utc)
+	tp->timezone.value = 0;
+
+	/* Treats as local time with proper time */
+	if (!sbi->options.tz_utc) {
 		second -= sys_tz.tz_minuteswest * SECS_PER_MIN;
+		tp->timezone.valid = 1;
+		tp->timezone.off = TIMEZONE_CUR_OFFSET();
+	}
 
 	/* Jan 1 GMT 00:00:00 1980. But what about another time zone? */
 	if (second < UNIX_SECS_1980) {
@@ -197,6 +218,7 @@ struct exfat_timestamp *exfat_tm_now(struct exfat_sb_info *sbi,
 	tp->hour = dt.hour;
 	tp->min = dt.minute;
 	tp->sec = dt.second;
+	tp->tz.value = dt.timezone.value;
 
 	return tp;
 }

@@ -138,8 +138,10 @@ struct exfat_dentry {
 			__le16 access_date;
 			__u8 create_time_ms;
 			__u8 modify_time_ms;
-			__u8 access_time_ms;
-			__u8 reserved2[9];
+			__u8 create_tz;
+			__u8 modify_tz;
+			__u8 access_tz;
+			__u8 reserved2[7];
 		} __packed file; /* file directory entry */
 		struct {
 			__u8 flags;
@@ -183,7 +185,9 @@ struct exfat_dentry {
 #define file_access_date		dentry.file.access_date
 #define file_create_time_ms		dentry.file.create_time_ms
 #define file_modify_time_ms		dentry.file.modify_time_ms
-#define file_access_time_ms		dentry.file.access_time_ms
+#define file_create_tz			dentry.file.create_tz
+#define file_modify_tz			dentry.file.modify_tz
+#define file_access_tz			dentry.file.access_tz
 #define stream_flags			dentry.stream.flags
 #define stream_name_len			dentry.stream.name_len
 #define stream_name_hash		dentry.stream.name_hash

@@ -67,19 +67,21 @@ static int __exfat_write_inode(struct inode *inode, int sync)
 	ep->file_attr = cpu_to_le16(info.attr);
 
 	/* set FILE_INFO structure using the acquired struct exfat_dentry */
-	tm.sec  = info.create_timestamp.second;
-	tm.min  = info.create_timestamp.minute;
+	tm.tz = info.create_timestamp.timezone;
+	tm.sec = info.create_timestamp.second;
+	tm.min = info.create_timestamp.minute;
 	tm.hour = info.create_timestamp.hour;
-	tm.day  = info.create_timestamp.day;
-	tm.mon  = info.create_timestamp.month;
+	tm.day = info.create_timestamp.day;
+	tm.mon = info.create_timestamp.month;
 	tm.year = info.create_timestamp.year;
 	exfat_set_entry_time(ep, &tm, TM_CREATE);
 
-	tm.sec  = info.modify_timestamp.second;
-	tm.min  = info.modify_timestamp.minute;
+	tm.tz = info.modify_timestamp.timezone;
+	tm.sec = info.modify_timestamp.second;
+	tm.min = info.modify_timestamp.minute;
 	tm.hour = info.modify_timestamp.hour;
-	tm.day  = info.modify_timestamp.day;
-	tm.mon  = info.modify_timestamp.month;
+	tm.day = info.modify_timestamp.day;
+	tm.mon = info.modify_timestamp.month;
 	tm.year = info.modify_timestamp.year;
 	exfat_set_entry_time(ep, &tm, TM_MODIFY);
 
