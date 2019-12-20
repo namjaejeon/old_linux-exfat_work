@@ -780,7 +780,7 @@ static int exfat_dir_readahead(struct super_block *sb, sector_t sec)
 	if (sec < sbi->data_start_sector) {
 		exfat_msg(sb, KERN_ERR,
 			"requested sector is invalid(sect:%llu, root:%llu)",
-			sec, sbi->data_start_sector);
+			(unsigned long long)sec, sbi->data_start_sector);
 		return -EIO;
 	}
 
