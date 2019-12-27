@@ -557,7 +557,7 @@ int exfat_init_dir_entry(struct inode *inode, struct exfat_chain *p_dir,
 	return 0;
 }
 
-int update_dir_chksum(struct inode *inode, struct exfat_chain *p_dir,
+int exfat_update_dir_chksum(struct inode *inode, struct exfat_chain *p_dir,
 		int entry)
 {
 	struct super_block *sb = inode->i_sb;
@@ -632,7 +632,7 @@ int exfat_init_ext_entry(struct inode *inode, struct exfat_chain *p_dir,
 		uniname += EXFAT_FILE_NAME_LEN;
 	}
 
-	update_dir_chksum(inode, p_dir, entry);
+	exfat_update_dir_chksum(inode, p_dir, entry);
 	return 0;
 }
 

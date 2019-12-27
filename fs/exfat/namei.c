@@ -398,7 +398,8 @@ static int exfat_find_empty_entry(struct inode *inode,
 			ep->stream_flags = p_dir->flags;
 			exfat_update_bh(sb, bh, IS_DIRSYNC(inode));
 			brelse(bh);
-			if (update_dir_chksum(inode, &(ei->dir), ei->entry))
+			if (exfat_update_dir_chksum(inode, &(ei->dir),
+			    ei->entry))
 				return -EIO;
 		}
 

@@ -501,7 +501,7 @@ int exfat_init_ext_entry(struct inode *inode, struct exfat_chain *p_dir,
 		int entry, int num_entries, struct exfat_uni_name *p_uniname);
 int exfat_remove_entries(struct inode *inode, struct exfat_chain *p_dir,
 		int entry, int order, int num_entries);
-int update_dir_chksum(struct inode *inode, struct exfat_chain *p_dir,
+int exfat_update_dir_chksum(struct inode *inode, struct exfat_chain *p_dir,
 		int entry);
 int exfat_update_dir_chksum_with_entry_set(struct super_block *sb,
 		struct exfat_entry_set_cache *es, int sync);
