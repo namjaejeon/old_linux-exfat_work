@@ -8,7 +8,6 @@
 
 #include <linux/fs.h>
 #include <linux/ratelimit.h>
-#include <linux/bits.h>
 
 #define EXFAT_SUPER_MAGIC       (0x2011BAB0UL)
 #define EXFAT_ROOT_INO		1
@@ -147,6 +146,14 @@ enum {
 #define BITS_PER_BYTE_MASK	(0x7)
 #define IGNORED_BITS_REMAINED(clu, clu_base) ((1 << ((clu) - (clu_base))) - 1)
 
+union exfat_timezone {
+	struct {
+		unsigned char off : 7;
+		unsigned char valid : 1;
+	};
+	unsigned char value;
+};
+
 struct exfat_timestamp {
 	unsigned short sec;	/* 0 ~ 59 */
 	unsigned short min;	/* 0 ~ 59 */
@@ -154,6 +161,7 @@ struct exfat_timestamp {
 	unsigned short day;	/* 1 ~ 31 */
 	unsigned short mon;	/* 1 ~ 12 */
 	unsigned short year;	/* 0 ~ 127 (since 1980) */
+	union exfat_timezone tz;
 };
 
 struct exfat_date_time {
@@ -164,6 +172,7 @@ struct exfat_date_time {
 	unsigned short minute;
 	unsigned short second;
 	unsigned short milli_second;
+	union exfat_timezone timezone;
 };
 
 struct exfat_dentry_namebuf {
@@ -521,6 +530,7 @@ void exfat_unhash_inode(struct inode *inode);
 struct inode *exfat_iget(struct super_block *sb, loff_t i_pos);
 int exfat_write_inode(struct inode *inode, struct writeback_control *wbc);
 void exfat_evict_inode(struct inode *inode);
+int exfat_block_truncate_page(struct inode *inode, loff_t from);
 
 /* exfat/nls.c */
 int exfat_nls_cmp_uniname(struct super_block *sb, unsigned short *a,

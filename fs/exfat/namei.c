@@ -310,8 +310,8 @@ static int exfat_check_max_dentries(struct inode *inode)
 /* find empty directory entry.
  * if there isn't any empty slot, expand cluster chain.
  */
-static int exfat_find_empty_entry(struct inode *inode, struct exfat_chain *p_dir,
-		int num_entries)
+static int exfat_find_empty_entry(struct inode *inode,
+		struct exfat_chain *p_dir, int num_entries)
 {
 	int dentry;
 	unsigned int ret, last_clu;
@@ -710,6 +710,7 @@ static int exfat_find(struct inode *dir, struct qstr *qname,
 		info->create_timestamp.minute = tm.min;
 		info->create_timestamp.second = tm.sec;
 		info->create_timestamp.milli_second = 0;
+		info->create_timestamp.timezone.value = tm.tz.value;
 
 		exfat_get_entry_time(ep, &tm, TM_MODIFY);
 		info->modify_timestamp.year = tm.year;
@@ -719,6 +720,7 @@ static int exfat_find(struct inode *dir, struct qstr *qname,
 		info->modify_timestamp.minute = tm.min;
 		info->modify_timestamp.second = tm.sec;
 		info->modify_timestamp.milli_second = 0;
+		info->create_timestamp.timezone.value = tm.tz.value;
 
 		memset(&info->access_timestamp, 0,
 				sizeof(struct exfat_date_time));

@@ -143,6 +143,8 @@ static int exfat_readdir(struct inode *inode, struct exfat_dir_entry *dir_entry)
 			dir_entry->create_timestamp.minute = tm.min;
 			dir_entry->create_timestamp.second = tm.sec;
 			dir_entry->create_timestamp.milli_second = 0;
+			dir_entry->create_timestamp.timezone.value =
+				tm.tz.value;
 
 			exfat_get_entry_time(ep, &tm, TM_MODIFY);
 			dir_entry->modify_timestamp.year = tm.year;
@@ -152,6 +154,8 @@ static int exfat_readdir(struct inode *inode, struct exfat_dir_entry *dir_entry)
 			dir_entry->modify_timestamp.minute = tm.min;
 			dir_entry->modify_timestamp.second = tm.sec;
 			dir_entry->modify_timestamp.milli_second = 0;
+			dir_entry->modify_timestamp.timezone.value =
+				tm.tz.value;
 
 			memset(&dir_entry->access_timestamp, 0,
 				sizeof(struct exfat_date_time));
@@ -419,23 +423,27 @@ static void exfat_set_entry_type(struct exfat_dentry *ep, unsigned int type)
 void exfat_get_entry_time(struct exfat_dentry *ep, struct exfat_timestamp *tp,
 		unsigned char mode)
 {
-	unsigned short t = 0x00, d = 0x21;
+	unsigned short t = 0x00, d = 0x21, tz = 0x00;
 
 	switch (mode) {
 	case TM_CREATE:
 		t = le16_to_cpu(ep->file_create_time);
 		d = le16_to_cpu(ep->file_create_date);
+		tz = le16_to_cpu(ep->file_create_tz);
 		break;
 	case TM_MODIFY:
 		t = le16_to_cpu(ep->file_modify_time);
 		d = le16_to_cpu(ep->file_modify_date);
+		tz = le16_to_cpu(ep->file_modify_tz);
 		break;
 	case TM_ACCESS:
 		t = le16_to_cpu(ep->file_access_time);
 		d = le16_to_cpu(ep->file_access_date);
+		tz = le16_to_cpu(ep->file_access_tz);
 		break;
 	}
 
+	tp->tz.value = tz;
 	tp->sec  = (t & 0x001F) << 1;
 	tp->min  = (t >> 5) & 0x003F;
 	tp->hour = (t >> 11);
@@ -456,14 +464,17 @@ void exfat_set_entry_time(struct exfat_dentry *ep,
 	case TM_CREATE:
 		ep->file_create_time = cpu_to_le16(t);
 		ep->file_create_date = cpu_to_le16(d);
+		ep->file_create_tz = cpu_to_le16(tp->tz.value);
 		break;
 	case TM_MODIFY:
 		ep->file_modify_time = cpu_to_le16(t);
 		ep->file_modify_date = cpu_to_le16(d);
+		ep->file_modify_tz = cpu_to_le16(tp->tz.value);
 		break;
 	case TM_ACCESS:
 		ep->file_access_time = cpu_to_le16(t);
 		ep->file_access_date = cpu_to_le16(d);
+		ep->file_access_tz = cpu_to_le16(tp->tz.value);
 		break;
 	}
 }
@@ -481,7 +492,6 @@ static void exfat_init_file_entry(struct super_block *sb,
 	exfat_set_entry_time(ep, tp, TM_ACCESS);
 	ep->file_create_time_ms = 0;
 	ep->file_modify_time_ms = 0;
-	ep->file_access_time_ms = 0;
 }
 
 static void exfat_init_stream_entry(struct exfat_dentry *ep,
@@ -780,7 +790,7 @@ static int exfat_dir_readahead(struct super_block *sb, sector_t sec)
 	if (sec < sbi->data_start_sector) {
 		exfat_msg(sb, KERN_ERR,
 			"requested sector is invalid(sect:%llu, root:%llu)",
-			sec, sbi->data_start_sector);
+			(unsigned long long)sec, sbi->data_start_sector);
 		return -EIO;
 	}
 
