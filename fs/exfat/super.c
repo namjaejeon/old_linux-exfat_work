@@ -512,7 +512,6 @@ static int __exfat_fill_super(struct super_block *sb)
 		goto free_bh;
 	}
 
-	/* allocate-bitmap is only for exFAT */
 	ret = exfat_load_bitmap(sb);
 	if (ret) {
 		exfat_msg(sb, KERN_ERR, "failed to load alloc-bitmap");
