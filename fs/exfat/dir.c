@@ -413,10 +413,10 @@ static void exfat_set_entry_type(struct exfat_dentry *ep, unsigned int type)
 		ep->type = EXFAT_VOLUME;
 	} else if (type == TYPE_DIR) {
 		ep->type = EXFAT_FILE;
-		ep->file_attr = ATTR_SUBDIR_LE;
+		ep->file_attr = cpu_to_le16(ATTR_SUBDIR);
 	} else if (type == TYPE_FILE) {
 		ep->type = EXFAT_FILE;
-		ep->file_attr = ATTR_ARCHIVE_LE;
+		ep->file_attr = cpu_to_le16(ATTR_ARCHIVE);
 	}
 }
 

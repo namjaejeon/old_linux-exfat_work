@@ -1088,7 +1088,7 @@ static int exfat_rename_file(struct inode *inode, struct exfat_chain *p_dir,
 
 		memcpy(epnew, epold, DENTRY_SIZE);
 		if (exfat_get_entry_type(epnew) == TYPE_FILE) {
-			epnew->file_attr |= ATTR_ARCHIVE_LE;
+			epnew->file_attr |= cpu_to_le16(ATTR_ARCHIVE);
 			ei->attr |= ATTR_ARCHIVE;
 		}
 		exfat_update_bh(sb, new_bh, sync);
@@ -1117,7 +1117,7 @@ static int exfat_rename_file(struct inode *inode, struct exfat_chain *p_dir,
 		ei->entry = newentry;
 	} else {
 		if (exfat_get_entry_type(epold) == TYPE_FILE) {
-			epold->file_attr |= ATTR_ARCHIVE_LE;
+			epold->file_attr |= cpu_to_le16(ATTR_ARCHIVE);
 			ei->attr |= ATTR_ARCHIVE;
 		}
 		exfat_update_bh(sb, old_bh, sync);
@@ -1172,7 +1172,7 @@ static int exfat_move_file(struct inode *inode, struct exfat_chain *p_olddir,
 
 	memcpy(epnew, epmov, DENTRY_SIZE);
 	if (exfat_get_entry_type(epnew) == TYPE_FILE) {
-		epnew->file_attr |= ATTR_ARCHIVE_LE;
+		epnew->file_attr |= cpu_to_le16(ATTR_ARCHIVE);
 		ei->attr |= ATTR_ARCHIVE;
 	}
 	exfat_update_bh(sb, new_bh, IS_DIRSYNC(inode));
