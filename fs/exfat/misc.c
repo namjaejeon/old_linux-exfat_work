@@ -161,7 +161,7 @@ void exfat_time_unix2fat(struct exfat_sb_info *sbi, struct timespec64 *ts,
 		tp->year = 0;
 		return;
 	}
-#if (BITS_PER_LONG == 64)
+
 	if (second >= UNIX_SECS_2108) {
 		tp->second  = 59;
 		tp->minute  = 59;
@@ -171,7 +171,6 @@ void exfat_time_unix2fat(struct exfat_sb_info *sbi, struct timespec64 *ts,
 		tp->year = 127;
 		return;
 	}
-#endif
 
 	day = second / SECS_PER_DAY - DAYS_DELTA_DECADE;
 	year = day / 365;
