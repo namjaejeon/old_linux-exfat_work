@@ -138,8 +138,6 @@ void exfat_time_unix2fat(struct exfat_sb_info *sbi, struct timespec64 *ts,
 	time_t day, month, year;
 	time_t ld; /* leap day */
 
-	tp->timezone.value = 0;
-
 	/* Treats as local time with proper time */
 	second -= sys_tz.tz_minuteswest * SECS_PER_MIN;
 	tp->timezone.valid = 1;
