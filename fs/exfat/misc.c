@@ -117,14 +117,10 @@ void exfat_time_fat2unix(struct exfat_sb_info *sbi, struct timespec64 *ts,
 	ts->tv_nsec = 0;
 
 	/* Treat as local time */
-	if (!sbi->options.tz_utc && !tp->timezone.valid) {
+	if (!tp->timezone.valid) {
 		ts->tv_sec += sys_tz.tz_minuteswest * SECS_PER_MIN;
 		return;
 	}
-
-	/* Treat as UTC time */
-	if (!tp->timezone.valid)
-		return;
 
 	/* Treat as UTC time, but need to adjust timezone to UTC0 */
 	if (tp->timezone.off <= 0x3F)
@@ -142,14 +138,10 @@ void exfat_time_unix2fat(struct exfat_sb_info *sbi, struct timespec64 *ts,
 	time_t day, month, year;
 	time_t ld; /* leap day */
 
-	tp->timezone.value = 0;
-
 	/* Treats as local time with proper time */
-	if (!sbi->options.tz_utc) {
-		second -= sys_tz.tz_minuteswest * SECS_PER_MIN;
-		tp->timezone.valid = 1;
-		tp->timezone.off = TIMEZONE_CUR_OFFSET();
-	}
+	second -= sys_tz.tz_minuteswest * SECS_PER_MIN;
+	tp->timezone.valid = 1;
+	tp->timezone.off = TIMEZONE_CUR_OFFSET();
 
 	/* Jan 1 GMT 00:00:00 1980. But what about another time zone? */
 	if (second < UNIX_SECS_1980) {
@@ -161,7 +153,7 @@ void exfat_time_unix2fat(struct exfat_sb_info *sbi, struct timespec64 *ts,
 		tp->year = 0;
 		return;
 	}
-#if (BITS_PER_LONG == 64)
+
 	if (second >= UNIX_SECS_2108) {
 		tp->second  = 59;
 		tp->minute  = 59;
@@ -171,7 +163,6 @@ void exfat_time_unix2fat(struct exfat_sb_info *sbi, struct timespec64 *ts,
 		tp->year = 127;
 		return;
 	}
-#endif
 
 	day = second / SECS_PER_DAY - DAYS_DELTA_DECADE;
 	year = day / 365;

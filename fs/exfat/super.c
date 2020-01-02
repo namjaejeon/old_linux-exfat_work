@@ -158,8 +158,6 @@ static int exfat_show_options(struct seq_file *m, struct dentry *root)
 	if (opts->utf8)
 		seq_puts(m, ",utf8");
 	seq_printf(m, ",case_sensitive=%u", opts->case_sensitive);
-	if (opts->tz_utc)
-		seq_puts(m, ",tz=UTC");
 	seq_printf(m, ",bps=%ld", sb->s_blocksize);
 	if (opts->errors == EXFAT_ERRORS_CONT)
 		seq_puts(m, ",errors=continue");
@@ -286,10 +284,6 @@ static int exfat_parse_param(struct fs_context *fc, struct fs_parameter *param)
 		break;
 	case Opt_utf8:
 		opts->utf8 = 1;
-		break;
-	case Opt_tz:
-		if (!strcmp(param->string, "UTC"))
-			opts->tz_utc = 1;
 		break;
 	case Opt_errors:
 		opts->errors = result.uint_32;
@@ -512,7 +506,6 @@ static int __exfat_fill_super(struct super_block *sb)
 		goto free_bh;
 	}
 
-	/* allocate-bitmap is only for exFAT */
 	ret = exfat_load_bitmap(sb);
 	if (ret) {
 		exfat_msg(sb, KERN_ERR, "failed to load alloc-bitmap");

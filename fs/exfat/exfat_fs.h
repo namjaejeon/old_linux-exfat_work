@@ -148,10 +148,10 @@ enum {
 
 union exfat_timezone {
 	struct {
-		unsigned char off : 7;
-		unsigned char valid : 1;
+		__u8 off : 7;
+		__u8 valid : 1;
 	};
-	unsigned char value;
+	__u8 value;
 };
 
 struct exfat_timestamp {
@@ -254,7 +254,6 @@ struct exfat_mount_options {
 	char *iocharset;
 	unsigned char utf8;
 	unsigned char case_sensitive;
-	unsigned char tz_utc;
 	/* on error: continue, panic, remount-ro */
 	enum exfat_error_mode errors;
 	/* flag on if -o dicard specified and device support discard() */
@@ -501,7 +500,7 @@ int exfat_init_ext_entry(struct inode *inode, struct exfat_chain *p_dir,
 		int entry, int num_entries, struct exfat_uni_name *p_uniname);
 int exfat_remove_entries(struct inode *inode, struct exfat_chain *p_dir,
 		int entry, int order, int num_entries);
-int update_dir_chksum(struct inode *inode, struct exfat_chain *p_dir,
+int exfat_update_dir_chksum(struct inode *inode, struct exfat_chain *p_dir,
 		int entry);
 int exfat_update_dir_chksum_with_entry_set(struct super_block *sb,
 		struct exfat_entry_set_cache *es, int sync);

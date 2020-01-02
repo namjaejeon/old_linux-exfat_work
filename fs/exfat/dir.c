@@ -413,10 +413,10 @@ static void exfat_set_entry_type(struct exfat_dentry *ep, unsigned int type)
 		ep->type = EXFAT_VOLUME;
 	} else if (type == TYPE_DIR) {
 		ep->type = EXFAT_FILE;
-		ep->file_attr = ATTR_SUBDIR_LE;
+		ep->file_attr = cpu_to_le16(ATTR_SUBDIR);
 	} else if (type == TYPE_FILE) {
 		ep->type = EXFAT_FILE;
-		ep->file_attr = ATTR_ARCHIVE_LE;
+		ep->file_attr = cpu_to_le16(ATTR_ARCHIVE);
 	}
 }
 
@@ -429,17 +429,17 @@ void exfat_get_entry_time(struct exfat_dentry *ep, struct exfat_timestamp *tp,
 	case TM_CREATE:
 		t = le16_to_cpu(ep->file_create_time);
 		d = le16_to_cpu(ep->file_create_date);
-		tz = le16_to_cpu(ep->file_create_tz);
+		tz = ep->file_create_tz;
 		break;
 	case TM_MODIFY:
 		t = le16_to_cpu(ep->file_modify_time);
 		d = le16_to_cpu(ep->file_modify_date);
-		tz = le16_to_cpu(ep->file_modify_tz);
+		tz = ep->file_modify_tz;
 		break;
 	case TM_ACCESS:
 		t = le16_to_cpu(ep->file_access_time);
 		d = le16_to_cpu(ep->file_access_date);
-		tz = le16_to_cpu(ep->file_access_tz);
+		tz = ep->file_access_tz;
 		break;
 	}
 
@@ -464,17 +464,17 @@ void exfat_set_entry_time(struct exfat_dentry *ep,
 	case TM_CREATE:
 		ep->file_create_time = cpu_to_le16(t);
 		ep->file_create_date = cpu_to_le16(d);
-		ep->file_create_tz = cpu_to_le16(tp->tz.value);
+		ep->file_create_tz = tp->tz.value;
 		break;
 	case TM_MODIFY:
 		ep->file_modify_time = cpu_to_le16(t);
 		ep->file_modify_date = cpu_to_le16(d);
-		ep->file_modify_tz = cpu_to_le16(tp->tz.value);
+		ep->file_modify_tz = tp->tz.value;
 		break;
 	case TM_ACCESS:
 		ep->file_access_time = cpu_to_le16(t);
 		ep->file_access_date = cpu_to_le16(d);
-		ep->file_access_tz = cpu_to_le16(tp->tz.value);
+		ep->file_access_tz = tp->tz.value;
 		break;
 	}
 }
@@ -557,7 +557,7 @@ int exfat_init_dir_entry(struct inode *inode, struct exfat_chain *p_dir,
 	return 0;
 }
 
-int update_dir_chksum(struct inode *inode, struct exfat_chain *p_dir,
+int exfat_update_dir_chksum(struct inode *inode, struct exfat_chain *p_dir,
 		int entry)
 {
 	struct super_block *sb = inode->i_sb;
@@ -632,7 +632,7 @@ int exfat_init_ext_entry(struct inode *inode, struct exfat_chain *p_dir,
 		uniname += EXFAT_FILE_NAME_LEN;
 	}
 
-	update_dir_chksum(inode, p_dir, entry);
+	exfat_update_dir_chksum(inode, p_dir, entry);
 	return 0;
 }
 
