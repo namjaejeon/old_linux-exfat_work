@@ -70,7 +70,7 @@ struct bpb64 {
 	__u8 jmp_boot[JUMP_BOOT_LEN];
 	__u8 oem_name[OEM_NAME_LEN];
 	__u8 res_zero[MUST_BE_ZERO_LEN];
-};
+} __packed;
 
 /* EXFAT EXTEND BIOS parameter block (56 bytes) */
 struct bsx64 {
@@ -90,13 +90,13 @@ struct bsx64 {
 	__u8 phy_drv_no;
 	__u8 perc_in_use;
 	__u8 reserved2[7];
-};
+} __packed;
 
 /* EXFAT PBR[BPB+BSX] (120 bytes) */
 struct pbr64 {
 	struct bpb64 bpb;
 	struct bsx64 bsx;
-};
+} __packed;
 
 /* Common PBR[Partition Boot Record] (512 bytes) */
 struct pbr {
@@ -110,7 +110,7 @@ struct pbr {
 	} bsx;
 	__u8 boot_code[390];
 	__le16 signature;
-};
+} __packed;
 
 struct exfat_dentry {
 	__u8 type;
