@@ -208,7 +208,6 @@ enum {
 	Opt_charset,
 	Opt_utf8,
 	Opt_case_sensitive,
-	Opt_tz,
 	Opt_errors,
 	Opt_discard,
 };
@@ -223,7 +222,6 @@ static const struct fs_parameter_spec exfat_param_specs[] = {
 	fsparam_string("iocharset",		Opt_charset),
 	fsparam_flag("utf8",			Opt_utf8),
 	fsparam_flag("case_sensitive",		Opt_case_sensitive),
-	fsparam_string("tz",			Opt_tz),
 	fsparam_enum("errors",			Opt_errors),
 	fsparam_flag("discard",			Opt_discard),
 	{}
