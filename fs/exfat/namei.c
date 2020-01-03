@@ -43,15 +43,7 @@ static int __exfat_revalidate_common(struct dentry *dentry)
 	return ret;
 }
 
-static int __exfat_revalidate(struct dentry *dentry)
-{
-	/* This is not negative dentry. Always valid. */
-	if (d_really_is_positive(dentry))
-		return 1;
-	return __exfat_revalidate_common(dentry);
-}
-
-static int __exfat_revalidate_ci(struct dentry *dentry, unsigned int flags)
+static int __exfat_revalidate(struct dentry *dentry, unsigned int flags)
 {
 	/*
 	 * This is not negative dentry. Always valid.
@@ -89,12 +81,6 @@ static unsigned int exfat_striptail_len(const struct qstr *qstr)
 	return __exfat_striptail_len(qstr->len, qstr->name);
 }
 
-static inline unsigned int __exfat_full_name_hash(const struct dentry *dentry,
-		const char *name, unsigned int len)
-{
-	return full_name_hash(dentry, name, len);
-}
-
 static inline unsigned long __exfat_init_name_hash(const struct dentry *dentry)
 {
 	return init_name_hash(dentry);
@@ -107,20 +93,6 @@ static inline unsigned long __exfat_init_name_hash(const struct dentry *dentry)
  * return ENOENT or EINVAL as appropriate.
  */
 static int exfat_d_hash(const struct dentry *dentry, struct qstr *qstr)
-{
-	unsigned int len = exfat_striptail_len(qstr);
-
-	qstr->hash = __exfat_full_name_hash(dentry, qstr->name, len);
-	return 0;
-}
-
-/*
- * Compute the hash for the exfat name corresponding to the dentry.
- * Note: if the name is invalid, we leave the hash code unchanged so
- * that the existing dentry can be used. The exfat fs routines will
- * return ENOENT or EINVAL as appropriate.
- */
-static int exfat_d_hashi(const struct dentry *dentry, struct qstr *qstr)
 {
 	struct nls_table *t = EXFAT_SB(dentry->d_sb)->nls_io;
 	const unsigned char *name;
@@ -138,28 +110,7 @@ static int exfat_d_hashi(const struct dentry *dentry, struct qstr *qstr)
 	return 0;
 }
 
-/*
- * Case sensitive compare of two exfat names.
- */
 static int exfat_cmp(const struct dentry *dentry, unsigned int len,
-		const char *str, const struct qstr *name)
-{
-	unsigned int alen, blen;
-
-	/* A filename cannot end in '.' or we treat it like it has none */
-	alen = exfat_striptail_len(name);
-	blen = __exfat_striptail_len(len, str);
-	if (alen == blen) {
-		if (strncmp(name->name, str, alen) == 0)
-			return 0;
-	}
-	return 1;
-}
-
-/*
- * Case insensitive compare of two exfat names.
- */
-static int exfat_cmpi(const struct dentry *dentry, unsigned int len,
 		const char *str, const struct qstr *name)
 {
 	struct nls_table *t = EXFAT_SB(dentry->d_sb)->nls_io;
@@ -180,27 +131,13 @@ static int exfat_revalidate(struct dentry *dentry, unsigned int flags)
 	if (flags & LOOKUP_RCU)
 		return -ECHILD;
 
-	return __exfat_revalidate(dentry);
-}
-
-static int exfat_revalidate_ci(struct dentry *dentry, unsigned int flags)
-{
-	if (flags & LOOKUP_RCU)
-		return -ECHILD;
-
-	return __exfat_revalidate_ci(dentry, flags);
+	return __exfat_revalidate(dentry, flags);
 }
 
 const struct dentry_operations exfat_dentry_ops = {
 	.d_revalidate	= exfat_revalidate,
 	.d_hash		= exfat_d_hash,
 	.d_compare	= exfat_cmp,
-};
-
-const struct dentry_operations exfat_ci_dentry_ops = {
-	.d_revalidate	= exfat_revalidate_ci,
-	.d_hash		= exfat_d_hashi,
-	.d_compare	= exfat_cmpi,
 };
 
 /* used only in search empty_slot() */

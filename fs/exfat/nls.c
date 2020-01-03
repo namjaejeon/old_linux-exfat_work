@@ -457,9 +457,7 @@ static unsigned short exfat_nls_upper(struct super_block *sb, unsigned short a)
 {
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 
-	if (!sbi->options.case_sensitive && sbi->vol_utbl[a])
-		return sbi->vol_utbl[a];
-	return a;
+	return sbi->vol_utbl[a] ? sbi->vol_utbl[a] : a;
 }
 
 static unsigned short *exfat_nls_wstrchr(unsigned short *str,
