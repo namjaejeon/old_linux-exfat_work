@@ -428,17 +428,11 @@ static int __exfat_resolve_path(struct inode *inode, const unsigned char *path,
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 	struct exfat_inode_info *ei = EXFAT_I(inode);
 
-	/* DOT and DOTDOT are handled by VFS layer */
-
-	/* strip all trailing spaces */
-	/* DO NOTHING : Is needed? */
-
 	/* strip all trailing periods */
 	namelen = __exfat_striptail_len(strlen(path), path);
 	if (!namelen)
 		return -ENOENT;
 
-	/* the limitation of linux? */
 	if (strlen(path) > (MAX_NAME_LENGTH * MAX_CHARSET_SIZE))
 		return -ENAMETOOLONG;
 
