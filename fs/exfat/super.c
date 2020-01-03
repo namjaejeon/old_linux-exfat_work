@@ -21,7 +21,7 @@
 #include "exfat_raw.h"
 #include "exfat_fs.h"
 
-static char exfat_default_iocharset[] = CONFIG_EXFAT_FS_DEFAULT_IOCHARSET;
+static char exfat_default_iocharset[] = CONFIG_EXFAT_DEFAULT_IOCHARSET;
 static const char exfat_iocharset_with_utf8[] = "iso8859-1";
 static struct kmem_cache *exfat_inode_cachep;
 
