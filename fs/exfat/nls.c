@@ -18,8 +18,8 @@
 
 /*
  * Upcase table in compressed format (7.2.5.1 Recommended Up-case Table
- * in exfat specification, See: https://docs.microsoft.com/en-us/windows/
- * win32/fileio/exfat-specification).
+ * in exfat specification, See:
+ * https://docs.microsoft.com/en-us/windows/win32/fileio/exfat-specification).
  */
 static const unsigned short uni_def_upcase[EXFAT_NUM_UPCASE] = {
 	0x0000, 0x0001, 0x0002, 0x0003, 0x0004, 0x0005, 0x0006, 0x0007,
