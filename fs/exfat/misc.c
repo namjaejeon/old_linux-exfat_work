@@ -66,7 +66,7 @@ void exfat_msg(struct super_block *sb, const char *level, const char *fmt, ...)
  * extern struct timezone sys_tz;
  */
 #define UNIX_SECS_1980    315532800L
-#define UNIX_SECS_2108    4354819200L
+#define UNIX_SECS_2108    4354819200LL
 
 /* days between 1970/01/01 and 1980/01/01 (2 leap days) */
 #define DAYS_DELTA_DECADE    (365 * 10 + 2)
