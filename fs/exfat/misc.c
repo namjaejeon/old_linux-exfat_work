@@ -88,7 +88,7 @@ void exfat_msg(struct super_block *sb, const char *level, const char *fmt, ...)
 	} while (0)
 
 /* Linear day numbers of the respective 1sts in non-leap years. */
-static time_t accum_days_in_year[] = {
+static long accum_days_in_year[] = {
 	/* Month : N 01  02  03  04  05  06  07  08  09  10  11  12 */
 	0, 0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334, 0, 0, 0,
 };
@@ -98,18 +98,17 @@ static time_t accum_days_in_year[] = {
 void exfat_time_fat2unix(struct exfat_sb_info *sbi, struct timespec64 *ts,
 		struct exfat_date_time *tp)
 {
-	time_t year = tp->year;
-	time_t ld; /* leap day */
+	long year = tp->year, leap_day;
 
-	MAKE_LEAP_YEAR(ld, year);
+	MAKE_LEAP_YEAR(leap_day, year);
 
 	if (IS_LEAP_YEAR(year) && (tp->month) > 2)
-		ld++;
+		leap_day++;
 
-	ts->tv_sec =  tp->second  + tp->minute * SECS_PER_MIN +
+	ts->tv_sec = (time64_t)(tp->second + tp->minute * SECS_PER_MIN +
 		tp->hour * SECS_PER_HOUR +
-		(year * 365 + ld + accum_days_in_year[tp->month] +
-		(tp->day - 1) + DAYS_DELTA_DECADE) * SECS_PER_DAY;
+		(year * 365 + leap_day + accum_days_in_year[tp->month] +
+		(tp->day - 1) + DAYS_DELTA_DECADE) * SECS_PER_DAY);
 
 	ts->tv_nsec = 0;
 
@@ -131,9 +130,8 @@ void exfat_time_fat2unix(struct exfat_sb_info *sbi, struct timespec64 *ts,
 void exfat_time_unix2fat(struct exfat_sb_info *sbi, struct timespec64 *ts,
 		struct exfat_date_time *tp)
 {
-	time_t second = ts->tv_sec;
-	time_t day, month, year;
-	time_t ld; /* leap day */
+	time64_t second = ts->tv_sec;
+	long day, month, year, leap_day;
 
 	/* Treats as local time with proper time */
 	second -= sys_tz.tz_minuteswest * SECS_PER_MIN;
@@ -164,12 +162,12 @@ void exfat_time_unix2fat(struct exfat_sb_info *sbi, struct timespec64 *ts,
 	day = second / SECS_PER_DAY - DAYS_DELTA_DECADE;
 	year = day / 365;
 
-	MAKE_LEAP_YEAR(ld, year);
-	if (year * 365 + ld > day)
+	MAKE_LEAP_YEAR(leap_day, year);
+	if (year * 365 + leap_day > day)
 		year--;
 
-	MAKE_LEAP_YEAR(ld, year);
-	day -= year * 365 + ld;
+	MAKE_LEAP_YEAR(leap_day, year);
+	day -= year * 365 + leap_day;
 
 	if (IS_LEAP_YEAR(year) && day == accum_days_in_year[3]) {
 		month = 2;
@@ -183,7 +181,7 @@ void exfat_time_unix2fat(struct exfat_sb_info *sbi, struct timespec64 *ts,
 	}
 	day -= accum_days_in_year[month];
 
-	tp->second  = second % SECS_PER_MIN;
+	tp->second = second % SECS_PER_MIN;
 	tp->minute  = (second / SECS_PER_MIN) % 60;
 	tp->hour = (second / SECS_PER_HOUR) % 24;
 	tp->day  = day + 1;
