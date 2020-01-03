@@ -22,7 +22,6 @@
 #include "exfat_fs.h"
 
 static char exfat_default_iocharset[] = CONFIG_EXFAT_DEFAULT_IOCHARSET;
-static const char exfat_iocharset_with_utf8[] = "iso8859-1";
 static struct kmem_cache *exfat_inode_cachep;
 
 static void exfat_free_iocharset(struct exfat_sb_info *sbi)
@@ -155,8 +154,6 @@ static int exfat_show_options(struct seq_file *m, struct dentry *root)
 		seq_printf(m, ",allow_utime=%04o", opts->allow_utime);
 	if (sbi->nls_io)
 		seq_printf(m, ",iocharset=%s", sbi->nls_io->charset);
-	if (opts->utf8)
-		seq_puts(m, ",utf8");
 	seq_printf(m, ",bps=%ld", sb->s_blocksize);
 	if (opts->errors == EXFAT_ERRORS_CONT)
 		seq_puts(m, ",errors=continue");
@@ -205,7 +202,6 @@ enum {
 	Opt_fmask,
 	Opt_allow_utime,
 	Opt_charset,
-	Opt_utf8,
 	Opt_errors,
 	Opt_discard,
 };
@@ -218,7 +214,6 @@ static const struct fs_parameter_spec exfat_param_specs[] = {
 	fsparam_u32oct("fmask",			Opt_fmask),
 	fsparam_u32oct("allow_utime",		Opt_allow_utime),
 	fsparam_string("iocharset",		Opt_charset),
-	fsparam_flag("utf8",			Opt_utf8),
 	fsparam_enum("errors",			Opt_errors),
 	fsparam_flag("discard",			Opt_discard),
 	{}
@@ -273,9 +268,6 @@ static int exfat_parse_param(struct fs_context *fc, struct fs_parameter *param)
 		opts->iocharset = kstrdup(param->string, GFP_KERNEL);
 		if (!opts->iocharset)
 			return -ENOMEM;
-		break;
-	case Opt_utf8:
-		opts->utf8 = 1;
 		break;
 	case Opt_errors:
 		opts->errors = result.uint_32;
@@ -531,11 +523,8 @@ static int exfat_fill_super(struct super_block *sb, struct fs_context *fc)
 	if (opts->allow_utime == (unsigned short)-1)
 		opts->allow_utime = ~opts->fs_dmask & 0022;
 
-	if (opts->utf8 && strcmp(opts->iocharset, exfat_iocharset_with_utf8)) {
-		exfat_msg(sb, KERN_WARNING,
-			"utf8 enabled, \"iocharset=%s\" is recommended",
-			exfat_iocharset_with_utf8);
-	}
+	if (!strcmp(sbi->options.iocharset, "utf8"))
+		opts->utf8 = 1;
 
 	if (opts->discard) {
 		struct request_queue *q = bdev_get_queue(sb->s_bdev);
