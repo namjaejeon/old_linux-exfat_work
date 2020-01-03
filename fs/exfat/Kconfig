@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-config EXFAT
+config EXFAT_FS
 	tristate "exFAT filesystem support"
 	select NLS
 	help
@@ -10,10 +10,10 @@ config EXFAT
 	  To compile this as a module, choose M here: the module will be called
 	  exfat.
 
-config EXFAT_FS_DEFAULT_IOCHARSET
+config EXFAT_DEFAULT_IOCHARSET
 	string "Default iocharset for exFAT"
 	default "utf8"
-	depends on EXFAT
+	depends on EXFAT_FS
 	help
 	  Set this to the default input/output character set you'd
 	  like exFAT to use. It should probably match the character set

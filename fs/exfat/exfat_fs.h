@@ -252,12 +252,10 @@ struct exfat_mount_options {
 	unsigned short allow_utime;
 	/* charset for filename input/display */
 	char *iocharset;
-	unsigned char utf8;
-	unsigned char case_sensitive;
 	/* on error: continue, panic, remount-ro */
 	enum exfat_error_mode errors;
-	/* flag on if -o dicard specified and device support discard() */
-	unsigned char discard;
+	unsigned utf8:1, /* Use of UTF-8 character set */
+		 discard:1; /* Issue discard requests on deletions */
 };
 
 /*
@@ -474,7 +472,6 @@ int exfat_getattr(const struct path *path, struct kstat *stat,
 
 /* namei.c */
 extern const struct dentry_operations exfat_dentry_ops;
-extern const struct dentry_operations exfat_ci_dentry_ops;
 
 /* cache.c */
 int exfat_cache_init(void);
