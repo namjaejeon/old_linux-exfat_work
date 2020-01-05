@@ -152,7 +152,9 @@ static int exfat_show_options(struct seq_file *m, struct dentry *root)
 	seq_printf(m, ",fmask=%04o,dmask=%04o", opts->fs_fmask, opts->fs_dmask);
 	if (opts->allow_utime)
 		seq_printf(m, ",allow_utime=%04o", opts->allow_utime);
-	if (sbi->nls_io)
+	if (opts->utf8)
+		seq_puts(m, ",iocharset=utf8");
+	else if (sbi->nls_io)
 		seq_printf(m, ",iocharset=%s", sbi->nls_io->charset);
 	seq_printf(m, ",bps=%ld", sb->s_blocksize);
 	if (opts->errors == EXFAT_ERRORS_CONT)
@@ -523,9 +525,6 @@ static int exfat_fill_super(struct super_block *sb, struct fs_context *fc)
 	if (opts->allow_utime == (unsigned short)-1)
 		opts->allow_utime = ~opts->fs_dmask & 0022;
 
-	if (!strcmp(sbi->options.iocharset, "utf8"))
-		opts->utf8 = 1;
-
 	if (opts->discard) {
 		struct request_queue *q = bdev_get_queue(sb->s_bdev);
 
@@ -550,12 +549,16 @@ static int exfat_fill_super(struct super_block *sb, struct fs_context *fc)
 	/* set up enough so that it can read an inode */
 	exfat_hash_init(sb);
 
-	sbi->nls_io = load_nls(sbi->options.iocharset);
-	if (!sbi->nls_io) {
-		exfat_msg(sb, KERN_ERR, "IO charset %s not found",
-				sbi->options.iocharset);
-		err = -EINVAL;
-		goto free_table;
+	if (!strcmp(sbi->options.iocharset, "utf8"))
+		opts->utf8 = 1;
+	else {
+		sbi->nls_io = load_nls(sbi->options.iocharset);
+		if (!sbi->nls_io) {
+			exfat_msg(sb, KERN_ERR, "IO charset %s not found",
+					sbi->options.iocharset);
+			err = -EINVAL;
+			goto free_table;
+		}
 	}
 
 	root_inode = new_inode(sb);

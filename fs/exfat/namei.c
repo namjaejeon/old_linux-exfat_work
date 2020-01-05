@@ -94,7 +94,7 @@ static inline unsigned long __exfat_init_name_hash(const struct dentry *dentry)
  */
 static int exfat_d_hash(const struct dentry *dentry, struct qstr *qstr)
 {
-	struct nls_table *t = EXFAT_SB(dentry->d_sb)->nls_io;
+	struct super_block *sb = dentry->d_sb;
 	const unsigned char *name;
 	unsigned int len;
 	unsigned long hash;
@@ -103,26 +103,93 @@ static int exfat_d_hash(const struct dentry *dentry, struct qstr *qstr)
 	len = exfat_striptail_len(qstr);
 
 	hash = __exfat_init_name_hash(dentry);
-	while (len--)
-		hash = partial_name_hash(nls_tolower(t, *name++), hash);
+
+	if (EXFAT_SB(sb)->options.utf8) {
+		unsigned int i, unilen;
+		unsigned short *uniname;
+
+		uniname	= kcalloc(MAX_NAME_LENGTH + 3,
+				sizeof(unsigned short), GFP_KERNEL);
+		if (!uniname)
+			return -ENOMEM;
+
+		unilen = utf8s_to_utf16s(name, strlen(name), UTF16_HOST_ENDIAN,
+				(wchar_t *)uniname, MAX_NAME_LENGTH + 2);
+		if (unilen < 0) {
+			kfree(uniname);
+			return unilen;
+		}
+
+		for (i = 0; i < unilen; i++)
+			hash = partial_name_hash(exfat_nls_upper(sb,
+					uniname[i]), hash);
+		kfree(uniname);
+	} else  {
+		struct nls_table *t = EXFAT_SB(sb)->nls_io;
+
+		while (len--)
+			hash = partial_name_hash(nls_tolower(t, *name++), hash);
+	}
+
 	qstr->hash = end_name_hash(hash);
 
 	return 0;
 }
 
+static int exfat_utf8_nls_cmp(struct super_block *sb, const char *a,
+		const char *b)
+{
+	unsigned short *auni, *buni;
+	int ret;
+
+	auni = kcalloc(MAX_NAME_LENGTH + 3,
+			sizeof(unsigned short), GFP_KERNEL);
+	buni = kcalloc(MAX_NAME_LENGTH + 3,
+			sizeof(unsigned short), GFP_KERNEL);
+	if (!auni || !buni) {
+		ret = -ENOMEM;
+		goto free;
+	}
+
+	ret = utf8s_to_utf16s(a, strlen(a), UTF16_HOST_ENDIAN,
+			(wchar_t *)auni, MAX_NAME_LENGTH + 2);
+	if (ret < 0)
+		goto free;
+
+	ret = utf8s_to_utf16s(b, strlen(b), UTF16_HOST_ENDIAN,
+			(wchar_t *)buni, MAX_NAME_LENGTH + 2);
+	if (ret < 0)
+		goto free;
+
+	ret = exfat_nls_cmp_uniname(sb, auni, buni);
+
+free:
+	kfree(auni);
+	kfree(buni);
+	return ret;
+}
+
 static int exfat_cmp(const struct dentry *dentry, unsigned int len,
 		const char *str, const struct qstr *name)
 {
-	struct nls_table *t = EXFAT_SB(dentry->d_sb)->nls_io;
+	struct super_block *sb = dentry->d_sb;
 	unsigned int alen, blen;
 
 	/* A filename cannot end in '.' or we treat it like it has none */
 	alen = exfat_striptail_len(name);
 	blen = __exfat_striptail_len(len, str);
 	if (alen == blen) {
-		if (nls_strnicmp(t, name->name, str, alen) == 0)
-			return 0;
+		if (EXFAT_SB(sb)->options.utf8) {
+			if (exfat_utf8_nls_cmp(sb, name->name, str) == 0)
+				return 0;
+		} else {
+			struct nls_table *t = EXFAT_SB(sb)->nls_io;
+
+			if (nls_strnicmp(t, name->name, str, alen) == 0)
+				return 0;
+		}
 	}
+
 	return 1;
 }
 

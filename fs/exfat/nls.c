@@ -453,7 +453,7 @@ static int exfat_convert_uni_to_ch(struct nls_table *nls, unsigned short uni,
 	return len;
 }
 
-static unsigned short exfat_nls_upper(struct super_block *sb, unsigned short a)
+unsigned short exfat_nls_upper(struct super_block *sb, unsigned short a)
 {
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 
