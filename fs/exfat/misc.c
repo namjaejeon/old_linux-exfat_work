@@ -62,61 +62,22 @@ void exfat_msg(struct super_block *sb, const char *level, const char *fmt, ...)
 	va_end(args);
 }
 
-/* <linux/time.h> externs sys_tz
- * extern struct timezone sys_tz;
- */
 #define UNIX_SECS_1980    315532800L
 #define UNIX_SECS_2108    4354819200LL
 
-/* days between 1970/01/01 and 1980/01/01 (2 leap days) */
-#define DAYS_DELTA_DECADE    (365 * 10 + 2)
-/* 120 (2100 - 1980) isn't leap year */
-#define NO_LEAP_YEAR_2100    (120)
-#define IS_LEAP_YEAR(y)    (!((y) & 0x3) && (y) != NO_LEAP_YEAR_2100)
-
 #define SECS_PER_MIN    (60)
-#define SECS_PER_HOUR   (60 * SECS_PER_MIN)
-#define SECS_PER_DAY    (24 * SECS_PER_HOUR)
-
-#define MAKE_LEAP_YEAR(leap_year, year)                         \
-	do {                                                    \
-		/* 2100 isn't leap year */                      \
-		if (unlikely(year > NO_LEAP_YEAR_2100))         \
-			leap_year = ((year + 3) / 4) - 1;       \
-		else                                            \
-			leap_year = ((year + 3) / 4);           \
-	} while (0)
-
-/* Linear day numbers of the respective 1sts in non-leap years. */
-static long accum_days_in_year[] = {
-	/* Month : N 01  02  03  04  05  06  07  08  09  10  11  12 */
-	0, 0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334, 0, 0, 0,
-};
-
 #define TIMEZONE_SEC(x)	((x) * 15 * SECS_PER_MIN)
 /* Convert a FAT time/date pair to a UNIX date (seconds since 1 1 70). */
 void exfat_time_fat2unix(struct exfat_sb_info *sbi, struct timespec64 *ts,
 		struct exfat_date_time *tp)
 {
-	long year = tp->year, leap_day;
-
-	MAKE_LEAP_YEAR(leap_day, year);
-
-	if (IS_LEAP_YEAR(year) && (tp->month) > 2)
-		leap_day++;
-
-	ts->tv_sec = (time64_t)(tp->second + tp->minute * SECS_PER_MIN +
-		tp->hour * SECS_PER_HOUR +
-		(year * 365 + leap_day + accum_days_in_year[tp->month] +
-		(tp->day - 1) + DAYS_DELTA_DECADE) * SECS_PER_DAY);
-
-	ts->tv_nsec = 0;
+	ts->tv_sec = mktime64(tp->year + 1980, tp->month, tp->day,
+			tp->hour, tp->minute, tp->second);
+	ts->tv_nsec = tp->milli_second * NSEC_PER_MSEC;
 
 	/* Treat as local time */
-	if (!tp->timezone.valid) {
-		ts->tv_sec += sys_tz.tz_minuteswest * SECS_PER_MIN;
+	if (!tp->timezone.valid)
 		return;
-	}
 
 	/* Treat as UTC time, but need to adjust timezone to UTC0 */
 	if (tp->timezone.off <= 0x3F)
@@ -131,62 +92,43 @@ void exfat_time_unix2fat(struct exfat_sb_info *sbi, struct timespec64 *ts,
 		struct exfat_date_time *tp)
 {
 	time64_t second = ts->tv_sec;
-	long day, month, year, leap_day;
+	struct tm tm;
 
-	/* Treats as local time with proper time */
-	second -= sys_tz.tz_minuteswest * SECS_PER_MIN;
+	time64_to_tm(second, 0, &tm);
+
 	tp->timezone.valid = 1;
 	tp->timezone.off = TIMEZONE_CUR_OFFSET();
 
 	/* Jan 1 GMT 00:00:00 1980. But what about another time zone? */
 	if (second < UNIX_SECS_1980) {
-		tp->second  = 0;
-		tp->minute  = 0;
+		tp->milli_second = 0;
+		tp->second = 0;
+		tp->minute = 0;
 		tp->hour = 0;
-		tp->day  = 1;
-		tp->month  = 1;
+		tp->day = 1;
+		tp->month = 1;
 		tp->year = 0;
 		return;
 	}
 
 	if (second >= UNIX_SECS_2108) {
-		tp->second  = 59;
-		tp->minute  = 59;
+		tp->milli_second = 999;
+		tp->second = 59;
+		tp->minute = 59;
 		tp->hour = 23;
-		tp->day  = 31;
-		tp->month  = 12;
+		tp->day = 31;
+		tp->month = 12;
 		tp->year = 127;
 		return;
 	}
 
-	day = second / SECS_PER_DAY - DAYS_DELTA_DECADE;
-	year = day / 365;
-
-	MAKE_LEAP_YEAR(leap_day, year);
-	if (year * 365 + leap_day > day)
-		year--;
-
-	MAKE_LEAP_YEAR(leap_day, year);
-	day -= year * 365 + leap_day;
-
-	if (IS_LEAP_YEAR(year) && day == accum_days_in_year[3]) {
-		month = 2;
-	} else {
-		if (IS_LEAP_YEAR(year) && day > accum_days_in_year[3])
-			day--;
-		for (month = 1; month < 12; month++) {
-			if (accum_days_in_year[month + 1] > day)
-				break;
-		}
-	}
-	day -= accum_days_in_year[month];
-
-	tp->second = second % SECS_PER_MIN;
-	tp->minute  = (second / SECS_PER_MIN) % 60;
-	tp->hour = (second / SECS_PER_HOUR) % 24;
-	tp->day  = day + 1;
-	tp->month  = month;
-	tp->year = year;
+	tp->milli_second = ts->tv_nsec / NSEC_PER_MSEC;
+	tp->second = tm.tm_sec;
+	tp->minute = tm.tm_min;
+	tp->hour = tm.tm_hour;
+	tp->day = tm.tm_mday;
+	tp->month = tm.tm_mon + 1;
+	tp->year = tm.tm_year + 1900 - 1980;
 }
 
 struct exfat_timestamp *exfat_tm_now(struct exfat_sb_info *sbi,
