@@ -529,6 +529,7 @@ void exfat_evict_inode(struct inode *inode);
 int exfat_block_truncate_page(struct inode *inode, loff_t from);
 
 /* exfat/nls.c */
+unsigned short exfat_nls_upper(struct super_block *sb, unsigned short a);
 int exfat_nls_cmp_uniname(struct super_block *sb, unsigned short *a,
 		unsigned short *b);
 int exfat_nls_uni16s_to_vfsname(struct super_block *sb,
