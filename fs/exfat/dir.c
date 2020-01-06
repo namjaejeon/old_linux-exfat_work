@@ -1149,8 +1149,7 @@ rewind:
 				else
 					uniname += EXFAT_FILE_NAME_LEN;
 
-				len = exfat_extract_uni_name(
-						ep, entry_uniname);
+				len = exfat_extract_uni_name(ep, entry_uniname);
 				name_len += len;
 
 				unichar = *(uniname+len);

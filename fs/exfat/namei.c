@@ -131,8 +131,7 @@ static int exfat_d_hash(const struct dentry *dentry, struct qstr *qstr)
 
 		for (i = 0; i < len; i += charlen) {
 			charlen = t->char2uni(&name[i], len - i, &c);
-			/* error out if we can't convert the character */
-			if (unlikely(charlen < 0))
+			if (charlen < 0)
 				return charlen;
 			hash = partial_name_hash(exfat_nls_upper(sb,
 				(unsigned short)c), hash);
