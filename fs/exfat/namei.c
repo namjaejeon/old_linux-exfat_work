@@ -126,9 +126,17 @@ static int exfat_d_hash(const struct dentry *dentry, struct qstr *qstr)
 		kfree(uniname);
 	} else  {
 		struct nls_table *t = EXFAT_SB(sb)->nls_io;
+		wchar_t c;
+		int i, charlen;
 
-		while (len--)
-			hash = partial_name_hash(nls_tolower(t, *name++), hash);
+		for (i = 0; i < len; i += charlen) {
+			charlen = t->char2uni(&name[i], len - i, &c);
+			/* error out if we can't convert the character */
+			if (unlikely(charlen < 0))
+				return charlen;
+			hash = partial_name_hash(exfat_nls_upper(sb,
+				(unsigned short)c), hash);
+		}
 	}
 
 	qstr->hash = end_name_hash(hash);
@@ -136,29 +144,31 @@ static int exfat_d_hash(const struct dentry *dentry, struct qstr *qstr)
 	return 0;
 }
 
-static int exfat_utf8_nls_cmp(struct super_block *sb, const char *a,
+static int exfat_utf8_ci_cmp(struct super_block *sb, const char *a,
 		const char *b)
 {
 	unsigned short *auni, *buni;
-	int ret;
+	unsigned int alen, blen;
+	int ret = 1;
 
 	auni = kcalloc(MAX_NAME_LENGTH + 3,
 			sizeof(unsigned short), GFP_KERNEL);
 	buni = kcalloc(MAX_NAME_LENGTH + 3,
 			sizeof(unsigned short), GFP_KERNEL);
-	if (!auni || !buni) {
-		ret = -ENOMEM;
+	if (!auni || !buni)
 		goto free;
-	}
 
-	ret = utf8s_to_utf16s(a, strlen(a), UTF16_HOST_ENDIAN,
+	alen = utf8s_to_utf16s(a, strlen(a), UTF16_HOST_ENDIAN,
 			(wchar_t *)auni, MAX_NAME_LENGTH + 2);
-	if (ret < 0)
+	if (alen < 0)
 		goto free;
 
-	ret = utf8s_to_utf16s(b, strlen(b), UTF16_HOST_ENDIAN,
+	blen = utf8s_to_utf16s(b, strlen(b), UTF16_HOST_ENDIAN,
 			(wchar_t *)buni, MAX_NAME_LENGTH + 2);
-	if (ret < 0)
+	if (blen < 0)
+		goto free;
+
+	if (alen != blen)
 		goto free;
 
 	ret = exfat_nls_cmp_uniname(sb, auni, buni);
@@ -180,13 +190,29 @@ static int exfat_cmp(const struct dentry *dentry, unsigned int len,
 	blen = __exfat_striptail_len(len, str);
 	if (alen == blen) {
 		if (EXFAT_SB(sb)->options.utf8) {
-			if (exfat_utf8_nls_cmp(sb, name->name, str) == 0)
+			if (exfat_utf8_ci_cmp(sb, name->name, str) == 0)
 				return 0;
 		} else {
 			struct nls_table *t = EXFAT_SB(sb)->nls_io;
+			wchar_t c1, c2;
+			int i, l1, l2;
 
-			if (nls_strnicmp(t, name->name, str, alen) == 0)
-				return 0;
+			for (i = 0; i < len; i += l1) {
+				l1 = t->char2uni(&name->name[i], alen - i, &c1);
+				l2 = t->char2uni(&str[i], blen - i, &c2);
+
+				if (l1 < 0 || l2 < 0)
+					return 1;
+
+				if (l1 != l2)
+					return 1;
+
+				if (exfat_nls_upper(sb, (unsigned short)c1) !=
+				    exfat_nls_upper(sb, (unsigned short)c2))
+					return 1;
+			}
+
+			return 0;
 		}
 	}
 
