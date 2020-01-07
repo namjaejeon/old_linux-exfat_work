@@ -423,8 +423,6 @@ static int exfat_convert_ch_to_uni(struct nls_table *nls,
 		if (lossy != NULL)
 			*lossy |= NLS_NAME_LOSSY;
 		*uni = '_';
-		if (!strcmp(nls->charset, "utf8"))
-			return 1;
 		return 2;
 	}
 	return len;
