@@ -529,13 +529,13 @@ void exfat_evict_inode(struct inode *inode);
 int exfat_block_truncate_page(struct inode *inode, loff_t from);
 
 /* exfat/nls.c */
-unsigned short exfat_nls_upper(struct super_block *sb, unsigned short a);
-int exfat_nls_cmp_uniname(struct super_block *sb, unsigned short *a,
+unsigned short exfat_toupper(struct super_block *sb, unsigned short a);
+int exfat_cmp_uniname(struct super_block *sb, unsigned short *a,
 		unsigned short *b);
-int exfat_nls_uni16s_to_vfsname(struct super_block *sb,
+int exfat_uni_to_nls(struct super_block *sb,
 		struct exfat_uni_name *uniname, unsigned char *p_cstring,
 		int len);
-int exfat_nls_vfsname_to_uni16s(struct super_block *sb,
+int exfat_nls_to_uni(struct super_block *sb,
 		const unsigned char *p_cstring, const int len,
 		struct exfat_uni_name *uniname, int *p_lossy);
 int exfat_create_upcase_table(struct super_block *sb);

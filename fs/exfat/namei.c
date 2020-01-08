@@ -121,7 +121,7 @@ static int exfat_d_hash(const struct dentry *dentry, struct qstr *qstr)
 		}
 
 		for (i = 0; i < unilen; i++)
-			hash = partial_name_hash(exfat_nls_upper(sb,
+			hash = partial_name_hash(exfat_toupper(sb,
 					uniname[i]), hash);
 		kfree(uniname);
 	} else  {
@@ -133,7 +133,7 @@ static int exfat_d_hash(const struct dentry *dentry, struct qstr *qstr)
 			charlen = t->char2uni(&name[i], len - i, &c);
 			if (charlen < 0)
 				return charlen;
-			hash = partial_name_hash(exfat_nls_upper(sb,
+			hash = partial_name_hash(exfat_toupper(sb,
 				(unsigned short)c), hash);
 		}
 	}
@@ -170,7 +170,7 @@ static int exfat_utf8_ci_cmp(struct super_block *sb, const char *a,
 	if (alen != blen)
 		goto free;
 
-	ret = exfat_nls_cmp_uniname(sb, auni, buni);
+	ret = exfat_cmp_uniname(sb, auni, buni);
 
 free:
 	kfree(auni);
@@ -206,8 +206,8 @@ static int exfat_cmp(const struct dentry *dentry, unsigned int len,
 				if (l1 != l2)
 					return 1;
 
-				if (exfat_nls_upper(sb, (unsigned short)c1) !=
-				    exfat_nls_upper(sb, (unsigned short)c2))
+				if (exfat_toupper(sb, (unsigned short)c1) !=
+				    exfat_toupper(sb, (unsigned short)c2))
 					return 1;
 			}
 
@@ -474,7 +474,7 @@ static int __exfat_resolve_path(struct inode *inode, const unsigned char *path,
 	/* file name conversion :
 	 * If lookup case, we allow bad-name for compatibility.
 	 */
-	namelen = exfat_nls_vfsname_to_uni16s(sb, path, namelen, p_uniname,
+	namelen = exfat_nls_to_uni(sb, path, namelen, p_uniname,
 			&lossy);
 	if (namelen < 0)
 		return namelen; /* return error value */
