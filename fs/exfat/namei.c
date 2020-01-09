@@ -147,8 +147,7 @@ static int exfat_utf8_ci_cmp(struct super_block *sb, const char *a,
 		const char *b)
 {
 	unsigned short *auni, *buni;
-	unsigned int alen, blen;
-	int ret = 1;
+	int alen, blen, ret = 1;
 
 	auni = kcalloc(MAX_NAME_LENGTH + 3,
 			sizeof(unsigned short), GFP_KERNEL);
