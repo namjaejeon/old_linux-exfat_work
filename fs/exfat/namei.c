@@ -147,8 +147,7 @@ static int exfat_utf8_ci_cmp(struct super_block *sb, const char *a,
 		const char *b)
 {
 	unsigned short *auni, *buni;
-	unsigned int alen, blen;
-	int ret = 1;
+	int alen, blen, ret = 1;
 
 	auni = kcalloc(MAX_NAME_LENGTH + 3,
 			sizeof(unsigned short), GFP_KERNEL);
@@ -170,7 +169,7 @@ static int exfat_utf8_ci_cmp(struct super_block *sb, const char *a,
 	if (alen != blen)
 		goto free;
 
-	ret = exfat_cmp_uniname(sb, auni, buni);
+	ret = exfat_uniname_ncmp(sb, auni, buni, alen);
 
 free:
 	kfree(auni);
@@ -474,7 +473,7 @@ static int __exfat_resolve_path(struct inode *inode, const unsigned char *path,
 	/* file name conversion :
 	 * If lookup case, we allow bad-name for compatibility.
 	 */
-	namelen = exfat_nls_to_uni(sb, path, namelen, p_uniname,
+	namelen = exfat_nls_to_utf16(sb, path, namelen, p_uniname,
 			&lossy);
 	if (namelen < 0)
 		return namelen; /* return error value */
