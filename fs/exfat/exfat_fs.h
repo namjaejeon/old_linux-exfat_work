@@ -532,10 +532,10 @@ int exfat_block_truncate_page(struct inode *inode, loff_t from);
 unsigned short exfat_toupper(struct super_block *sb, unsigned short a);
 int exfat_uniname_ncmp(struct super_block *sb, unsigned short *a,
 		unsigned short *b, unsigned int len);
-int exfat_uni_to_nls(struct super_block *sb,
+int exfat_utf16_to_nls(struct super_block *sb,
 		struct exfat_uni_name *uniname, unsigned char *p_cstring,
 		int len);
-int exfat_nls_to_uni(struct super_block *sb,
+int exfat_nls_to_utf16(struct super_block *sb,
 		const unsigned char *p_cstring, const int len,
 		struct exfat_uni_name *uniname, int *p_lossy);
 int exfat_create_upcase_table(struct super_block *sb);

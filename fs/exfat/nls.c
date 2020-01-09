@@ -478,7 +478,7 @@ int exfat_uniname_ncmp(struct super_block *sb, unsigned short *a,
 	return 0;
 }
 
-static int exfat_utf16s_to_utf8s(struct super_block *sb,
+static int exfat_utf16_to_utf8(struct super_block *sb,
 		struct exfat_uni_name *p_uniname, unsigned char *p_cstring,
 		int buflen)
 {
@@ -492,7 +492,7 @@ static int exfat_utf16s_to_utf8s(struct super_block *sb,
 	return len;
 }
 
-static int exfat_utf8s_to_utf16s(struct super_block *sb,
+static int exfat_utf8_to_utf16(struct super_block *sb,
 		const unsigned char *p_cstring, const int len,
 		struct exfat_uni_name *p_uniname, int *p_lossy)
 {
@@ -539,7 +539,7 @@ static int exfat_utf8s_to_utf16s(struct super_block *sb,
 	return unilen;
 }
 
-static int __exfat_uni_to_nls(struct super_block *sb,
+static int __exfat_utf16_to_nls(struct super_block *sb,
 		struct exfat_uni_name *p_uniname, unsigned char *p_cstring,
 		int buflen)
 {
@@ -573,7 +573,7 @@ static int __exfat_uni_to_nls(struct super_block *sb,
 	return out_len;
 }
 
-static int __exfat_nls_to_uni(struct super_block *sb,
+static int __exfat_nls_to_utf16(struct super_block *sb,
 		const unsigned char *p_cstring, const int len,
 		struct exfat_uni_name *p_uniname, int *p_lossy)
 {
@@ -610,22 +610,22 @@ static int __exfat_nls_to_uni(struct super_block *sb,
 	return unilen;
 }
 
-int exfat_uni_to_nls(struct super_block *sb, struct exfat_uni_name *uniname,
+int exfat_utf16_to_nls(struct super_block *sb, struct exfat_uni_name *uniname,
 		unsigned char *p_cstring, int buflen)
 {
 	if (EXFAT_SB(sb)->options.utf8)
-		return exfat_utf16s_to_utf8s(sb, uniname, p_cstring,
+		return exfat_utf16_to_utf8(sb, uniname, p_cstring,
 				buflen);
-	return __exfat_uni_to_nls(sb, uniname, p_cstring, buflen);
+	return __exfat_utf16_to_nls(sb, uniname, p_cstring, buflen);
 }
 
-int exfat_nls_to_uni(struct super_block *sb, const unsigned char *p_cstring,
+int exfat_nls_to_utf16(struct super_block *sb, const unsigned char *p_cstring,
 		const int len, struct exfat_uni_name *uniname, int *p_lossy)
 {
 	if (EXFAT_SB(sb)->options.utf8)
-		return exfat_utf8s_to_utf16s(sb, p_cstring, len,
+		return exfat_utf8_to_utf16(sb, p_cstring, len,
 				uniname, p_lossy);
-	return __exfat_nls_to_uni(sb, p_cstring, len, uniname,
+	return __exfat_nls_to_utf16(sb, p_cstring, len, uniname,
 			p_lossy);
 }
 
