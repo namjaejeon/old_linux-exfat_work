@@ -169,7 +169,7 @@ static int exfat_utf8_ci_cmp(struct super_block *sb, const char *a,
 	if (alen != blen)
 		goto free;
 
-	ret = exfat_cmp_uniname(sb, auni, buni);
+	ret = exfat_uniname_ncmp(sb, auni, buni, alen);
 
 free:
 	kfree(auni);

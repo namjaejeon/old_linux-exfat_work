@@ -467,17 +467,14 @@ static unsigned short *exfat_wstrchr(unsigned short *str, unsigned short wchar)
 	return NULL;
 }
 
-int exfat_cmp_uniname(struct super_block *sb, unsigned short *a,
-		unsigned short *b)
+int exfat_uniname_ncmp(struct super_block *sb, unsigned short *a,
+		unsigned short *b, unsigned int len)
 {
 	int i;
 
-	for (i = 0; i < MAX_NAME_LENGTH; i++, a++, b++) {
+	for (i = 0; i < len; i++, a++, b++)
 		if (exfat_toupper(sb, *a) != exfat_toupper(sb, *b))
 			return 1;
-		if (*a == 0x0)
-			return 0;
-	}
 	return 0;
 }
 

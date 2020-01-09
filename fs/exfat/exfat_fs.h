@@ -530,8 +530,8 @@ int exfat_block_truncate_page(struct inode *inode, loff_t from);
 
 /* exfat/nls.c */
 unsigned short exfat_toupper(struct super_block *sb, unsigned short a);
-int exfat_cmp_uniname(struct super_block *sb, unsigned short *a,
-		unsigned short *b);
+int exfat_uniname_ncmp(struct super_block *sb, unsigned short *a,
+		unsigned short *b, unsigned int len);
 int exfat_uni_to_nls(struct super_block *sb,
 		struct exfat_uni_name *uniname, unsigned char *p_cstring,
 		int len);
