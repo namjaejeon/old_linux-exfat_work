@@ -3,8 +3,8 @@
  * Copyright (C) 2012-2013 Samsung Electronics Co., Ltd.
  */
 
-#ifndef _EXFAT_H
-#define _EXFAT_H
+#ifndef _EXFAT_FS_H
+#define _EXFAT_FS_H
 
 #include <linux/fs.h>
 #include <linux/ratelimit.h>
@@ -564,4 +564,4 @@ void exfat_chain_set(struct exfat_chain *ec, unsigned int dir,
 		unsigned int size, unsigned char flags);
 void exfat_chain_dup(struct exfat_chain *dup, struct exfat_chain *ec);
 
-#endif /* !_EXFAT_H */
+#endif /* !_EXFAT_FS_H */
