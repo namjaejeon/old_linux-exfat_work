@@ -175,12 +175,11 @@ struct exfat_dentry {
 	} __packed dentry;
 } __packed;
 
-union exfat_timezone {
-	struct {
-		__u8 off : 7;
-		__u8 valid : 1;
-	};
-	__u8 value;
-};
+#define EXFAT_TZ_VALID		(1 << 7)
+
+/* Jan 1 GMT 00:00:00 1980 */
+#define EXFAT_MIN_TIMESTAMP_SECS    315532800LL
+/* Dec 31 GMT 23:59:59 2107 */
+#define EXFAT_MAX_TIMESTAMP_SECS    4354819199LL
 
 #endif /* !_EXFAT_RAW_H */

@@ -581,12 +581,9 @@ static int exfat_add_entry(struct inode *inode, const char *path,
 			return -EIO;
 		info->num_subdirs = count + EXFAT_MIN_SUBDIR;
 	}
-	memset(&info->create_timestamp, 0,
-			sizeof(struct exfat_date_time));
-	memset(&info->modify_timestamp, 0,
-			sizeof(struct exfat_date_time));
-	memset(&info->access_timestamp, 0,
-			sizeof(struct exfat_date_time));
+	memset(&info->ctime, 0, sizeof(info->ctime));
+	memset(&info->mtime, 0, sizeof(info->mtime));
+	memset(&info->atime, 0, sizeof(info->atime));
 out:
 	return ret;
 }
@@ -643,7 +640,6 @@ static int exfat_find(struct inode *dir, struct qstr *qname,
 	struct super_block *sb = dir->i_sb;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 	struct exfat_inode_info *ei = EXFAT_I(dir);
-	struct exfat_timestamp tm;
 
 	if (qname->len == 0)
 		return -ENOENT;
@@ -684,12 +680,9 @@ static int exfat_find(struct inode *dir, struct qstr *qname,
 		info->attr = ATTR_SUBDIR;
 		info->flags = ALLOC_FAT_CHAIN;
 		info->start_clu = sbi->root_dir;
-		memset(&info->create_timestamp, 0,
-				sizeof(struct exfat_date_time));
-		memset(&info->modify_timestamp, 0,
-				sizeof(struct exfat_date_time));
-		memset(&info->access_timestamp, 0,
-				sizeof(struct exfat_date_time));
+		memset(&info->ctime, 0, sizeof(info->ctime));
+		memset(&info->mtime, 0, sizeof(info->mtime));
+		memset(&info->atime, 0, sizeof(info->atime));
 
 		exfat_chain_set(&cdir, sbi->root_dir, 0, ALLOC_FAT_CHAIN);
 		if (exfat_count_num_clusters(sb, &cdir, &num_clu))
@@ -726,28 +719,15 @@ static int exfat_find(struct inode *dir, struct qstr *qname,
 			return -EIO;
 		}
 
-		exfat_get_entry_time(ep, &tm, TM_CREATE);
-		info->create_timestamp.year = tm.year;
-		info->create_timestamp.month = tm.mon;
-		info->create_timestamp.day = tm.day;
-		info->create_timestamp.hour = tm.hour;
-		info->create_timestamp.minute = tm.min;
-		info->create_timestamp.second = tm.sec;
-		info->create_timestamp.milli_second = 0;
-		info->create_timestamp.timezone.value = tm.tz.value;
-
-		exfat_get_entry_time(ep, &tm, TM_MODIFY);
-		info->modify_timestamp.year = tm.year;
-		info->modify_timestamp.month = tm.mon;
-		info->modify_timestamp.day = tm.day;
-		info->modify_timestamp.hour = tm.hour;
-		info->modify_timestamp.minute = tm.min;
-		info->modify_timestamp.second = tm.sec;
-		info->modify_timestamp.milli_second = 0;
-		info->modify_timestamp.timezone.value = tm.tz.value;
-
-		memset(&info->access_timestamp, 0,
-				sizeof(struct exfat_date_time));
+		exfat_get_entry_time(sbi, &info->ctime,
+				ep->dentry.file.create_time,
+				ep->dentry.file.create_date,
+				ep->dentry.file.create_tz);
+		exfat_get_entry_time(sbi, &info->ctime,
+				ep->dentry.file.modify_time,
+				ep->dentry.file.modify_date,
+				ep->dentry.file.modify_tz);
+		memset(&info->atime, 0, sizeof(info->atime));
 		kfree(es);
 
 		if (info->type == TYPE_DIR) {

@@ -96,7 +96,6 @@ int __exfat_truncate(struct inode *inode, loff_t new_size)
 	unsigned int num_clusters_new, num_clusters_phys;
 	unsigned int last_clu = EXFAT_FREE_CLUSTER;
 	struct exfat_chain clu;
-	struct exfat_timestamp tm;
 	struct exfat_dentry *ep, *ep2;
 	struct super_block *sb = inode->i_sb;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
@@ -153,14 +152,19 @@ int __exfat_truncate(struct inode *inode, loff_t new_size)
 
 	/* update the directory entry */
 	if (!evict) {
+		struct timespec64 ts;
+
 		es = exfat_get_dentry_set(sb, &(ei->dir), ei->entry,
 				ES_ALL_ENTRIES, &ep);
 		if (!es)
 			return -EIO;
 		ep2 = ep + 1;
 
-		exfat_set_entry_time(ep, exfat_tm_now(EXFAT_SB(sb), &tm),
-				TM_MODIFY);
+		ktime_get_real_ts64(&ts);
+		exfat_set_entry_time(sbi, &ts,
+				&ep->dentry.file.modify_time,
+				&ep->dentry.file.modify_date,
+				&ep->dentry.file.modify_tz);
 		ep->dentry.file.attr = cpu_to_le16(ei->attr);
 
 		/* File size should be zero if there is no cluster allocated */
