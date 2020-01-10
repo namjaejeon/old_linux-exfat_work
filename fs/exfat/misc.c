@@ -62,31 +62,6 @@ void exfat_msg(struct super_block *sb, const char *level, const char *fmt, ...)
 	va_end(args);
 }
 
-void exfat_time_min(struct exfat_date_time *tp)
-{
-	tp->milli_second = 0;
-	tp->second = 0;
-	tp->minute = 0;
-	tp->hour = 0;
-	tp->day = 1;
-	tp->month = 1;
-	tp->year = 0;
-}
-
-void exfat_time_max(struct exfat_date_time *tp)
-{
-	tp->milli_second = 999;
-	tp->second = 59;
-	tp->minute = 59;
-	tp->hour = 23;
-	tp->day = 31;
-	tp->month = 12;
-	tp->year = 127;
-}
-
-#define UNIX_SECS_1980    315532800L
-#define UNIX_SECS_2108    4354819200LL
-
 #define SECS_PER_MIN    (60)
 #define TIMEZONE_SEC(x)	((x) * 15 * SECS_PER_MIN)
 
@@ -100,15 +75,18 @@ static void exfat_adjust_tz(struct timespec64 *ts, u8 tz_off)
 }
 
 /* Convert a FAT time/date pair to a UNIX date (seconds since 1 1 70). */
-void exfat_time_fat2unix(struct exfat_sb_info *sbi, struct timespec64 *ts,
-		struct exfat_date_time *tp)
+void exfat_get_entry_time(struct exfat_sb_info *sbi, struct timespec64 *ts,
+		__le16 time, __le16 date, u8 tz)
 {
-	ts->tv_sec = mktime64(tp->year + 1980, tp->month, tp->day,
-			tp->hour, tp->minute, tp->second);
-	ts->tv_nsec = tp->milli_second * NSEC_PER_MSEC;
+	u16 t = le16_to_cpu(time);
+	u16 d = le16_to_cpu(date);
 
-	if (tp->timezone & EXFAT_TZ_VALID)
-		exfat_adjust_tz(ts, tp->timezone & ~EXFAT_TZ_VALID);
+	ts->tv_sec = mktime64(1980 + (d >> 9), d >> 5 & 0x000F, d & 0x001F,
+			      t >> 11, (t >> 5) & 0x003F, (t & 0x001F) << 1);
+	ts->tv_nsec = 0;
+
+	if (tz & EXFAT_TZ_VALID)
+		exfat_adjust_tz(ts, tz & ~EXFAT_TZ_VALID);
 	else
 		; /* Treat as local time */
 }
@@ -122,54 +100,21 @@ static inline int exfat_tz_offset(struct exfat_sb_info *sbi)
 }
 
 /* Convert linear UNIX date to a FAT time/date pair. */
-void exfat_time_unix2fat(struct exfat_sb_info *sbi, struct timespec64 *ts,
-		struct exfat_date_time *tp)
+void exfat_set_entry_time(struct exfat_sb_info *sbi, struct timespec64 *ts,
+		__le16 *time, __le16 *date, u8 *tz)
 {
-	time64_t second = ts->tv_sec;
 	struct tm tm;
+	u16 t, d;
 
-	time64_to_tm(second, 0, &tm);
+	/* clamp to the range valid in the exfat on-disk representation. */
+	time64_to_tm(clamp(ts->tv_sec, EXFAT_MIN_TIMESTAMP_SECS,
+			EXFAT_MAX_TIMESTAMP_SECS), 0, &tm);
+	t = (tm.tm_hour << 11) | (tm.tm_min << 5) | (tm.tm_sec >> 1);
+	d = ((tm.tm_year - 80) <<  9) | ((tm.tm_mon + 1) << 5) | tm.tm_mday;
 
-	tp->timezone = exfat_tz_offset(sbi) | EXFAT_TZ_VALID;
-
-	/* Jan 1 GMT 00:00:00 1980. But what about another time zone? */
-	if (second < UNIX_SECS_1980) {
-		exfat_time_min(tp);
-		return;
-	}
-
-	if (second >= UNIX_SECS_2108) {
-		exfat_time_max(tp);
-		return;
-	}
-
-	tp->milli_second = ts->tv_nsec / NSEC_PER_MSEC;
-	tp->second = tm.tm_sec;
-	tp->minute = tm.tm_min;
-	tp->hour = tm.tm_hour;
-	tp->day = tm.tm_mday;
-	tp->month = tm.tm_mon + 1;
-	tp->year = tm.tm_year + 1900 - 1980;
-}
-
-struct exfat_timestamp *exfat_tm_now(struct exfat_sb_info *sbi,
-		struct exfat_timestamp *tp)
-{
-	struct timespec64 ts;
-	struct exfat_date_time dt;
-
-	ktime_get_real_ts64(&ts);
-	exfat_time_unix2fat(sbi, &ts, &dt);
-
-	tp->year = dt.year;
-	tp->mon = dt.month;
-	tp->day = dt.day;
-	tp->hour = dt.hour;
-	tp->min = dt.minute;
-	tp->sec = dt.second;
-	tp->tz = dt.timezone;
-
-	return tp;
+	*time = cpu_to_le16(t);
+	*date = cpu_to_le16(d);
+	*tz = exfat_tz_offset(sbi) | EXFAT_TZ_VALID;
 }
 
 unsigned short exfat_calc_chksum_2byte(void *data, int len,

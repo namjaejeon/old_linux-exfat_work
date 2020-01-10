@@ -21,24 +21,15 @@ static int __exfat_write_inode(struct inode *inode, int sync)
 {
 	int ret = -EIO;
 	unsigned long long on_disk_size;
-	struct exfat_timestamp tm;
 	struct exfat_dentry *ep, *ep2;
 	struct exfat_entry_set_cache *es = NULL;
 	struct super_block *sb = inode->i_sb;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 	struct exfat_inode_info *ei = EXFAT_I(inode);
 	bool is_dir = (ei->type == TYPE_DIR) ? true : false;
-	struct exfat_dir_entry info;
 
 	if (inode->i_ino == EXFAT_ROOT_INO)
 		return 0;
-
-	info.attr = exfat_make_attr(inode);
-	info.size = i_size_read(inode);
-
-	exfat_time_unix2fat(sbi, &inode->i_mtime, &info.modify_timestamp);
-	exfat_time_unix2fat(sbi, &inode->i_ctime, &info.create_timestamp);
-	exfat_time_unix2fat(sbi, &inode->i_atime, &info.access_timestamp);
 
 	/*
 	 * If the indode is already unlinked, there is no need for updating it.
@@ -58,29 +49,20 @@ static int __exfat_write_inode(struct inode *inode, int sync)
 		return -EIO;
 	ep2 = ep + 1;
 
-	ep->dentry.file.attr = cpu_to_le16(info.attr);
+	ep->dentry.file.attr = cpu_to_le16(exfat_make_attr(inode));
 
 	/* set FILE_INFO structure using the acquired struct exfat_dentry */
-	tm.tz = info.create_timestamp.timezone;
-	tm.sec = info.create_timestamp.second;
-	tm.min = info.create_timestamp.minute;
-	tm.hour = info.create_timestamp.hour;
-	tm.day = info.create_timestamp.day;
-	tm.mon = info.create_timestamp.month;
-	tm.year = info.create_timestamp.year;
-	exfat_set_entry_time(ep, &tm, TM_CREATE);
-
-	tm.tz = info.modify_timestamp.timezone;
-	tm.sec = info.modify_timestamp.second;
-	tm.min = info.modify_timestamp.minute;
-	tm.hour = info.modify_timestamp.hour;
-	tm.day = info.modify_timestamp.day;
-	tm.mon = info.modify_timestamp.month;
-	tm.year = info.modify_timestamp.year;
-	exfat_set_entry_time(ep, &tm, TM_MODIFY);
+	exfat_set_entry_time(sbi, &inode->i_ctime,
+			&ep->dentry.file.create_time,
+			&ep->dentry.file.create_date,
+			&ep->dentry.file.create_tz);
+	exfat_set_entry_time(sbi, &inode->i_mtime,
+			&ep->dentry.file.modify_time,
+			&ep->dentry.file.modify_date,
+			&ep->dentry.file.modify_tz);
 
 	/* File size should be zero if there is no cluster allocated */
-	on_disk_size = info.size;
+	on_disk_size = i_size_read(inode);
 
 	if (ei->start_clu == EXFAT_EOF_CLUSTER)
 		on_disk_size = 0;
@@ -625,10 +607,9 @@ static int exfat_fill_inode(struct inode *inode, struct exfat_dir_entry *info)
 
 	inode->i_blocks = ((i_size_read(inode) + (sbi->cluster_size - 1)) &
 		~(sbi->cluster_size - 1)) >> inode->i_blkbits;
-
-	exfat_time_fat2unix(sbi, &inode->i_mtime, &info->modify_timestamp);
-	exfat_time_fat2unix(sbi, &inode->i_ctime, &info->create_timestamp);
-	exfat_time_fat2unix(sbi, &inode->i_atime, &info->access_timestamp);
+	inode->i_ctime = info->mtime;
+	inode->i_ctime = info->ctime;
+	inode->i_atime = info->atime;
 
 	exfat_cache_init_inode(inode);
 

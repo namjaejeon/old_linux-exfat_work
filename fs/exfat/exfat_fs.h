@@ -16,12 +16,6 @@
 
 #define EXFAT_CLUSTERS_UNTRACKED (~0u)
 
-enum exfat_time_mode {
-	TM_CREATE,
-	TM_MODIFY,
-	TM_ACCESS,
-};
-
 /*
  * exfat error flags
  */
@@ -135,27 +129,6 @@ enum {
 #define BITS_PER_BYTE_MASK	0x7
 #define IGNORED_BITS_REMAINED(clu, clu_base) ((1 << ((clu) - (clu_base))) - 1)
 
-struct exfat_timestamp {
-	unsigned short sec;	/* 0 ~ 59 */
-	unsigned short min;	/* 0 ~ 59 */
-	unsigned short hour;	/* 0 ~ 23 */
-	unsigned short day;	/* 1 ~ 31 */
-	unsigned short mon;	/* 1 ~ 12 */
-	unsigned short year;	/* 0 ~ 127 (since 1980) */
-	u8 tz;
-};
-
-struct exfat_date_time {
-	unsigned short year;
-	unsigned short month;
-	unsigned short day;
-	unsigned short hour;
-	unsigned short minute;
-	unsigned short second;
-	unsigned short milli_second;
-	u8 timezone;
-};
-
 struct exfat_dentry_namebuf {
 	char *lfn;
 	int lfnbuf_len; /* usally MAX_UNINAME_BUF_SIZE */
@@ -215,9 +188,9 @@ struct exfat_dir_entry {
 	unsigned short attr;
 	loff_t size;
 	unsigned int num_subdirs;
-	struct exfat_date_time create_timestamp;
-	struct exfat_date_time modify_timestamp;
-	struct exfat_date_time access_timestamp;
+	struct timespec64 atime;
+	struct timespec64 mtime;
+	struct timespec64 ctime;
 	struct exfat_dentry_namebuf namebuf;
 };
 
@@ -468,10 +441,6 @@ int exfat_get_cluster(struct inode *inode, unsigned int cluster,
 extern const struct inode_operations exfat_dir_inode_operations;
 extern const struct file_operations exfat_dir_operations;
 unsigned int exfat_get_entry_type(struct exfat_dentry *p_entry);
-void exfat_get_entry_time(struct exfat_dentry *p_entry,
-		struct exfat_timestamp *tp, unsigned char mode);
-void exfat_set_entry_time(struct exfat_dentry *p_entry,
-		struct exfat_timestamp *tp, unsigned char mode);
 int exfat_init_dir_entry(struct inode *inode, struct exfat_chain *p_dir,
 		int entry, unsigned int type, unsigned int start_clu,
 		unsigned long long size);
@@ -533,14 +502,10 @@ void __exfat_fs_error(struct super_block *sb, int report, const char *fmt, ...)
 		fmt, ## args)
 void exfat_msg(struct super_block *sb, const char *lv, const char *fmt, ...)
 		__printf(3, 4) __cold;
-void exfat_time_min(struct exfat_date_time *tp);
-void exfat_time_max(struct exfat_date_time *tp);
-void exfat_time_fat2unix(struct exfat_sb_info *sbi, struct timespec64 *ts,
-		struct exfat_date_time *tp);
-void exfat_time_unix2fat(struct exfat_sb_info *sbi, struct timespec64 *ts,
-		struct exfat_date_time *tp);
-struct exfat_timestamp *exfat_tm_now(struct exfat_sb_info *sbi,
-		struct exfat_timestamp *tm);
+void exfat_get_entry_time(struct exfat_sb_info *sbi, struct timespec64 *ts,
+		__le16 time, __le16 date, u8 tz);
+void exfat_set_entry_time(struct exfat_sb_info *sbi, struct timespec64 *ts,
+		__le16 *time, __le16 *date, u8 *tz);
 unsigned short exfat_calc_chksum_2byte(void *data, int len,
 		unsigned short chksum, int type);
 void exfat_update_bh(struct super_block *sb, struct buffer_head *bh, int sync);
