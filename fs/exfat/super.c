@@ -344,17 +344,6 @@ static int exfat_read_root(struct inode *inode)
 	return 0;
 }
 
-static bool is_exfat(struct pbr *pbr)
-{
-	int i = MUST_BE_ZERO_LEN;
-
-	do {
-		if (pbr->bpb.f64.res_zero[i - 1])
-			break;
-	} while (--i);
-	return i ? false : true;
-}
-
 static struct pbr *exfat_read_pbr_with_logical_sector(struct super_block *sb,
 		struct buffer_head **prev_bh)
 {
@@ -439,13 +428,15 @@ static int __exfat_fill_super(struct super_block *sb)
 		goto free_bh;
 	}
 
-	if (!is_exfat(p_pbr)) {
+	/*
+	 * res_zero field must be filled with zero to prevent mounting
+	 * from FAT volume.
+	 */
+	if (memchr_inv(p_pbr->bpb.f64.res_zero, 0,
+			sizeof(p_pbr->bpb.f64.res_zero))) {
 		ret = -EINVAL;
 		goto free_bh;
 	}
-
-	/* set maximum file size for exFAT */
-	sb->s_maxbytes = 0x7fffffffffffffffLL;
 
 	p_bpb = (struct pbr64 *)p_pbr;
 	if (!p_bpb->bsx.num_fats) {
@@ -485,6 +476,10 @@ static int __exfat_fill_super(struct super_block *sb)
 		exfat_msg(sb, KERN_WARNING,
 			"Volume was not properly unmounted. Some data may be corrupt. Please run fsck.");
 	}
+
+	/* exFAT file size is limited by a disk volume size */
+	sb->s_maxbytes = (u64)(sbi->num_clusters - EXFAT_RESERVED_CLUSTERS) <<
+		sbi->cluster_size_bits; 
 
 	ret = exfat_create_upcase_table(sb);
 	if (ret) {

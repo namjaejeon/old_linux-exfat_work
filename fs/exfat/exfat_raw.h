@@ -70,16 +70,17 @@
 #define ATTR_RWMASK		(ATTR_HIDDEN | ATTR_SYSTEM | ATTR_VOLUME | \
 				 ATTR_SUBDIR | ATTR_ARCHIVE)
 
-#define JUMP_BOOT_LEN			3
-#define OEM_NAME_LEN			8
-#define MUST_BE_ZERO_LEN		53
+#define PBR64_JUMP_BOOT_LEN		3
+#define PBR64_OEM_NAME_LEN		8
+#define PBR64_RESERVED_LEN		53
+
 #define EXFAT_FILE_NAME_LEN		15
 
 /* EXFAT BIOS parameter block (64 bytes) */
 struct bpb64 {
-	__u8 jmp_boot[JUMP_BOOT_LEN];
-	__u8 oem_name[OEM_NAME_LEN];
-	__u8 res_zero[MUST_BE_ZERO_LEN];
+	__u8 jmp_boot[PBR64_JUMP_BOOT_LEN];
+	__u8 oem_name[PBR64_OEM_NAME_LEN];
+	__u8 res_zero[PBR64_RESERVED_LEN];
 } __packed;
 
 /* EXFAT EXTEND BIOS parameter block (56 bytes) */
