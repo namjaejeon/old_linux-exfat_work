@@ -123,7 +123,7 @@ int exfat_set_vol_flags(struct super_block *sb, unsigned short new_flag)
 	bpb = (struct pbr64 *)sbi->pbr_bh->b_data;
 	bpb->bsx.vol_flags = cpu_to_le16(new_flag);
 
-	if ((new_flag == VOL_DIRTY) && (!buffer_dirty(sbi->pbr_bh)))
+	if (new_flag == VOL_DIRTY && !buffer_dirty(sbi->pbr_bh))
 		sync = true;
 	else
 		sync = false;
