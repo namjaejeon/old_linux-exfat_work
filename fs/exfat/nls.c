@@ -539,6 +539,9 @@ static int exfat_utf8_to_utf16(struct super_block *sb,
 	return unilen;
 }
 
+#define SURROGATE_MASK	0xfffff800
+#define SURROGATE_PAIR	0x0000d800
+#define SURROGATE_LOW	0x00000400
 static int __exfat_utf16_to_nls(struct super_block *sb,
 		struct exfat_uni_name *p_uniname, unsigned char *p_cstring,
 		int buflen)
@@ -552,8 +555,28 @@ static int __exfat_utf16_to_nls(struct super_block *sb,
 	while (i < MAX_NAME_LENGTH && out_len < (buflen - 1)) {
 		if (*uniname == '\0')
 			break;
+		if ((*uniname & SURROGATE_MASK) != SURROGATE_PAIR) {
+			len = exfat_convert_uni_to_ch(nls, *uniname, buf, NULL);
+		} else {
+			/* Process UTF-16 surrogate pair as one character */
+			if (!(*uniname & SURROGATE_LOW) &&
+			    i+1 < MAX_NAME_LENGTH &&
+			    (*(uniname+1) & SURROGATE_MASK) == SURROGATE_PAIR &&
+			    (*(uniname+1) & SURROGATE_LOW)) {
+				uniname++;
+				i++;
+			}
 
-		len = exfat_convert_uni_to_ch(nls, *uniname, buf, NULL);
+			/*
+			 * UTF-16 surrogate pair encodes code points above
+			 * Ux+FFFF. Code points above U+FFFF are not supported
+			 * by kernel NLS framework therefore use replacement
+			 * character
+			 */
+			len = 1;
+			buf[0] = '_';
+		}
+
 		if (out_len + len >= buflen)
 			len = buflen - 1 - out_len;
 		out_len += len;
