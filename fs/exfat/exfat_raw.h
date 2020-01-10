@@ -175,12 +175,6 @@ struct exfat_dentry {
 	} __packed dentry;
 } __packed;
 
-union exfat_timezone {
-	struct {
-		__u8 off : 7;
-		__u8 valid : 1;
-	};
-	__u8 value;
-};
+#define EXFAT_TZ_VALID		(1 << 7)
 
 #endif /* !_EXFAT_RAW_H */

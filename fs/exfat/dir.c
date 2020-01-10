@@ -143,8 +143,7 @@ static int exfat_readdir(struct inode *inode, struct exfat_dir_entry *dir_entry)
 			dir_entry->create_timestamp.minute = tm.min;
 			dir_entry->create_timestamp.second = tm.sec;
 			dir_entry->create_timestamp.milli_second = 0;
-			dir_entry->create_timestamp.timezone.value =
-				tm.tz.value;
+			dir_entry->create_timestamp.timezone = tm.tz;
 
 			exfat_get_entry_time(ep, &tm, TM_MODIFY);
 			dir_entry->modify_timestamp.year = tm.year;
@@ -154,8 +153,7 @@ static int exfat_readdir(struct inode *inode, struct exfat_dir_entry *dir_entry)
 			dir_entry->modify_timestamp.minute = tm.min;
 			dir_entry->modify_timestamp.second = tm.sec;
 			dir_entry->modify_timestamp.milli_second = 0;
-			dir_entry->modify_timestamp.timezone.value =
-				tm.tz.value;
+			dir_entry->modify_timestamp.timezone = tm.tz;
 
 			memset(&dir_entry->access_timestamp, 0,
 				sizeof(struct exfat_date_time));
@@ -443,7 +441,7 @@ void exfat_get_entry_time(struct exfat_dentry *ep, struct exfat_timestamp *tp,
 		break;
 	}
 
-	tp->tz.value = tz;
+	tp->tz = tz;
 	tp->sec  = (t & 0x001F) << 1;
 	tp->min  = (t >> 5) & 0x003F;
 	tp->hour = (t >> 11);
@@ -464,17 +462,17 @@ void exfat_set_entry_time(struct exfat_dentry *ep,
 	case TM_CREATE:
 		ep->dentry.file.create_time = cpu_to_le16(t);
 		ep->dentry.file.create_date = cpu_to_le16(d);
-		ep->dentry.file.create_tz = tp->tz.value;
+		ep->dentry.file.create_tz = tp->tz;
 		break;
 	case TM_MODIFY:
 		ep->dentry.file.modify_time = cpu_to_le16(t);
 		ep->dentry.file.modify_date = cpu_to_le16(d);
-		ep->dentry.file.modify_tz = tp->tz.value;
+		ep->dentry.file.modify_tz = tp->tz;
 		break;
 	case TM_ACCESS:
 		ep->dentry.file.access_time = cpu_to_le16(t);
 		ep->dentry.file.access_date = cpu_to_le16(d);
-		ep->dentry.file.access_tz = tp->tz.value;
+		ep->dentry.file.access_tz = tp->tz;
 		break;
 	}
 }

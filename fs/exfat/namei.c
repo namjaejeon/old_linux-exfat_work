@@ -734,7 +734,7 @@ static int exfat_find(struct inode *dir, struct qstr *qname,
 		info->create_timestamp.minute = tm.min;
 		info->create_timestamp.second = tm.sec;
 		info->create_timestamp.milli_second = 0;
-		info->create_timestamp.timezone.value = tm.tz.value;
+		info->create_timestamp.timezone = tm.tz;
 
 		exfat_get_entry_time(ep, &tm, TM_MODIFY);
 		info->modify_timestamp.year = tm.year;
@@ -744,7 +744,7 @@ static int exfat_find(struct inode *dir, struct qstr *qname,
 		info->modify_timestamp.minute = tm.min;
 		info->modify_timestamp.second = tm.sec;
 		info->modify_timestamp.milli_second = 0;
-		info->modify_timestamp.timezone.value = tm.tz.value;
+		info->modify_timestamp.timezone = tm.tz;
 
 		memset(&info->access_timestamp, 0,
 				sizeof(struct exfat_date_time));

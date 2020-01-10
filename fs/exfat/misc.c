@@ -89,6 +89,16 @@ void exfat_time_max(struct exfat_date_time *tp)
 
 #define SECS_PER_MIN    (60)
 #define TIMEZONE_SEC(x)	((x) * 15 * SECS_PER_MIN)
+
+static void exfat_adjust_tz(struct timespec64 *ts, u8 tz_off)
+{
+	/* Treat as UTC time, but need to adjust timezone to UTC0 */
+	if (tz_off <= 0x3F)
+		ts->tv_sec -= TIMEZONE_SEC(tz_off);
+	else /* 0x40 <= (tz_off & 0x7F) <=0x7F */
+		ts->tv_sec += TIMEZONE_SEC(0x80 - tz_off);
+}
+
 /* Convert a FAT time/date pair to a UNIX date (seconds since 1 1 70). */
 void exfat_time_fat2unix(struct exfat_sb_info *sbi, struct timespec64 *ts,
 		struct exfat_date_time *tp)
@@ -97,16 +107,12 @@ void exfat_time_fat2unix(struct exfat_sb_info *sbi, struct timespec64 *ts,
 			tp->hour, tp->minute, tp->second);
 	ts->tv_nsec = tp->milli_second * NSEC_PER_MSEC;
 
-	/* Treat as local time */
-	if (!tp->timezone.valid)
-		return;
-
-	/* Treat as UTC time, but need to adjust timezone to UTC0 */
-	if (tp->timezone.off <= 0x3F)
-		ts->tv_sec -= TIMEZONE_SEC(tp->timezone.off);
-	else /* 0x40 <= (tp->timezone & 0x7F) <=0x7F */
-		ts->tv_sec += TIMEZONE_SEC(0x80 - tp->timezone.off);
+	if (tp->timezone & EXFAT_TZ_VALID)
+		exfat_adjust_tz(ts, tp->timezone & ~EXFAT_TZ_VALID);
+	else
+		; /* Treat as local time */
 }
+
 
 static inline int exfat_tz_offset(struct exfat_sb_info *sbi)
 {
@@ -115,7 +121,6 @@ static inline int exfat_tz_offset(struct exfat_sb_info *sbi)
 		sys_tz.tz_minuteswest) / -15) & 0x7F;
 }
 
-#define TIMEZONE_CUR_OFFSET()	((sys_tz.tz_minuteswest / (-15)) & 0x7F)
 /* Convert linear UNIX date to a FAT time/date pair. */
 void exfat_time_unix2fat(struct exfat_sb_info *sbi, struct timespec64 *ts,
 		struct exfat_date_time *tp)
@@ -125,8 +130,7 @@ void exfat_time_unix2fat(struct exfat_sb_info *sbi, struct timespec64 *ts,
 
 	time64_to_tm(second, 0, &tm);
 
-	tp->timezone.valid = 1;
-	tp->timezone.off = exfat_tz_offset(sbi);
+	tp->timezone = exfat_tz_offset(sbi) | EXFAT_TZ_VALID;
 
 	/* Jan 1 GMT 00:00:00 1980. But what about another time zone? */
 	if (second < UNIX_SECS_1980) {
@@ -163,7 +167,7 @@ struct exfat_timestamp *exfat_tm_now(struct exfat_sb_info *sbi,
 	tp->hour = dt.hour;
 	tp->min = dt.minute;
 	tp->sec = dt.second;
-	tp->tz.value = dt.timezone.value;
+	tp->tz = dt.timezone;
 
 	return tp;
 }
