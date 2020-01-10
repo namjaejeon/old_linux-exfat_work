@@ -723,7 +723,7 @@ static int exfat_find(struct inode *dir, struct qstr *qname,
 				ep->dentry.file.create_time,
 				ep->dentry.file.create_date,
 				ep->dentry.file.create_tz);
-		exfat_get_entry_time(sbi, &info->ctime,
+		exfat_get_entry_time(sbi, &info->mtime,
 				ep->dentry.file.modify_time,
 				ep->dentry.file.modify_date,
 				ep->dentry.file.modify_tz);
