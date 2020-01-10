@@ -73,7 +73,7 @@ static int exfat_statfs(struct dentry *dentry, struct kstatfs *buf)
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 	unsigned long long id = huge_encode_dev(sb->s_bdev->bd_dev);
 
-	if (sbi->used_clusters == ~0u) {
+	if (sbi->used_clusters == EXFAT_CLUSTERS_UNTRACKED) {
 		mutex_lock(&sbi->s_lock);
 		if (exfat_count_used_clusters(sb, &sbi->used_clusters)) {
 			mutex_unlock(&sbi->s_lock);
@@ -478,7 +478,7 @@ static int __exfat_fill_super(struct super_block *sb)
 
 	sbi->vol_flag = le16_to_cpu(p_bpb->bsx.vol_flags);
 	sbi->clu_srch_ptr = EXFAT_FIRST_CLUSTER;
-	sbi->used_clusters = ~0u;
+	sbi->used_clusters = EXFAT_CLUSTERS_UNTRACKED;
 
 	if (le16_to_cpu(p_bpb->bsx.vol_flags) & VOL_DIRTY) {
 		sbi->vol_flag |= VOL_DIRTY;

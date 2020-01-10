@@ -14,6 +14,8 @@
 
 #define EXFAT_SB_DIRTY		0
 
+#define EXFAT_CLUSTERS_UNTRACKED (~0u)
+
 enum exfat_time_mode {
 	TM_CREATE,
 	TM_MODIFY,
