@@ -607,7 +607,7 @@ static int exfat_fill_inode(struct inode *inode, struct exfat_dir_entry *info)
 
 	inode->i_blocks = ((i_size_read(inode) + (sbi->cluster_size - 1)) &
 		~(sbi->cluster_size - 1)) >> inode->i_blkbits;
-	inode->i_ctime = info->mtime;
+	inode->i_mtime = info->mtime;
 	inode->i_ctime = info->ctime;
 	inode->i_atime = info->atime;
 
