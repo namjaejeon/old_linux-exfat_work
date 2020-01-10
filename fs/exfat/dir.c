@@ -16,7 +16,7 @@ static int exfat_extract_uni_name(struct exfat_dentry *ep,
 	int i, len = 0;
 
 	for (i = 0; i < EXFAT_FILE_NAME_LEN; i++) {
-		*uniname = le16_to_cpu(ep->name_unicode[i]);
+		*uniname = le16_to_cpu(ep->dentry.name.unicode_0_14[i]);
 		if (*uniname == 0x0)
 			return len;
 		uniname++;
@@ -133,7 +133,7 @@ static int exfat_readdir(struct inode *inode, struct exfat_dir_entry *dir_entry)
 				continue;
 			}
 
-			dir_entry->attr = le16_to_cpu(ep->file_attr);
+			dir_entry->attr = le16_to_cpu(ep->dentry.file.attr);
 
 			exfat_get_entry_time(ep, &tm, TM_CREATE);
 			dir_entry->create_timestamp.year = tm.year;
@@ -170,7 +170,8 @@ static int exfat_readdir(struct inode *inode, struct exfat_dir_entry *dir_entry)
 			ep = exfat_get_dentry(sb, &clu, i + 1, &bh, NULL);
 			if (!ep)
 				return -EIO;
-			dir_entry->size = le64_to_cpu(ep->stream_valid_size);
+			dir_entry->size =
+				le64_to_cpu(ep->dentry.stream.valid_size);
 			brelse(bh);
 
 			ei->hint_bmap.off = dentry >> dentries_per_clu_bits;
@@ -367,7 +368,7 @@ unsigned int exfat_get_entry_type(struct exfat_dentry *ep)
 		if (ep->type == EXFAT_VOLUME)
 			return TYPE_VOLUME;
 		if (ep->type == EXFAT_FILE) {
-			if (le16_to_cpu(ep->file_attr) & ATTR_SUBDIR)
+			if (le16_to_cpu(ep->dentry.file.attr) & ATTR_SUBDIR)
 				return TYPE_DIR;
 			return TYPE_FILE;
 		}
@@ -412,10 +413,10 @@ static void exfat_set_entry_type(struct exfat_dentry *ep, unsigned int type)
 		ep->type = EXFAT_VOLUME;
 	} else if (type == TYPE_DIR) {
 		ep->type = EXFAT_FILE;
-		ep->file_attr = cpu_to_le16(ATTR_SUBDIR);
+		ep->dentry.file.attr = cpu_to_le16(ATTR_SUBDIR);
 	} else if (type == TYPE_FILE) {
 		ep->type = EXFAT_FILE;
-		ep->file_attr = cpu_to_le16(ATTR_ARCHIVE);
+		ep->dentry.file.attr = cpu_to_le16(ATTR_ARCHIVE);
 	}
 }
 
@@ -426,19 +427,19 @@ void exfat_get_entry_time(struct exfat_dentry *ep, struct exfat_timestamp *tp,
 
 	switch (mode) {
 	case TM_CREATE:
-		t = le16_to_cpu(ep->file_create_time);
-		d = le16_to_cpu(ep->file_create_date);
-		tz = ep->file_create_tz;
+		t = le16_to_cpu(ep->dentry.file.create_time);
+		d = le16_to_cpu(ep->dentry.file.create_date);
+		tz = ep->dentry.file.create_tz;
 		break;
 	case TM_MODIFY:
-		t = le16_to_cpu(ep->file_modify_time);
-		d = le16_to_cpu(ep->file_modify_date);
-		tz = ep->file_modify_tz;
+		t = le16_to_cpu(ep->dentry.file.modify_time);
+		d = le16_to_cpu(ep->dentry.file.modify_date);
+		tz = ep->dentry.file.modify_tz;
 		break;
 	case TM_ACCESS:
-		t = le16_to_cpu(ep->file_access_time);
-		d = le16_to_cpu(ep->file_access_date);
-		tz = ep->file_access_tz;
+		t = le16_to_cpu(ep->dentry.file.access_time);
+		d = le16_to_cpu(ep->dentry.file.access_date);
+		tz = ep->dentry.file.access_tz;
 		break;
 	}
 
@@ -461,19 +462,19 @@ void exfat_set_entry_time(struct exfat_dentry *ep,
 
 	switch (mode) {
 	case TM_CREATE:
-		ep->file_create_time = cpu_to_le16(t);
-		ep->file_create_date = cpu_to_le16(d);
-		ep->file_create_tz = tp->tz.value;
+		ep->dentry.file.create_time = cpu_to_le16(t);
+		ep->dentry.file.create_date = cpu_to_le16(d);
+		ep->dentry.file.create_tz = tp->tz.value;
 		break;
 	case TM_MODIFY:
-		ep->file_modify_time = cpu_to_le16(t);
-		ep->file_modify_date = cpu_to_le16(d);
-		ep->file_modify_tz = tp->tz.value;
+		ep->dentry.file.modify_time = cpu_to_le16(t);
+		ep->dentry.file.modify_date = cpu_to_le16(d);
+		ep->dentry.file.modify_tz = tp->tz.value;
 		break;
 	case TM_ACCESS:
-		ep->file_access_time = cpu_to_le16(t);
-		ep->file_access_date = cpu_to_le16(d);
-		ep->file_access_tz = tp->tz.value;
+		ep->dentry.file.access_time = cpu_to_le16(t);
+		ep->dentry.file.access_date = cpu_to_le16(d);
+		ep->dentry.file.access_tz = tp->tz.value;
 		break;
 	}
 }
@@ -489,8 +490,8 @@ static void exfat_init_file_entry(struct super_block *sb,
 	exfat_set_entry_time(ep, tp, TM_CREATE);
 	exfat_set_entry_time(ep, tp, TM_MODIFY);
 	exfat_set_entry_time(ep, tp, TM_ACCESS);
-	ep->file_create_time_ms = 0;
-	ep->file_modify_time_ms = 0;
+	ep->dentry.file.create_time_ms = 0;
+	ep->dentry.file.modify_time_ms = 0;
 }
 
 static void exfat_init_stream_entry(struct exfat_dentry *ep,
@@ -498,10 +499,10 @@ static void exfat_init_stream_entry(struct exfat_dentry *ep,
 		unsigned long long size)
 {
 	exfat_set_entry_type(ep, TYPE_STREAM);
-	ep->stream_flags = flags;
-	ep->stream_start_clu = cpu_to_le32(start_clu);
-	ep->stream_valid_size = cpu_to_le64(size);
-	ep->stream_size = cpu_to_le64(size);
+	ep->dentry.stream.flags = flags;
+	ep->dentry.stream.start_clu = cpu_to_le32(start_clu);
+	ep->dentry.stream.valid_size = cpu_to_le64(size);
+	ep->dentry.stream.size = cpu_to_le64(size);
 }
 
 static void exfat_init_name_entry(struct exfat_dentry *ep,
@@ -510,10 +511,10 @@ static void exfat_init_name_entry(struct exfat_dentry *ep,
 	int i;
 
 	exfat_set_entry_type(ep, TYPE_EXTEND);
-	ep->name_flags = 0x0;
+	ep->dentry.name.flags = 0x0;
 
 	for (i = 0; i < EXFAT_FILE_NAME_LEN; i++) {
-		ep->name_unicode[i] = cpu_to_le16(*uniname);
+		ep->dentry.name.unicode_0_14[i] = cpu_to_le16(*uniname);
 		if (*uniname == 0x0)
 			break;
 		uniname++;
@@ -571,7 +572,7 @@ int exfat_update_dir_chksum(struct inode *inode, struct exfat_chain *p_dir,
 	if (!fep)
 		return -EIO;
 
-	num_entries = fep->file_num_ext + 1;
+	num_entries = fep->dentry.file.num_ext + 1;
 	chksum = exfat_calc_chksum_2byte(fep, DENTRY_SIZE, 0, CS_DIR_ENTRY);
 
 	for (i = 1; i < num_entries; i++) {
@@ -585,7 +586,7 @@ int exfat_update_dir_chksum(struct inode *inode, struct exfat_chain *p_dir,
 		brelse(bh);
 	}
 
-	fep->file_checksum = cpu_to_le16(chksum);
+	fep->dentry.file.checksum = cpu_to_le16(chksum);
 	exfat_update_bh(sb, fbh, IS_DIRSYNC(inode));
 release_fbh:
 	brelse(fbh);
@@ -607,7 +608,7 @@ int exfat_init_ext_entry(struct inode *inode, struct exfat_chain *p_dir,
 	if (!ep)
 		return -EIO;
 
-	ep->file_num_ext = (unsigned char)(num_entries - 1);
+	ep->dentry.file.num_ext = (unsigned char)(num_entries - 1);
 	exfat_update_bh(sb, bh, sync);
 	brelse(bh);
 
@@ -615,8 +616,8 @@ int exfat_init_ext_entry(struct inode *inode, struct exfat_chain *p_dir,
 	if (!ep)
 		return -EIO;
 
-	ep->stream_name_len = p_uniname->name_len;
-	ep->stream_name_hash = cpu_to_le16(p_uniname->name_hash);
+	ep->dentry.stream.name_len = p_uniname->name_len;
+	ep->dentry.stream.name_hash = cpu_to_le16(p_uniname->name_hash);
 	exfat_update_bh(sb, bh, sync);
 	brelse(bh);
 
@@ -675,7 +676,7 @@ int exfat_update_dir_chksum_with_entry_set(struct super_block *sb,
 		chksum_type = CS_DEFAULT;
 	}
 
-	es->entries[0].file_checksum = cpu_to_le16(chksum);
+	es->entries[0].dentry.file.checksum = cpu_to_le16(chksum);
 
 	while (num_entries) {
 		/* write per sector base */
@@ -949,7 +950,8 @@ struct exfat_entry_set_cache *exfat_get_dentry_set(struct super_block *sb,
 	if (entry_type != TYPE_FILE && entry_type != TYPE_DIR)
 		goto release_bh;
 
-	num_entries = type == ES_ALL_ENTRIES ? ep->file_num_ext + 1 : type;
+	num_entries = type == ES_ALL_ENTRIES ?
+		ep->dentry.file.num_ext + 1 : type;
 	es = kmalloc(struct_size(es, entries, num_entries), GFP_KERNEL);
 	if (!es)
 		goto release_bh;
@@ -1106,7 +1108,7 @@ rewind:
 			if (entry_type == TYPE_FILE || entry_type == TYPE_DIR) {
 				step = DIRENT_STEP_FILE;
 				if (type == TYPE_ALL || type == entry_type) {
-					num_ext = ep->file_num_ext;
+					num_ext = ep->dentry.file.num_ext;
 					step = DIRENT_STEP_STRM;
 				}
 				brelse(bh);
@@ -1122,10 +1124,11 @@ rewind:
 					continue;
 				}
 				step = DIRENT_STEP_FILE;
-				name_hash = le16_to_cpu(ep->stream_name_hash);
+				name_hash = le16_to_cpu(
+						ep->dentry.stream.name_hash);
 				if (p_uniname->name_hash == name_hash &&
 				    p_uniname->name_len ==
-						ep->stream_name_len) {
+						ep->dentry.stream.name_len) {
 					step = DIRENT_STEP_NAME;
 					order = 1;
 					name_len = 0;
@@ -1244,7 +1247,7 @@ int exfat_count_ext_entries(struct super_block *sb, struct exfat_chain *p_dir,
 	struct exfat_dentry *ext_ep;
 	struct buffer_head *bh;
 
-	for (i = 0, entry++; i < ep->file_num_ext; i++, entry++) {
+	for (i = 0, entry++; i < ep->dentry.file.num_ext; i++, entry++) {
 		ext_ep = exfat_get_dentry(sb, p_dir, entry, &bh, NULL);
 		if (!ext_ep)
 			return -EIO;

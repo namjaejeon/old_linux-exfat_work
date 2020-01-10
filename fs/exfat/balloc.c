@@ -53,8 +53,8 @@ static int exfat_allocate_bitmap(struct super_block *sb,
 	unsigned int i, need_map_size;
 	sector_t sector;
 
-	sbi->map_clu = le32_to_cpu(ep->bitmap_start_clu);
-	map_size = le64_to_cpu(ep->bitmap_size);
+	sbi->map_clu = le32_to_cpu(ep->dentry.bitmap.start_clu);
+	map_size = le64_to_cpu(ep->dentry.bitmap.size);
 	need_map_size = ((EXFAT_DATA_CLUSTER_COUNT(sbi) - 1) / BITS_PER_BYTE)
 		+ 1;
 	if (need_map_size != map_size) {
@@ -116,7 +116,7 @@ int exfat_load_bitmap(struct super_block *sb)
 				break;
 			if (type != TYPE_BITMAP)
 				continue;
-			if (ep->bitmap_flags == 0x0) {
+			if (ep->dentry.bitmap.flags == 0x0) {
 				int err;
 
 				err = exfat_allocate_bitmap(sb, ep);

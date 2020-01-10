@@ -182,33 +182,4 @@ union exfat_timezone {
 	__u8 value;
 };
 
-#define file_num_ext			dentry.file.num_ext
-#define file_checksum			dentry.file.checksum
-#define file_attr			dentry.file.attr
-#define file_create_time		dentry.file.create_time
-#define file_create_date		dentry.file.create_date
-#define file_modify_time		dentry.file.modify_time
-#define file_modify_date		dentry.file.modify_date
-#define file_access_time		dentry.file.access_time
-#define file_access_date		dentry.file.access_date
-#define file_create_time_ms		dentry.file.create_time_ms
-#define file_modify_time_ms		dentry.file.modify_time_ms
-#define file_create_tz			dentry.file.create_tz
-#define file_modify_tz			dentry.file.modify_tz
-#define file_access_tz			dentry.file.access_tz
-#define stream_flags			dentry.stream.flags
-#define stream_name_len			dentry.stream.name_len
-#define stream_name_hash		dentry.stream.name_hash
-#define stream_start_clu		dentry.stream.start_clu
-#define stream_valid_size		dentry.stream.valid_size
-#define stream_size			dentry.stream.size
-#define name_flags			dentry.name.flags
-#define name_unicode			dentry.name.unicode_0_14
-#define bitmap_flags			dentry.bitmap.flags
-#define bitmap_start_clu		dentry.bitmap.start_clu
-#define bitmap_size			dentry.bitmap.size
-#define upcase_start_clu		dentry.upcase.start_clu
-#define upcase_size			dentry.upcase.size
-#define upcase_checksum			dentry.upcase.checksum
-
 #endif /* !_EXFAT_RAW_H */

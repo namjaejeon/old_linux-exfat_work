@@ -421,9 +421,9 @@ static int exfat_find_empty_entry(struct inode *inode,
 			if (!ep)
 				return -EIO;
 
-			ep->stream_valid_size = cpu_to_le64(size);
-			ep->stream_size = ep->stream_valid_size;
-			ep->stream_flags = p_dir->flags;
+			ep->dentry.stream.valid_size = cpu_to_le64(size);
+			ep->dentry.stream.size = ep->dentry.stream.valid_size;
+			ep->dentry.stream.flags = p_dir->flags;
 			exfat_update_bh(sb, bh, IS_DIRSYNC(inode));
 			brelse(bh);
 			if (exfat_update_dir_chksum(inode, &(ei->dir),
@@ -708,14 +708,15 @@ static int exfat_find(struct inode *dir, struct qstr *qname,
 		ep2 = ep + 1;
 
 		info->type = exfat_get_entry_type(ep);
-		info->attr = le16_to_cpu(ep->file_attr);
-		info->size = le64_to_cpu(ep2->stream_valid_size);
+		info->attr = le16_to_cpu(ep->dentry.file.attr);
+		info->size = le64_to_cpu(ep2->dentry.stream.valid_size);
 		if ((info->type == TYPE_FILE) && (info->size == 0)) {
 			info->flags = ALLOC_NO_FAT_CHAIN;
 			info->start_clu = EXFAT_EOF_CLUSTER;
 		} else {
-			info->flags = ep2->stream_flags;
-			info->start_clu = le32_to_cpu(ep2->stream_start_clu);
+			info->flags = ep2->dentry.stream.flags;
+			info->start_clu =
+				le32_to_cpu(ep2->dentry.stream.start_clu);
 		}
 
 		if (ei->start_clu == EXFAT_FREE_CLUSTER) {
@@ -1110,7 +1111,7 @@ static int exfat_rename_file(struct inode *inode, struct exfat_chain *p_dir,
 
 		memcpy(epnew, epold, DENTRY_SIZE);
 		if (exfat_get_entry_type(epnew) == TYPE_FILE) {
-			epnew->file_attr |= cpu_to_le16(ATTR_ARCHIVE);
+			epnew->dentry.file.attr |= cpu_to_le16(ATTR_ARCHIVE);
 			ei->attr |= ATTR_ARCHIVE;
 		}
 		exfat_update_bh(sb, new_bh, sync);
@@ -1139,7 +1140,7 @@ static int exfat_rename_file(struct inode *inode, struct exfat_chain *p_dir,
 		ei->entry = newentry;
 	} else {
 		if (exfat_get_entry_type(epold) == TYPE_FILE) {
-			epold->file_attr |= cpu_to_le16(ATTR_ARCHIVE);
+			epold->dentry.file.attr |= cpu_to_le16(ATTR_ARCHIVE);
 			ei->attr |= ATTR_ARCHIVE;
 		}
 		exfat_update_bh(sb, old_bh, sync);
@@ -1171,7 +1172,7 @@ static int exfat_move_file(struct inode *inode, struct exfat_chain *p_olddir,
 
 	/* check if the source and target directory is the same */
 	if (exfat_get_entry_type(epmov) == TYPE_DIR &&
-	    le32_to_cpu(epmov->stream_start_clu) == p_newdir->dir)
+	    le32_to_cpu(epmov->dentry.stream.start_clu) == p_newdir->dir)
 		return -EINVAL;
 
 	num_old_entries = exfat_count_ext_entries(sb, p_olddir, oldentry,
@@ -1194,7 +1195,7 @@ static int exfat_move_file(struct inode *inode, struct exfat_chain *p_olddir,
 
 	memcpy(epnew, epmov, DENTRY_SIZE);
 	if (exfat_get_entry_type(epnew) == TYPE_FILE) {
-		epnew->file_attr |= cpu_to_le16(ATTR_ARCHIVE);
+		epnew->dentry.file.attr |= cpu_to_le16(ATTR_ARCHIVE);
 		ei->attr |= ATTR_ARCHIVE;
 	}
 	exfat_update_bh(sb, new_bh, IS_DIRSYNC(inode));
