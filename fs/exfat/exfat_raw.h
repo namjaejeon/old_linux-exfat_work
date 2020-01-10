@@ -15,6 +15,16 @@
 #define VOL_CLEAN		0x0000
 #define VOL_DIRTY		0x0002
 
+#define CLUSTER_32(x)		((unsigned int)((x) & 0xFFFFFFFFU))
+#define EXFAT_EOF_CLUSTER	CLUSTER_32(~0)
+#define EXFAT_BAD_CLUSTER	0xFFFFFFF7U
+#define EXFAT_FREE_CLUSTER	0
+/* Cluster 0, 1 are reserved, the first cluster is 2 in the cluster heap. */
+#define EXFAT_RESERVED_CLUSTERS	2
+#define EXFAT_FIRST_CLUSTER	2
+#define EXFAT_DATA_CLUSTER_COUNT(sbi)	\
+	((sbi)->num_clusters - EXFAT_RESERVED_CLUSTERS)
+
 /* AllocationPossible and NoFatChain field in GeneralSecondaryFlags Field */
 #define ALLOC_FAT_CHAIN		0x01
 #define ALLOC_NO_FAT_CHAIN	0x03
@@ -163,6 +173,14 @@ struct exfat_dentry {
 		} __packed upcase; /* up-case table directory entry */
 	} __packed dentry;
 } __packed;
+
+union exfat_timezone {
+	struct {
+		__u8 off : 7;
+		__u8 valid : 1;
+	};
+	__u8 value;
+};
 
 #define file_num_ext			dentry.file.num_ext
 #define file_checksum			dentry.file.checksum

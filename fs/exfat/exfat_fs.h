@@ -38,29 +38,16 @@ enum {
 	NLS_NAME_OVERLEN,	/* the length is over than its limit */
 };
 
-/*
- * exfat common MACRO
- */
-#define CLUSTER_32(x)			((unsigned int)((x) & 0xFFFFFFFFU))
-#define EXFAT_EOF_CLUSTER		CLUSTER_32(~0)
-#define EXFAT_BAD_CLUSTER		0xFFFFFFF7U
-#define EXFAT_FREE_CLUSTER		0
-/* Cluster 0, 1 are reserved, the first cluster is 2 in the cluster heap. */
-#define EXFAT_RESERVED_CLUSTERS		2
-#define EXFAT_FIRST_CLUSTER		2
-#define EXFAT_DATA_CLUSTER_COUNT(sbi)	\
-	((sbi)->num_clusters - EXFAT_RESERVED_CLUSTERS)
-
-#define EXFAT_HASH_BITS			8
-#define EXFAT_HASH_SIZE			(1UL << EXFAT_HASH_BITS)
+#define EXFAT_HASH_BITS		8
+#define EXFAT_HASH_SIZE		(1UL << EXFAT_HASH_BITS)
 
 /*
  * Type Definitions
  */
-#define ES_2_ENTRIES			2
-#define ES_ALL_ENTRIES			0
+#define ES_2_ENTRIES		2
+#define ES_ALL_ENTRIES		0
 
-#define DIR_DELETED			0xFFFF0321
+#define DIR_DELETED		0xFFFF0321
 
 /* type values */
 #define TYPE_UNUSED		0x0000
@@ -145,14 +132,6 @@ enum {
 	((ent / BITS_PER_BYTE) & ((sb)->s_blocksize - 1))
 #define BITS_PER_BYTE_MASK	0x7
 #define IGNORED_BITS_REMAINED(clu, clu_base) ((1 << ((clu) - (clu_base))) - 1)
-
-union exfat_timezone {
-	struct {
-		__u8 off : 7;
-		__u8 valid : 1;
-	};
-	__u8 value;
-};
 
 struct exfat_timestamp {
 	unsigned short sec;	/* 0 ~ 59 */
