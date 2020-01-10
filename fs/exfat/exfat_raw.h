@@ -15,6 +15,16 @@
 #define VOL_CLEAN		0x0000
 #define VOL_DIRTY		0x0002
 
+#define CLUSTER_32(x)		((unsigned int)((x) & 0xFFFFFFFFU))
+#define EXFAT_EOF_CLUSTER	CLUSTER_32(~0)
+#define EXFAT_BAD_CLUSTER	0xFFFFFFF7U
+#define EXFAT_FREE_CLUSTER	0
+/* Cluster 0, 1 are reserved, the first cluster is 2 in the cluster heap. */
+#define EXFAT_RESERVED_CLUSTERS	2
+#define EXFAT_FIRST_CLUSTER	2
+#define EXFAT_DATA_CLUSTER_COUNT(sbi)	\
+	((sbi)->num_clusters - EXFAT_RESERVED_CLUSTERS)
+
 /* AllocationPossible and NoFatChain field in GeneralSecondaryFlags Field */
 #define ALLOC_FAT_CHAIN		0x01
 #define ALLOC_NO_FAT_CHAIN	0x03
@@ -26,7 +36,7 @@
 
 /* dentry types */
 #define EXFAT_UNUSED		0x00	/* end of directory */
-#define EXFAT_DELETE		~(0x80)
+#define EXFAT_DELETE		(~0x80)
 #define IS_EXFAT_DELETED(x)	((x) < 0x80) /* deleted file (0x01~0x7F) */
 #define EXFAT_INVAL		0x80	/* invalid value */
 #define EXFAT_BITMAP		0x81	/* allocation bitmap */
@@ -60,16 +70,17 @@
 #define ATTR_RWMASK		(ATTR_HIDDEN | ATTR_SYSTEM | ATTR_VOLUME | \
 				 ATTR_SUBDIR | ATTR_ARCHIVE)
 
-#define JUMP_BOOT_LEN			3
-#define OEM_NAME_LEN			8
-#define MUST_BE_ZERO_LEN		53
+#define PBR64_JUMP_BOOT_LEN		3
+#define PBR64_OEM_NAME_LEN		8
+#define PBR64_RESERVED_LEN		53
+
 #define EXFAT_FILE_NAME_LEN		15
 
 /* EXFAT BIOS parameter block (64 bytes) */
 struct bpb64 {
-	__u8 jmp_boot[JUMP_BOOT_LEN];
-	__u8 oem_name[OEM_NAME_LEN];
-	__u8 res_zero[MUST_BE_ZERO_LEN];
+	__u8 jmp_boot[PBR64_JUMP_BOOT_LEN];
+	__u8 oem_name[PBR64_OEM_NAME_LEN];
+	__u8 res_zero[PBR64_RESERVED_LEN];
 } __packed;
 
 /* EXFAT EXTEND BIOS parameter block (56 bytes) */
@@ -164,33 +175,12 @@ struct exfat_dentry {
 	} __packed dentry;
 } __packed;
 
-#define file_num_ext			dentry.file.num_ext
-#define file_checksum			dentry.file.checksum
-#define file_attr			dentry.file.attr
-#define file_create_time		dentry.file.create_time
-#define file_create_date		dentry.file.create_date
-#define file_modify_time		dentry.file.modify_time
-#define file_modify_date		dentry.file.modify_date
-#define file_access_time		dentry.file.access_time
-#define file_access_date		dentry.file.access_date
-#define file_create_time_ms		dentry.file.create_time_ms
-#define file_modify_time_ms		dentry.file.modify_time_ms
-#define file_create_tz			dentry.file.create_tz
-#define file_modify_tz			dentry.file.modify_tz
-#define file_access_tz			dentry.file.access_tz
-#define stream_flags			dentry.stream.flags
-#define stream_name_len			dentry.stream.name_len
-#define stream_name_hash		dentry.stream.name_hash
-#define stream_start_clu		dentry.stream.start_clu
-#define stream_valid_size		dentry.stream.valid_size
-#define stream_size			dentry.stream.size
-#define name_flags			dentry.name.flags
-#define name_unicode			dentry.name.unicode_0_14
-#define bitmap_flags			dentry.bitmap.flags
-#define bitmap_start_clu		dentry.bitmap.start_clu
-#define bitmap_size			dentry.bitmap.size
-#define upcase_start_clu		dentry.upcase.start_clu
-#define upcase_size			dentry.upcase.size
-#define upcase_checksum			dentry.upcase.checksum
+union exfat_timezone {
+	struct {
+		__u8 off : 7;
+		__u8 valid : 1;
+	};
+	__u8 value;
+};
 
 #endif /* !_EXFAT_RAW_H */

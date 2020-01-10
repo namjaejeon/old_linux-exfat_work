@@ -73,7 +73,7 @@ static int exfat_statfs(struct dentry *dentry, struct kstatfs *buf)
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 	unsigned long long id = huge_encode_dev(sb->s_bdev->bd_dev);
 
-	if (sbi->used_clusters == ~0u) {
+	if (sbi->used_clusters == EXFAT_CLUSTERS_UNTRACKED) {
 		mutex_lock(&sbi->s_lock);
 		if (exfat_count_used_clusters(sb, &sbi->used_clusters)) {
 			mutex_unlock(&sbi->s_lock);
@@ -123,7 +123,7 @@ int exfat_set_vol_flags(struct super_block *sb, unsigned short new_flag)
 	bpb = (struct pbr64 *)sbi->pbr_bh->b_data;
 	bpb->bsx.vol_flags = cpu_to_le16(new_flag);
 
-	if ((new_flag == VOL_DIRTY) && (!buffer_dirty(sbi->pbr_bh)))
+	if (new_flag == VOL_DIRTY && !buffer_dirty(sbi->pbr_bh))
 		sync = true;
 	else
 		sync = false;
@@ -165,6 +165,8 @@ static int exfat_show_options(struct seq_file *m, struct dentry *root)
 		seq_puts(m, ",errors=remount-ro");
 	if (opts->discard)
 		seq_puts(m, ",discard");
+	if (opts->time_offset)
+		seq_printf(m, ",time_offset=%d", opts->time_offset);
 	return 0;
 }
 
@@ -206,6 +208,7 @@ enum {
 	Opt_charset,
 	Opt_errors,
 	Opt_discard,
+	Opt_time_offset,
 };
 
 static const struct fs_parameter_spec exfat_param_specs[] = {
@@ -218,6 +221,7 @@ static const struct fs_parameter_spec exfat_param_specs[] = {
 	fsparam_string("iocharset",		Opt_charset),
 	fsparam_enum("errors",			Opt_errors),
 	fsparam_flag("discard",			Opt_discard),
+	fsparam_s32("time_offset",		Opt_time_offset),
 	{}
 };
 
@@ -276,6 +280,11 @@ static int exfat_parse_param(struct fs_context *fc, struct fs_parameter *param)
 		break;
 	case Opt_discard:
 		opts->discard = 1;
+		break;
+	case Opt_time_offset:
+		if (result.int_32 < -24 * 60 || result.int_32 > 24 * 60)
+			return -EINVAL;
+		opts->time_offset = result.int_32;
 		break;
 	default:
 		return -EINVAL;
@@ -342,17 +351,6 @@ static int exfat_read_root(struct inode *inode)
 	inode->i_mtime = inode->i_atime = inode->i_ctime = current_time(inode);
 	exfat_cache_init_inode(inode);
 	return 0;
-}
-
-static bool is_exfat(struct pbr *pbr)
-{
-	int i = MUST_BE_ZERO_LEN;
-
-	do {
-		if (pbr->bpb.f64.res_zero[i - 1])
-			break;
-	} while (--i);
-	return i ? false : true;
 }
 
 static struct pbr *exfat_read_pbr_with_logical_sector(struct super_block *sb,
@@ -439,13 +437,15 @@ static int __exfat_fill_super(struct super_block *sb)
 		goto free_bh;
 	}
 
-	if (!is_exfat(p_pbr)) {
+	/*
+	 * res_zero field must be filled with zero to prevent mounting
+	 * from FAT volume.
+	 */
+	if (memchr_inv(p_pbr->bpb.f64.res_zero, 0,
+			sizeof(p_pbr->bpb.f64.res_zero))) {
 		ret = -EINVAL;
 		goto free_bh;
 	}
-
-	/* set maximum file size for exFAT */
-	sb->s_maxbytes = 0x7fffffffffffffffLL;
 
 	p_bpb = (struct pbr64 *)p_pbr;
 	if (!p_bpb->bsx.num_fats) {
@@ -478,13 +478,17 @@ static int __exfat_fill_super(struct super_block *sb)
 
 	sbi->vol_flag = le16_to_cpu(p_bpb->bsx.vol_flags);
 	sbi->clu_srch_ptr = EXFAT_FIRST_CLUSTER;
-	sbi->used_clusters = ~0u;
+	sbi->used_clusters = EXFAT_CLUSTERS_UNTRACKED;
 
 	if (le16_to_cpu(p_bpb->bsx.vol_flags) & VOL_DIRTY) {
 		sbi->vol_flag |= VOL_DIRTY;
 		exfat_msg(sb, KERN_WARNING,
 			"Volume was not properly unmounted. Some data may be corrupt. Please run fsck.");
 	}
+
+	/* exFAT file size is limited by a disk volume size */
+	sb->s_maxbytes = (u64)(sbi->num_clusters - EXFAT_RESERVED_CLUSTERS) <<
+		sbi->cluster_size_bits; 
 
 	ret = exfat_create_upcase_table(sb);
 	if (ret) {
@@ -521,6 +525,8 @@ static int exfat_fill_super(struct super_block *sb, struct fs_context *fc)
 	struct exfat_mount_options *opts = &sbi->options;
 	struct inode *root_inode;
 	int err;
+	struct timespec64 ts;
+	struct exfat_date_time tp;
 
 	if (opts->allow_utime == (unsigned short)-1)
 		opts->allow_utime = ~opts->fs_dmask & 0022;
@@ -537,6 +543,16 @@ static int exfat_fill_super(struct super_block *sb, struct fs_context *fc)
 	sb->s_flags |= SB_NODIRATIME;
 	sb->s_magic = EXFAT_SUPER_MAGIC;
 	sb->s_op = &exfat_sops;
+
+	sb->s_time_gran = 1;
+
+	exfat_time_min(&tp);
+	exfat_time_fat2unix(sbi, &ts, &tp);
+	sb->s_time_min = ts.tv_sec;
+
+	exfat_time_max(&tp);
+	exfat_time_fat2unix(sbi, &ts, &tp);
+	sb->s_time_max = ts.tv_sec;
 
 	sb->s_d_op = &exfat_dentry_ops;
 

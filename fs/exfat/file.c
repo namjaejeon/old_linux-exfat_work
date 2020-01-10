@@ -161,22 +161,23 @@ int __exfat_truncate(struct inode *inode, loff_t new_size)
 
 		exfat_set_entry_time(ep, exfat_tm_now(EXFAT_SB(sb), &tm),
 				TM_MODIFY);
-		ep->file_attr = cpu_to_le16(ei->attr);
+		ep->dentry.file.attr = cpu_to_le16(ei->attr);
 
 		/* File size should be zero if there is no cluster allocated */
-		if (ei->start_clu == EXFAT_EOF_CLUSTER)
-			ep->stream_valid_size = ep->stream_size = 0;
-		else {
-			ep->stream_valid_size = cpu_to_le64(new_size);
-			ep->stream_size = ep->stream_valid_size;
+		if (ei->start_clu == EXFAT_EOF_CLUSTER) {
+			ep->dentry.stream.valid_size = 0;
+			ep->dentry.stream.size = 0;
+		} else {
+			ep->dentry.stream.valid_size = cpu_to_le64(new_size);
+			ep->dentry.stream.size = ep->dentry.stream.valid_size;
 		}
 
 		if (new_size == 0) {
 			/* Any directory can not be truncated to zero */
 			WARN_ON(ei->type != TYPE_FILE);
 
-			ep2->stream_flags = ALLOC_FAT_CHAIN;
-			ep2->stream_start_clu = EXFAT_FREE_CLUSTER;
+			ep2->dentry.stream.flags = ALLOC_FAT_CHAIN;
+			ep2->dentry.stream.start_clu = EXFAT_FREE_CLUSTER;
 		}
 
 		if (exfat_update_dir_chksum_with_entry_set(sb, es,

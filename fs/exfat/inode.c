@@ -17,12 +17,6 @@
 #include "exfat_raw.h"
 #include "exfat_fs.h"
 
-/* 2-level option flag */
-enum {
-	BMAP_NOT_CREATE,
-	BMAP_ADD_CLUSTER,
-};
-
 static int __exfat_write_inode(struct inode *inode, int sync)
 {
 	int ret = -EIO;
@@ -64,7 +58,7 @@ static int __exfat_write_inode(struct inode *inode, int sync)
 		return -EIO;
 	ep2 = ep + 1;
 
-	ep->file_attr = cpu_to_le16(info.attr);
+	ep->dentry.file.attr = cpu_to_le16(info.attr);
 
 	/* set FILE_INFO structure using the acquired struct exfat_dentry */
 	tm.tz = info.create_timestamp.timezone;
@@ -91,8 +85,8 @@ static int __exfat_write_inode(struct inode *inode, int sync)
 	if (ei->start_clu == EXFAT_EOF_CLUSTER)
 		on_disk_size = 0;
 
-	ep2->stream_valid_size = cpu_to_le64(on_disk_size);
-	ep2->stream_size = ep2->stream_valid_size;
+	ep2->dentry.stream.valid_size = cpu_to_le64(on_disk_size);
+	ep2->dentry.stream.size = ep2->dentry.stream.valid_size;
 
 	ret = exfat_update_dir_chksum_with_entry_set(sb, es, sync);
 	kfree(es);
@@ -249,17 +243,18 @@ static int exfat_map_cluster(struct inode *inode, unsigned int clu_offset,
 
 			/* update directory entry */
 			if (modified) {
-				if (ep->stream_flags != ei->flags)
-					ep->stream_flags = ei->flags;
+				if (ep->dentry.stream.flags != ei->flags)
+					ep->dentry.stream.flags = ei->flags;
 
-				if (le32_to_cpu(ep->stream_start_clu) !=
+				if (le32_to_cpu(ep->dentry.stream.start_clu) !=
 						ei->start_clu)
-					ep->stream_start_clu =
+					ep->dentry.stream.start_clu =
 						cpu_to_le32(ei->start_clu);
 
-				ep->stream_valid_size =
+				ep->dentry.stream.valid_size =
 					cpu_to_le64(i_size_read(inode));
-				ep->stream_size = ep->stream_valid_size;
+				ep->dentry.stream.size =
+					ep->dentry.stream.valid_size;
 			}
 
 			if (exfat_update_dir_chksum_with_entry_set(sb, es,
@@ -298,59 +293,42 @@ static int exfat_map_cluster(struct inode *inode, unsigned int clu_offset,
 	return 0;
 }
 
-static int exfat_bmap(struct inode *inode, sector_t sector, sector_t *phys,
-		unsigned long *mapped_blocks, int *create)
+static int exfat_map_new_buffer(struct exfat_inode_info *ei,
+		struct buffer_head *bh, loff_t pos)
 {
-	struct super_block *sb = inode->i_sb;
-	struct exfat_sb_info *sbi = EXFAT_SB(sb);
-	sector_t last_block;
-	unsigned int cluster, clu_offset, sec_offset;
-	int err = 0;
+	if (buffer_delay(bh) && pos > ei->i_size_aligned)
+		return -EIO;
+	set_buffer_new(bh);
 
-	*phys = 0;
-	*mapped_blocks = 0;
-
-	last_block = EXFAT_B_TO_BLK_ROUND_UP(i_size_read(inode), sb);
-	if (sector >= last_block && *create == BMAP_NOT_CREATE)
-		return 0;
-
-	/* Is this block already allocated? */
-	clu_offset = sector >> sbi->sect_per_clus_bits;  /* cluster offset */
-
-	err = exfat_map_cluster(inode, clu_offset, &cluster,
-		*create & BMAP_ADD_CLUSTER);
-	if (err) {
-		if (err != -ENOSPC)
-			return -EIO;
-		return err;
-	}
-
-	if (cluster != EXFAT_EOF_CLUSTER) {
-		/* sector offset in cluster */
-		sec_offset = sector & (sbi->sect_per_clus - 1);
-
-		*phys = exfat_cluster_to_sector(sbi, cluster) + sec_offset;
-		*mapped_blocks = sbi->sect_per_clus - sec_offset;
-	}
-
-	if (sector < last_block)
-		*create = BMAP_NOT_CREATE;
+	/*
+	 * Adjust i_size_aligned if i_size_ondisk is bigger than it.
+	 */
+	if (ei->i_size_ondisk > ei->i_size_aligned)
+		ei->i_size_aligned = ei->i_size_ondisk;
 	return 0;
 }
 
 static int exfat_get_block(struct inode *inode, sector_t iblock,
-		struct buffer_head *bh_result, int create)
-{
+		struct buffer_head *bh_result, int create)  {
+	struct exfat_inode_info *ei = EXFAT_I(inode);
 	struct super_block *sb = inode->i_sb;
+	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 	unsigned long max_blocks = bh_result->b_size >> inode->i_blkbits;
 	int err = 0;
-	unsigned long mapped_blocks;
-	sector_t phys;
+	unsigned long mapped_blocks = 0;
+	unsigned int cluster, sec_offset;
+	sector_t last_block;
+	sector_t phys = 0;
 	loff_t pos;
-	int bmap_create = create ? BMAP_ADD_CLUSTER : BMAP_NOT_CREATE;
 
-	mutex_lock(&EXFAT_SB(sb)->s_lock);
-	err = exfat_bmap(inode, iblock, &phys, &mapped_blocks, &bmap_create);
+	mutex_lock(&sbi->s_lock);
+	last_block = EXFAT_B_TO_BLK_ROUND_UP(i_size_read(inode), sb);
+	if (iblock >= last_block && !create)
+		goto done;
+
+	/* Is this block already allocated? */
+	err = exfat_map_cluster(inode, iblock >> sbi->sect_per_clus_bits,
+			&cluster, create);
 	if (err) {
 		if (err != -ENOSPC)
 			exfat_fs_error_ratelimit(sb,
@@ -359,48 +337,43 @@ static int exfat_get_block(struct inode *inode, sector_t iblock,
 		goto unlock_ret;
 	}
 
-	if (phys) {
-		max_blocks = min(mapped_blocks, max_blocks);
+	if (cluster == EXFAT_EOF_CLUSTER)
+		goto done;
 
-		/* Treat newly added block / cluster */
-		if (bmap_create || buffer_delay(bh_result)) {
-			/* Update i_size_ondisk */
-			pos = EXFAT_BLK_TO_B((iblock + 1), sb);
-			if (EXFAT_I(inode)->i_size_ondisk < pos)
-				EXFAT_I(inode)->i_size_ondisk = pos;
+	/* sector offset in cluster */
+	sec_offset = iblock & (sbi->sect_per_clus - 1);
 
-			if (bmap_create) {
-				if (buffer_delay(bh_result) &&
-				    pos > EXFAT_I(inode)->i_size_aligned) {
-					exfat_fs_error(sb,
-						"requested for bmap out of range(pos : (%llu) > i_size_aligned(%llu)\n",
-						pos,
-						EXFAT_I(inode)->i_size_aligned);
-					err = -EIO;
-					goto unlock_ret;
-				}
-				set_buffer_new(bh_result);
+	phys = exfat_cluster_to_sector(sbi, cluster) + sec_offset;
+	mapped_blocks = sbi->sect_per_clus - sec_offset;
+	max_blocks = min(mapped_blocks, max_blocks);
 
-				/*
-				 * adjust i_size_aligned if i_size_ondisk is
-				 * bigger than it. (i.e. non-DA)
-				 */
-				if (EXFAT_I(inode)->i_size_ondisk >
-				    EXFAT_I(inode)->i_size_aligned) {
-					EXFAT_I(inode)->i_size_aligned =
-						EXFAT_I(inode)->i_size_ondisk;
-				}
-			}
+	/* Treat newly added block / cluster */
+	if (iblock < last_block)
+		create = 0;
 
-			if (buffer_delay(bh_result))
-				clear_buffer_delay(bh_result);
-		}
-		map_bh(bh_result, sb, phys);
+	if (create || buffer_delay(bh_result)) {
+		pos = EXFAT_BLK_TO_B((iblock + 1), sb);
+		if (ei->i_size_ondisk < pos)
+			ei->i_size_ondisk = pos;
 	}
 
+	if (create) {
+		err = exfat_map_new_buffer(ei, bh_result, pos);
+		if (err) {
+			exfat_fs_error(sb,
+					"requested for bmap out of range(pos : (%llu) > i_size_aligned(%llu)\n",
+					pos, ei->i_size_aligned);
+			goto unlock_ret;
+		}
+	}
+
+	if (buffer_delay(bh_result))
+		clear_buffer_delay(bh_result);
+	map_bh(bh_result, sb, phys);
+done:
 	bh_result->b_size = EXFAT_BLK_TO_B(max_blocks, sb);
 unlock_ret:
-	mutex_unlock(&EXFAT_SB(sb)->s_lock);
+	mutex_unlock(&sbi->s_lock);
 	return err;
 }
 

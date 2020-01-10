@@ -3,16 +3,18 @@
  * Copyright (C) 2012-2013 Samsung Electronics Co., Ltd.
  */
 
-#ifndef _EXFAT_H
-#define _EXFAT_H
+#ifndef _EXFAT_FS_H
+#define _EXFAT_FS_H
 
 #include <linux/fs.h>
 #include <linux/ratelimit.h>
 
-#define EXFAT_SUPER_MAGIC       (0x2011BAB0UL)
+#define EXFAT_SUPER_MAGIC       0x2011BAB0UL
 #define EXFAT_ROOT_INO		1
 
 #define EXFAT_SB_DIRTY		0
+
+#define EXFAT_CLUSTERS_UNTRACKED (~0u)
 
 enum exfat_time_mode {
 	TM_CREATE,
@@ -38,29 +40,16 @@ enum {
 	NLS_NAME_OVERLEN,	/* the length is over than its limit */
 };
 
-/*
- * exfat common MACRO
- */
-#define CLUSTER_32(x)			((unsigned int)((x) & 0xFFFFFFFFU))
-#define EXFAT_EOF_CLUSTER		CLUSTER_32(~0)
-#define EXFAT_BAD_CLUSTER		(0xFFFFFFF7U)
-#define EXFAT_FREE_CLUSTER		(0)
-/* Cluster 0, 1 are reserved, the first cluster is 2 in the cluster heap. */
-#define EXFAT_RESERVED_CLUSTERS		(2)
-#define EXFAT_FIRST_CLUSTER		(2)
-#define EXFAT_DATA_CLUSTER_COUNT(sbi)	\
-	((sbi)->num_clusters - EXFAT_RESERVED_CLUSTERS)
-
-#define EXFAT_HASH_BITS			8
-#define EXFAT_HASH_SIZE			(1UL << EXFAT_HASH_BITS)
+#define EXFAT_HASH_BITS		8
+#define EXFAT_HASH_SIZE		(1UL << EXFAT_HASH_BITS)
 
 /*
  * Type Definitions
  */
-#define ES_2_ENTRIES			2
-#define ES_ALL_ENTRIES			0
+#define ES_2_ENTRIES		2
+#define ES_ALL_ENTRIES		0
 
-#define DIR_DELETED			0xFFFF0321
+#define DIR_DELETED		0xFFFF0321
 
 /* type values */
 #define TYPE_UNUSED		0x0000
@@ -143,16 +132,8 @@ enum {
 #define BITMAP_OFFSET_BIT_IN_SECTOR(sb, ent) (ent & BITS_PER_SECTOR_MASK(sb))
 #define BITMAP_OFFSET_BYTE_IN_SECTOR(sb, ent) \
 	((ent / BITS_PER_BYTE) & ((sb)->s_blocksize - 1))
-#define BITS_PER_BYTE_MASK	(0x7)
+#define BITS_PER_BYTE_MASK	0x7
 #define IGNORED_BITS_REMAINED(clu, clu_base) ((1 << ((clu) - (clu_base))) - 1)
-
-union exfat_timezone {
-	struct {
-		__u8 off : 7;
-		__u8 valid : 1;
-	};
-	__u8 value;
-};
 
 struct exfat_timestamp {
 	unsigned short sec;	/* 0 ~ 59 */
@@ -256,6 +237,7 @@ struct exfat_mount_options {
 	enum exfat_error_mode errors;
 	unsigned utf8:1, /* Use of UTF-8 character set */
 		 discard:1; /* Issue discard requests on deletions */
+	int time_offset; /* Offset of timestamps from UTC (in minutes) */
 };
 
 /*
@@ -420,8 +402,8 @@ static inline bool exfat_is_last_sector_in_cluster(struct exfat_sb_info *sbi,
 static inline sector_t exfat_cluster_to_sector(struct exfat_sb_info *sbi,
 		unsigned int clus)
 {
-	return ((clus - EXFAT_RESERVED_CLUSTERS) << sbi->sect_per_clus_bits)
-		+ sbi->data_start_sector;
+	return ((clus - EXFAT_RESERVED_CLUSTERS) << sbi->sect_per_clus_bits) +
+		sbi->data_start_sector;
 }
 
 static inline int exfat_sector_to_cluster(struct exfat_sb_info *sbi,
@@ -551,6 +533,8 @@ void __exfat_fs_error(struct super_block *sb, int report, const char *fmt, ...)
 		fmt, ## args)
 void exfat_msg(struct super_block *sb, const char *lv, const char *fmt, ...)
 		__printf(3, 4) __cold;
+void exfat_time_min(struct exfat_date_time *tp);
+void exfat_time_max(struct exfat_date_time *tp);
 void exfat_time_fat2unix(struct exfat_sb_info *sbi, struct timespec64 *ts,
 		struct exfat_date_time *tp);
 void exfat_time_unix2fat(struct exfat_sb_info *sbi, struct timespec64 *ts,
@@ -564,4 +548,4 @@ void exfat_chain_set(struct exfat_chain *ec, unsigned int dir,
 		unsigned int size, unsigned char flags);
 void exfat_chain_dup(struct exfat_chain *dup, struct exfat_chain *ec);
 
-#endif /* !_EXFAT_H */
+#endif /* !_EXFAT_FS_H */
