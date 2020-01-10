@@ -237,6 +237,7 @@ struct exfat_mount_options {
 	enum exfat_error_mode errors;
 	unsigned utf8:1, /* Use of UTF-8 character set */
 		 discard:1; /* Issue discard requests on deletions */
+	int time_offset; /* Offset of timestamps from UTC (in minutes) */
 };
 
 /*

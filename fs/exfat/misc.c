@@ -108,6 +108,13 @@ void exfat_time_fat2unix(struct exfat_sb_info *sbi, struct timespec64 *ts,
 		ts->tv_sec += TIMEZONE_SEC(0x80 - tp->timezone.off);
 }
 
+static inline int exfat_tz_offset(struct exfat_sb_info *sbi)
+{
+	return ((sbi->options.time_offset ?
+		sbi->options.time_offset :
+		sys_tz.tz_minuteswest) / -15) & 0x7F;
+}
+
 #define TIMEZONE_CUR_OFFSET()	((sys_tz.tz_minuteswest / (-15)) & 0x7F)
 /* Convert linear UNIX date to a FAT time/date pair. */
 void exfat_time_unix2fat(struct exfat_sb_info *sbi, struct timespec64 *ts,
@@ -119,7 +126,7 @@ void exfat_time_unix2fat(struct exfat_sb_info *sbi, struct timespec64 *ts,
 	time64_to_tm(second, 0, &tm);
 
 	tp->timezone.valid = 1;
-	tp->timezone.off = TIMEZONE_CUR_OFFSET();
+	tp->timezone.off = exfat_tz_offset(sbi);
 
 	/* Jan 1 GMT 00:00:00 1980. But what about another time zone? */
 	if (second < UNIX_SECS_1980) {
