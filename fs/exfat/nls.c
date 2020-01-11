@@ -405,42 +405,42 @@ static unsigned short bad_uni_chars[] = {
 	0
 };
 
-static int exfat_convert_ch_to_uni(struct nls_table *nls,
-		const unsigned char *ch, unsigned short *uni, int *lossy)
+static int exfat_convert_char_to_ucs2(struct nls_table *nls,
+		const unsigned char *ch, unsigned short *ucs2, int *lossy)
 {
 	int len;
 
-	*uni = 0x0;
+	*ucs2 = 0x0;
 
 	if (ch[0] < 0x80) {
-		*uni = ch[0];
+		*ucs2 = ch[0];
 		return 1;
 	}
 
-	len = nls->char2uni(ch, MAX_CHARSET_SIZE, uni);
+	len = nls->char2uni(ch, MAX_CHARSET_SIZE, ucs2);
 	if (len < 0) {
 		/* conversion failed */
 		if (lossy != NULL)
 			*lossy |= NLS_NAME_LOSSY;
-		*uni = '_';
+		*ucs2 = '_';
 		return 2;
 	}
 	return len;
 }
 
-static int exfat_convert_uni_to_ch(struct nls_table *nls, unsigned short uni,
-		unsigned char *ch, int *lossy)
+static int exfat_convert_ucs2_to_char(struct nls_table *nls,
+		unsigned short ucs2, unsigned char *ch, int *lossy)
 {
 	int len;
 
 	ch[0] = 0x0;
 
-	if (uni < 0x0080) {
-		ch[0] = uni;
+	if (ucs2 < 0x0080) {
+		ch[0] = ucs2;
 		return 1;
 	}
 
-	len = nls->uni2char(uni, ch, MAX_CHARSET_SIZE);
+	len = nls->uni2char(ucs2, ch, MAX_CHARSET_SIZE);
 	if (len < 0) {
 		/* conversion failed */
 		if (lossy != NULL)
@@ -556,7 +556,7 @@ static int __exfat_utf16_to_nls(struct super_block *sb,
 		if (*uniname == '\0')
 			break;
 		if ((*uniname & SURROGATE_MASK) != SURROGATE_PAIR) {
-			len = exfat_convert_uni_to_ch(nls, *uniname, buf, NULL);
+			len = exfat_convert_ucs2_to_char(nls, *uniname, buf, NULL);
 		} else {
 			/* Process UTF-16 surrogate pair as one character */
 			if (!(*uniname & SURROGATE_LOW) &&
@@ -596,7 +596,7 @@ static int __exfat_utf16_to_nls(struct super_block *sb,
 	return out_len;
 }
 
-static int __exfat_nls_to_utf16(struct super_block *sb,
+static int exfat_nls_to_ucs2(struct super_block *sb,
 		const unsigned char *p_cstring, const int len,
 		struct exfat_uni_name *p_uniname, int *p_lossy)
 {
@@ -608,7 +608,7 @@ static int __exfat_nls_to_utf16(struct super_block *sb,
 	WARN_ON(!len);
 
 	while (unilen < MAX_NAME_LENGTH && i < len) {
-		i += exfat_convert_ch_to_uni(nls, p_cstring + i, uniname,
+		i += exfat_convert_char_to_ucs2(nls, p_cstring + i, uniname,
 				&lossy);
 
 		if (*uniname < 0x0020 ||
@@ -648,8 +648,7 @@ int exfat_nls_to_utf16(struct super_block *sb, const unsigned char *p_cstring,
 	if (EXFAT_SB(sb)->options.utf8)
 		return exfat_utf8_to_utf16(sb, p_cstring, len,
 				uniname, p_lossy);
-	return __exfat_nls_to_utf16(sb, p_cstring, len, uniname,
-			p_lossy);
+	return exfat_nls_to_ucs2(sb, p_cstring, len, uniname, p_lossy);
 }
 
 static int exfat_load_upcase_table(struct super_block *sb,
