@@ -60,6 +60,10 @@ static int __exfat_write_inode(struct inode *inode, int sync)
 			&ep->dentry.file.modify_time,
 			&ep->dentry.file.modify_date,
 			&ep->dentry.file.modify_tz);
+	exfat_set_entry_time(sbi, &inode->i_atime,
+			&ep->dentry.file.access_time,
+			&ep->dentry.file.access_date,
+			&ep->dentry.file.access_tz);
 
 	/* File size should be zero if there is no cluster allocated */
 	on_disk_size = i_size_read(inode);

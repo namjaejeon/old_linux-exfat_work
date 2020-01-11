@@ -141,7 +141,10 @@ static int exfat_readdir(struct inode *inode, struct exfat_dir_entry *dir_entry)
 					ep->dentry.file.modify_time,
 					ep->dentry.file.modify_date,
 					ep->dentry.file.modify_tz);
-			memset(&dir_entry->atime, 0, sizeof(dir_entry->atime));
+			exfat_get_entry_time(sbi, &dir_entry->atime,
+					ep->dentry.file.access_time,
+					ep->dentry.file.access_date,
+					ep->dentry.file.access_tz);
 
 			*uni_name.name = 0x0;
 			exfat_get_uniname_from_ext_entry(sb, &dir, dentry,
