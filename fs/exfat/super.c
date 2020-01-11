@@ -282,6 +282,11 @@ static int exfat_parse_param(struct fs_context *fc, struct fs_parameter *param)
 		opts->discard = 1;
 		break;
 	case Opt_time_offset:
+		/*
+		 * GMT+-12 zones may have DST corrections so at least
+		 * 13 hours difference is needed. Make the limit 24
+		 * just in case someone invents something unusual.
+		 */
 		if (result.int_32 < -24 * 60 || result.int_32 > 24 * 60)
 			return -EINVAL;
 		opts->time_offset = result.int_32;
