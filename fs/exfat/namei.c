@@ -727,7 +727,10 @@ static int exfat_find(struct inode *dir, struct qstr *qname,
 				ep->dentry.file.modify_time,
 				ep->dentry.file.modify_date,
 				ep->dentry.file.modify_tz);
-		memset(&info->atime, 0, sizeof(info->atime));
+		exfat_get_entry_time(sbi, &info->atime,
+				ep->dentry.file.access_time,
+				ep->dentry.file.access_date,
+				ep->dentry.file.access_tz);
 		kfree(es);
 
 		if (info->type == TYPE_DIR) {
