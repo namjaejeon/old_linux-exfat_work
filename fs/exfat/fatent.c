@@ -37,7 +37,7 @@ static int exfat_mirror_bh(struct super_block *sb, sector_t sec,
 static int __exfat_ent_get(struct super_block *sb, unsigned int loc,
 		unsigned int *content)
 {
-	unsigned int off, _content;
+	unsigned int off;
 	sector_t sec;
 	struct buffer_head *bh;
 
@@ -48,13 +48,12 @@ static int __exfat_ent_get(struct super_block *sb, unsigned int loc,
 	if (!bh)
 		return -EIO;
 
-	_content = le32_to_cpu(*(__le32 *)(&bh->b_data[off]));
+	*content = le32_to_cpu(*(__le32 *)(&bh->b_data[off]));
 
 	/* remap reserved clusters to simplify code */
-	if (_content >= CLUSTER_32(0xFFFFFFF8))
-		_content = EXFAT_EOF_CLUSTER;
+	if (*content > EXFAT_BAD_CLUSTER)
+		*content = EXFAT_EOF_CLUSTER;
 
-	*content = CLUSTER_32(_content);
 	brelse(bh);
 	return 0;
 }
@@ -80,14 +79,6 @@ int exfat_ent_set(struct super_block *sb, unsigned int loc,
 	exfat_mirror_bh(sb, sec, bh);
 	brelse(bh);
 	return 0;
-}
-
-static inline bool is_reserved_cluster(unsigned int clus)
-{
-	if (clus == EXFAT_FREE_CLUSTER || clus == EXFAT_EOF_CLUSTER ||
-	    clus == EXFAT_BAD_CLUSTER)
-		return true;
-	return false;
 }
 
 static inline bool is_valid_cluster(struct exfat_sb_info *sbi,
@@ -118,14 +109,6 @@ int exfat_ent_get(struct super_block *sb, unsigned int loc,
 		return err;
 	}
 
-	if (!is_reserved_cluster(*content) &&
-			!is_valid_cluster(sbi, *content)) {
-		exfat_fs_error(sb,
-			"invalid access to FAT (entry 0x%08x) bogus content (0x%08x)",
-			loc, *content);
-		return -EIO;
-	}
-
 	if (*content == EXFAT_FREE_CLUSTER) {
 		exfat_fs_error(sb,
 			"invalid access to FAT free cluster (entry 0x%08x)",
@@ -139,6 +122,14 @@ int exfat_ent_get(struct super_block *sb, unsigned int loc,
 			loc);
 		return -EIO;
 	}
+
+	if (*content != EXFAT_EOF_CLUSTER && !is_valid_cluster(sbi, *content)) {
+		exfat_fs_error(sb,
+			"invalid access to FAT (entry 0x%08x) bogus content (0x%08x)",
+			loc, *content);
+		return -EIO;
+	}
+
 	return 0;
 }
 

@@ -15,9 +15,8 @@
 #define VOL_CLEAN		0x0000
 #define VOL_DIRTY		0x0002
 
-#define CLUSTER_32(x)		((unsigned int)((x) & 0xFFFFFFFFU))
-#define EXFAT_EOF_CLUSTER	CLUSTER_32(~0)
-#define EXFAT_BAD_CLUSTER	0xFFFFFFF7U
+#define EXFAT_EOF_CLUSTER	0xFFFFFFFFu
+#define EXFAT_BAD_CLUSTER	0xFFFFFFF7u
 #define EXFAT_FREE_CLUSTER	0
 /* Cluster 0, 1 are reserved, the first cluster is 2 in the cluster heap. */
 #define EXFAT_RESERVED_CLUSTERS	2
