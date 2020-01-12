@@ -422,7 +422,7 @@ static int exfat_convert_char_to_ucs2(struct nls_table *nls,
 		if (lossy != NULL)
 			*lossy |= NLS_NAME_LOSSY;
 		*ucs2 = '_';
-		return 2;
+		return 1;
 	}
 	return len;
 }
