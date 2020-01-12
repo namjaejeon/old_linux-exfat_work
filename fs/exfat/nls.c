@@ -406,7 +406,8 @@ static unsigned short bad_uni_chars[] = {
 };
 
 static int exfat_convert_char_to_ucs2(struct nls_table *nls,
-		const unsigned char *ch, unsigned short *ucs2, int *lossy)
+		const unsigned char *ch, int ch_len, unsigned short *ucs2,
+		int *lossy)
 {
 	int len;
 
@@ -417,7 +418,7 @@ static int exfat_convert_char_to_ucs2(struct nls_table *nls,
 		return 1;
 	}
 
-	len = nls->char2uni(ch, MAX_CHARSET_SIZE, ucs2);
+	len = nls->char2uni(ch, ch_len, ucs2);
 	if (len < 0) {
 		/* conversion failed */
 		if (lossy != NULL)
@@ -608,8 +609,8 @@ static int exfat_nls_to_ucs2(struct super_block *sb,
 	WARN_ON(!len);
 
 	while (unilen < MAX_NAME_LENGTH && i < len) {
-		i += exfat_convert_char_to_ucs2(nls, p_cstring + i, uniname,
-				&lossy);
+		i += exfat_convert_char_to_ucs2(nls, p_cstring + i, len - i,
+				uniname, &lossy);
 
 		if (*uniname < 0x0020 ||
 		    exfat_wstrchr(bad_uni_chars, *uniname))
