@@ -396,8 +396,6 @@ static const unsigned short uni_def_upcase[EXFAT_NUM_UPCASE] = {
  * for compatibility.
  *
  * " * / : < > ? \ |
- *
- * patch 1.2.0
  */
 static unsigned short bad_uni_chars[] = {
 	0x0022,         0x002A, 0x002F, 0x003A,
