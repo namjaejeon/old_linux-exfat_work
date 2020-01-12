@@ -570,7 +570,7 @@ static int __exfat_utf16_to_nls(struct super_block *sb,
 
 			/*
 			 * UTF-16 surrogate pair encodes code points above
-			 * Ux+FFFF. Code points above U+FFFF are not supported
+			 * U+FFFF. Code points above U+FFFF are not supported
 			 * by kernel NLS framework therefore use replacement
 			 * character
 			 */
