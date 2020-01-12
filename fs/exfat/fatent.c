@@ -37,7 +37,7 @@ static int exfat_mirror_bh(struct super_block *sb, sector_t sec,
 static int __exfat_ent_get(struct super_block *sb, unsigned int loc,
 		unsigned int *content)
 {
-	unsigned int off, _content;
+	unsigned int off;
 	sector_t sec;
 	struct buffer_head *bh;
 
@@ -48,13 +48,12 @@ static int __exfat_ent_get(struct super_block *sb, unsigned int loc,
 	if (!bh)
 		return -EIO;
 
-	_content = le32_to_cpu(*(__le32 *)(&bh->b_data[off]));
+	*content = le32_to_cpu(*(__le32 *)(&bh->b_data[off]));
 
 	/* remap reserved clusters to simplify code */
-	if (_content >= CLUSTER_32(0xFFFFFFF8))
-		_content = EXFAT_EOF_CLUSTER;
+	if (*content > EXFAT_BAD_CLUSTER)
+		*content = EXFAT_EOF_CLUSTER;
 
-	*content = CLUSTER_32(_content);
 	brelse(bh);
 	return 0;
 }
