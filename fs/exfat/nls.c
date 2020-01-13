@@ -396,8 +396,6 @@ static const unsigned short uni_def_upcase[EXFAT_NUM_UPCASE] = {
  * for compatibility.
  *
  * " * / : < > ? \ |
- *
- * patch 1.2.0
  */
 static unsigned short bad_uni_chars[] = {
 	0x0022,         0x002A, 0x002F, 0x003A,
@@ -424,7 +422,7 @@ static int exfat_convert_char_to_ucs2(struct nls_table *nls,
 		if (lossy != NULL)
 			*lossy |= NLS_NAME_LOSSY;
 		*ucs2 = '_';
-		return 2;
+		return 1;
 	}
 	return len;
 }
@@ -557,7 +555,8 @@ static int __exfat_utf16_to_nls(struct super_block *sb,
 		if (*uniname == '\0')
 			break;
 		if ((*uniname & SURROGATE_MASK) != SURROGATE_PAIR) {
-			len = exfat_convert_ucs2_to_char(nls, *uniname, buf, NULL);
+			len = exfat_convert_ucs2_to_char(nls, *uniname, buf,
+				NULL);
 		} else {
 			/* Process UTF-16 surrogate pair as one character */
 			if (!(*uniname & SURROGATE_LOW) &&

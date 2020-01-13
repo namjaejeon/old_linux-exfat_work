@@ -295,7 +295,8 @@ static int exfat_map_new_buffer(struct exfat_inode_info *ei,
 }
 
 static int exfat_get_block(struct inode *inode, sector_t iblock,
-		struct buffer_head *bh_result, int create)  {
+		struct buffer_head *bh_result, int create)
+{
 	struct exfat_inode_info *ei = EXFAT_I(inode);
 	struct super_block *sb = inode->i_sb;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
