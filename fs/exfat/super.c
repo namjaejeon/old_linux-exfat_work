@@ -493,7 +493,7 @@ static int __exfat_fill_super(struct super_block *sb)
 
 	/* exFAT file size is limited by a disk volume size */
 	sb->s_maxbytes = (u64)(sbi->num_clusters - EXFAT_RESERVED_CLUSTERS) <<
-		sbi->cluster_size_bits; 
+		sbi->cluster_size_bits;
 
 	ret = exfat_create_upcase_table(sb);
 	if (ret) {

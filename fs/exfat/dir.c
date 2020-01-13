@@ -149,7 +149,8 @@ static int exfat_readdir(struct inode *inode, struct exfat_dir_entry *dir_entry)
 			*uni_name.name = 0x0;
 			exfat_get_uniname_from_ext_entry(sb, &dir, dentry,
 				uni_name.name);
-			exfat_utf16_to_nls(sb, &uni_name, dir_entry->namebuf.lfn,
+			exfat_utf16_to_nls(sb, &uni_name,
+				dir_entry->namebuf.lfn,
 				dir_entry->namebuf.lfnbuf_len);
 			brelse(bh);
 

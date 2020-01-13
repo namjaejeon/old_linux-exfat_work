@@ -555,7 +555,8 @@ static int __exfat_utf16_to_nls(struct super_block *sb,
 		if (*uniname == '\0')
 			break;
 		if ((*uniname & SURROGATE_MASK) != SURROGATE_PAIR) {
-			len = exfat_convert_ucs2_to_char(nls, *uniname, buf, NULL);
+			len = exfat_convert_ucs2_to_char(nls, *uniname, buf,
+				NULL);
 		} else {
 			/* Process UTF-16 surrogate pair as one character */
 			if (!(*uniname & SURROGATE_LOW) &&
