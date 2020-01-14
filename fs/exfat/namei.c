@@ -105,7 +105,7 @@ static int exfat_d_hash(const struct dentry *dentry, struct qstr *qstr)
 	hash = __exfat_init_name_hash(dentry);
 
 	if (EXFAT_SB(sb)->options.utf8) {
-		unsigned int i, unilen;
+		int i, unilen;
 		unsigned short *uniname;
 
 		uniname	= kcalloc(MAX_NAME_LENGTH + 3,
