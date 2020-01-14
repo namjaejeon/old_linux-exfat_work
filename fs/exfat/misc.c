@@ -74,7 +74,14 @@ static void exfat_adjust_tz(struct timespec64 *ts, u8 tz_off)
 		ts->tv_sec += TIMEZONE_SEC(0x80 - tz_off);
 }
 
-/* Convert a FAT time/date pair to a UNIX date (seconds since 1 1 70). */
+static inline int exfat_tz_offset(struct exfat_sb_info *sbi)
+{
+	return ((sbi->options.time_offset ?
+		-sbi->options.time_offset :
+		sys_tz.tz_minuteswest) * SECS_PER_MIN);
+}
+
+/* Convert a EXFAT time/date pair to a UNIX date (seconds since 1 1 70). */
 void exfat_get_entry_time(struct exfat_sb_info *sbi, struct timespec64 *ts,
 		__le16 time, __le16 date, u8 tz)
 {
@@ -88,18 +95,10 @@ void exfat_get_entry_time(struct exfat_sb_info *sbi, struct timespec64 *ts,
 	if (tz & EXFAT_TZ_VALID)
 		exfat_adjust_tz(ts, tz & ~EXFAT_TZ_VALID);
 	else
-		; /* Treat as local time */
+		ts->tv_sec += exfat_tz_offset(sbi); /* Treat as local time */
 }
 
-
-static inline int exfat_tz_offset(struct exfat_sb_info *sbi)
-{
-	return ((sbi->options.time_offset ?
-		sbi->options.time_offset :
-		sys_tz.tz_minuteswest) / -15) & 0x7F;
-}
-
-/* Convert linear UNIX date to a FAT time/date pair. */
+/* Convert linear UNIX date to a EXFAT time/date pair. */
 void exfat_set_entry_time(struct exfat_sb_info *sbi, struct timespec64 *ts,
 		__le16 *time, __le16 *date, u8 *tz)
 {
@@ -108,13 +107,18 @@ void exfat_set_entry_time(struct exfat_sb_info *sbi, struct timespec64 *ts,
 
 	/* clamp to the range valid in the exfat on-disk representation. */
 	time64_to_tm(clamp(ts->tv_sec, EXFAT_MIN_TIMESTAMP_SECS,
-			EXFAT_MAX_TIMESTAMP_SECS), 0, &tm);
+		EXFAT_MAX_TIMESTAMP_SECS), -exfat_tz_offset(sbi), &tm);
 	t = (tm.tm_hour << 11) | (tm.tm_min << 5) | (tm.tm_sec >> 1);
 	d = ((tm.tm_year - 80) <<  9) | ((tm.tm_mon + 1) << 5) | tm.tm_mday;
 
 	*time = cpu_to_le16(t);
 	*date = cpu_to_le16(d);
-	*tz = exfat_tz_offset(sbi) | EXFAT_TZ_VALID;
+
+	/*
+	 * exfat ondisk tz offset field decribes the offset from UTF
+	 * in 15 minute interval.
+	 */
+	*tz = ((sys_tz.tz_minuteswest / -15) & 0x7F) | EXFAT_TZ_VALID;
 }
 
 unsigned short exfat_calc_chksum_2byte(void *data, int len,
