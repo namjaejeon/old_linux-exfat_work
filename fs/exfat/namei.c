@@ -24,32 +24,25 @@ static inline void exfat_d_version_set(struct dentry *dentry,
 }
 
 /*
- * If new entry was created in the parent, it could create the 8.3
- * alias (the shortname of logname).  So, the parent may have the
- * negative-dentry which matches the created 8.3 alias.
+ * If new entry was created in the parent, it could create the 8.3 alias (the
+ * shortname of logname).  So, the parent may have the negative-dentry which
+ * matches the created 8.3 alias.
  *
- * If it happened, the negative dentry isn't actually negative
- * anymore.  So, drop it.
+ * If it happened, the negative dentry isn't actually negative anymore.  So,
+ * drop it.
  */
-static int __exfat_revalidate_common(struct dentry *dentry)
+static int exfat_revalidate(struct dentry *dentry, unsigned int flags)
 {
-	int ret = 1;
+	int ret;
 
-	spin_lock(&dentry->d_lock);
-	if (!inode_eq_iversion(d_inode(dentry->d_parent),
-			exfat_d_version(dentry)))
-		ret = 0;
-	spin_unlock(&dentry->d_lock);
-	return ret;
-}
+	if (flags & LOOKUP_RCU)
+		return -ECHILD;
 
-static int __exfat_revalidate(struct dentry *dentry, unsigned int flags)
-{
 	/*
 	 * This is not negative dentry. Always valid.
 	 *
-	 * Note, rename() to existing directory entry will have ->d_inode,
-	 * and will use existing name which isn't specified name by user.
+	 * Note, rename() to existing directory entry will have ->d_inode, and
+	 * will use existing name which isn't specified name by user.
 	 *
 	 * We may be able to drop this positive dentry here. But dropping
 	 * positive dentry isn't good idea. So it's unsupported like
@@ -57,16 +50,20 @@ static int __exfat_revalidate(struct dentry *dentry, unsigned int flags)
 	 */
 	if (d_really_is_positive(dentry))
 		return 1;
+
 	/*
-	 * Drop the negative dentry, in order to make sure to use the
-	 * case sensitive name which is specified by user if this is
-	 * for creation.
+	 * Drop the negative dentry, in order to make sure to use the case
+	 * sensitive name which is specified by user if this is for creation.
 	 */
 	if (flags & (LOOKUP_CREATE | LOOKUP_RENAME_TARGET))
 		return 0;
-	return __exfat_revalidate_common(dentry);
-}
 
+	spin_lock(&dentry->d_lock);
+	ret = inode_eq_iversion(d_inode(dentry->d_parent),
+			exfat_d_version(dentry));
+	spin_unlock(&dentry->d_lock);
+	return ret;
+}
 
 /* returns the length of a struct qstr, ignoring trailing dots */
 static unsigned int exfat_striptail_len(unsigned int len, const char *name)
@@ -205,14 +202,6 @@ static int exfat_cmp(const struct dentry *dentry, unsigned int len,
 	}
 
 	return 1;
-}
-
-static int exfat_revalidate(struct dentry *dentry, unsigned int flags)
-{
-	if (flags & LOOKUP_RCU)
-		return -ECHILD;
-
-	return __exfat_revalidate(dentry, flags);
 }
 
 const struct dentry_operations exfat_dentry_ops = {
