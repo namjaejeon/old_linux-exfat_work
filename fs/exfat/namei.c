@@ -81,11 +81,6 @@ static unsigned int exfat_striptail_len(const struct qstr *qstr)
 	return __exfat_striptail_len(qstr->len, qstr->name);
 }
 
-static inline unsigned long __exfat_init_name_hash(const struct dentry *dentry)
-{
-	return init_name_hash(dentry);
-}
-
 /*
  * Compute the hash for the exfat name corresponding to the dentry.
  * Note: if the name is invalid, we leave the hash code unchanged so
@@ -103,7 +98,7 @@ static int exfat_d_hash(const struct dentry *dentry, struct qstr *qstr)
 	name = qstr->name;
 	len = exfat_striptail_len(qstr);
 
-	hash = __exfat_init_name_hash(dentry);
+	hash = init_name_hash(dentry);
 
 	if (EXFAT_SB(sb)->options.utf8) {
 		unicode_t u;
