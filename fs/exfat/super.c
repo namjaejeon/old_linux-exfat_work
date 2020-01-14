@@ -551,7 +551,10 @@ static int exfat_fill_super(struct super_block *sb, struct fs_context *fc)
 	sb->s_time_min = EXFAT_MIN_TIMESTAMP_SECS;
 	sb->s_time_max = EXFAT_MAX_TIMESTAMP_SECS;
 
-	sb->s_d_op = &exfat_dentry_ops;
+	if (sbi->options.utf8)
+		sb->s_d_op = &exfat_utf8_dentry_ops;
+	else
+		sb->s_d_op = &exfat_dentry_ops;
 
 	err = __exfat_fill_super(sb);
 	if (err) {

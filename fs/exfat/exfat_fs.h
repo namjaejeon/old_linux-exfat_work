@@ -428,6 +428,7 @@ int exfat_getattr(const struct path *path, struct kstat *stat,
 
 /* namei.c */
 extern const struct dentry_operations exfat_dentry_ops;
+extern const struct dentry_operations exfat_utf8_dentry_ops;
 
 /* cache.c */
 int exfat_cache_init(void);
