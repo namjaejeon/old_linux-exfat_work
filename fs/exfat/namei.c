@@ -69,16 +69,11 @@ static int __exfat_revalidate(struct dentry *dentry, unsigned int flags)
 
 
 /* returns the length of a struct qstr, ignoring trailing dots */
-static unsigned int __exfat_striptail_len(unsigned int len, const char *name)
+static unsigned int exfat_striptail_len(unsigned int len, const char *name)
 {
 	while (len && name[len - 1] == '.')
 		len--;
 	return len;
-}
-
-static unsigned int exfat_striptail_len(const struct qstr *qstr)
-{
-	return __exfat_striptail_len(qstr->len, qstr->name);
 }
 
 /*
@@ -96,7 +91,7 @@ static int exfat_d_hash(const struct dentry *dentry, struct qstr *qstr)
 	int i, charlen;
 
 	name = qstr->name;
-	len = exfat_striptail_len(qstr);
+	len = exfat_striptail_len(qstr->len, qstr->name);
 
 	hash = init_name_hash(dentry);
 
@@ -166,8 +161,8 @@ static int exfat_cmp(const struct dentry *dentry, unsigned int len,
 	int i, charlen;
 
 	/* A filename cannot end in '.' or we treat it like it has none */
-	alen = exfat_striptail_len(name);
-	blen = __exfat_striptail_len(len, str);
+	alen = exfat_striptail_len(name->len, name->name);
+	blen = exfat_striptail_len(len, str);
 	if (alen == blen) {
 		if (EXFAT_SB(sb)->options.utf8) {
 			unicode_t u_a, u_b;
@@ -452,7 +447,7 @@ static int __exfat_resolve_path(struct inode *inode, const unsigned char *path,
 	struct exfat_inode_info *ei = EXFAT_I(inode);
 
 	/* strip all trailing periods */
-	namelen = __exfat_striptail_len(strlen(path), path);
+	namelen = exfat_striptail_len(strlen(path), path);
 	if (!namelen)
 		return -ENOENT;
 
