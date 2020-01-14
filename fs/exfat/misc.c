@@ -118,7 +118,9 @@ void exfat_set_entry_time(struct exfat_sb_info *sbi, struct timespec64 *ts,
 	 * exfat ondisk tz offset field decribes the offset from UTF
 	 * in 15 minute interval.
 	 */
-	*tz = ((sys_tz.tz_minuteswest / -15) & 0x7F) | EXFAT_TZ_VALID;
+	*tz = (((sbi->options.time_offset ?
+		 sbi->options.time_offset : sys_tz.tz_minuteswest) / -15) &
+		0x7F) | EXFAT_TZ_VALID;
 }
 
 unsigned short exfat_calc_chksum_2byte(void *data, int len,

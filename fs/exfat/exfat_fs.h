@@ -8,6 +8,7 @@
 
 #include <linux/fs.h>
 #include <linux/ratelimit.h>
+#include <linux/nls.h>
 
 #define EXFAT_SUPER_MAGIC       0x2011BAB0UL
 #define EXFAT_ROOT_INO		1
@@ -491,6 +492,8 @@ int exfat_nls_to_utf16(struct super_block *sb,
 		struct exfat_uni_name *uniname, int *p_lossy);
 int exfat_create_upcase_table(struct super_block *sb);
 void exfat_free_upcase_table(struct super_block *sb);
+unsigned short high_surrogate(unicode_t u);
+unsigned short low_surrogate(unicode_t u);
 
 /* exfat/misc.c */
 void __exfat_fs_error(struct super_block *sb, int report, const char *fmt, ...)

@@ -106,17 +106,29 @@ static int exfat_d_hash(const struct dentry *dentry, struct qstr *qstr)
 	hash = __exfat_init_name_hash(dentry);
 
 	if (EXFAT_SB(sb)->options.utf8) {
-		int j;
-		wchar_t utf16[8];
+		unicode_t u;
 
 		for (i = 0; i < len; i += charlen) {
-			charlen = utf8s_to_utf16s(&name[i], 4,
-				UTF16_HOST_ENDIAN, utf16, 8);
-			if (charlen <= 0 || charlen > 8)
+			charlen = utf8_to_utf32(&name[i], len - i, &u);
+			if (charlen < 0)
 				return charlen;
-			for (j = 0; j < charlen; j++)
+			/*
+			 * Convert to UTF-16: code points above U+FFFF are
+			 * encoded as surrogate pairs.
+			 */
+			if (u > 0xFFFF) {
+				/*
+				 * exfat_toupper() works only for code points
+				 * up to the U+FFFF.
+				 */
+				hash = partial_name_hash(high_surrogate(u),
+						hash);
+				hash = partial_name_hash(low_surrogate(u),
+						hash);
+			} else {
 				hash = partial_name_hash(exfat_toupper(sb,
-					utf16[j]), hash);
+						(unsigned short)u), hash);
+			}
 		}
 	} else  {
 		struct nls_table *t = EXFAT_SB(sb)->nls_io;
@@ -136,32 +148,19 @@ static int exfat_d_hash(const struct dentry *dentry, struct qstr *qstr)
 	return 0;
 }
 
-static int exfat_utf8_ci_ncmp(struct super_block *sb, const char *a,
-		const char *b, int len)
+static int exfat_unicode_cmp(struct super_block *sb, unicode_t a, unicode_t b)
 {
-	int i, alen, blen, ret = 1;
-	wchar_t utf16_a[8], utf16_b[8];
-
-	for (i = 0; i < len; i += alen) {
-		alen = utf8s_to_utf16s(&a[i], 4, UTF16_HOST_ENDIAN,
-				utf16_a, 8);
-		if (alen <= 0 || alen > 8)
-			goto out;
-
-		blen = utf8s_to_utf16s(&b[i], 4, UTF16_HOST_ENDIAN,
-				utf16_b, 8);
-		if (blen <= 0 || blen > 8)
-			goto out;
-
-		if (alen != blen)
-			goto out;
-
-		ret = exfat_uniname_ncmp(sb, utf16_a, utf16_b, alen);
-		if (ret)
-			break;
+	if (a <= 0xFFFF && b <= 0xFFFF) {
+		if (exfat_toupper(sb, (unsigned short)a) ==
+		    exfat_toupper(sb, (unsigned short)b))
+			return 0;
+	} else if (a > 0xFFFF && b > 0xFFFF) {
+		if (low_surrogate(a) == low_surrogate(b) &&
+		    high_surrogate(a) == high_surrogate(b))
+			return 0;
 	}
-out:
-	return ret;
+
+	return 1;
 }
 
 static int exfat_cmp(const struct dentry *dentry, unsigned int len,
@@ -169,27 +168,41 @@ static int exfat_cmp(const struct dentry *dentry, unsigned int len,
 {
 	struct super_block *sb = dentry->d_sb;
 	unsigned int alen, blen;
+	int i, charlen;
 
 	/* A filename cannot end in '.' or we treat it like it has none */
 	alen = exfat_striptail_len(name);
 	blen = __exfat_striptail_len(len, str);
 	if (alen == blen) {
 		if (EXFAT_SB(sb)->options.utf8) {
-			if (exfat_utf8_ci_ncmp(sb, name->name, str, len) == 0)
-				return 0;
+			unicode_t u_a, u_b;
+
+			for (i = 0; i < alen; i += charlen) {
+				charlen = utf8_to_utf32(&name->name[i],
+						alen - i, &u_a);
+				if (charlen < 0)
+					return 1;
+
+				if (charlen !=
+					utf8_to_utf32(&str[i], blen - i, &u_b))
+					return 1;
+
+				if (exfat_unicode_cmp(sb, u_a, u_b))
+					return 1;
+			}
+
+			return 0;
 		} else {
 			struct nls_table *t = EXFAT_SB(sb)->nls_io;
 			wchar_t c1, c2;
-			int i, l1, l2;
 
-			for (i = 0; i < len; i += l1) {
-				l1 = t->char2uni(&name->name[i], alen - i, &c1);
-				l2 = t->char2uni(&str[i], blen - i, &c2);
-
-				if (l1 < 0 || l2 < 0)
+			for (i = 0; i < len; i += charlen) {
+				charlen = t->char2uni(&name->name[i], alen - i,
+						&c1);
+				if (charlen < 0)
 					return 1;
-
-				if (l1 != l2)
+				if (charlen !=
+				    t->char2uni(&str[i], blen - i, &c2))
 					return 1;
 
 				if (exfat_toupper(sb, (unsigned short)c1) !=
