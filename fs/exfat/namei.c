@@ -24,32 +24,25 @@ static inline void exfat_d_version_set(struct dentry *dentry,
 }
 
 /*
- * If new entry was created in the parent, it could create the 8.3
- * alias (the shortname of logname).  So, the parent may have the
- * negative-dentry which matches the created 8.3 alias.
+ * If new entry was created in the parent, it could create the 8.3 alias (the
+ * shortname of logname).  So, the parent may have the negative-dentry which
+ * matches the created 8.3 alias.
  *
- * If it happened, the negative dentry isn't actually negative
- * anymore.  So, drop it.
+ * If it happened, the negative dentry isn't actually negative anymore.  So,
+ * drop it.
  */
-static int __exfat_revalidate_common(struct dentry *dentry)
+static int exfat_d_revalidate(struct dentry *dentry, unsigned int flags)
 {
-	int ret = 1;
+	int ret;
 
-	spin_lock(&dentry->d_lock);
-	if (!inode_eq_iversion(d_inode(dentry->d_parent),
-			exfat_d_version(dentry)))
-		ret = 0;
-	spin_unlock(&dentry->d_lock);
-	return ret;
-}
+	if (flags & LOOKUP_RCU)
+		return -ECHILD;
 
-static int __exfat_revalidate(struct dentry *dentry, unsigned int flags)
-{
 	/*
 	 * This is not negative dentry. Always valid.
 	 *
-	 * Note, rename() to existing directory entry will have ->d_inode,
-	 * and will use existing name which isn't specified name by user.
+	 * Note, rename() to existing directory entry will have ->d_inode, and
+	 * will use existing name which isn't specified name by user.
 	 *
 	 * We may be able to drop this positive dentry here. But dropping
 	 * positive dentry isn't good idea. So it's unsupported like
@@ -57,178 +50,157 @@ static int __exfat_revalidate(struct dentry *dentry, unsigned int flags)
 	 */
 	if (d_really_is_positive(dentry))
 		return 1;
+
 	/*
-	 * Drop the negative dentry, in order to make sure to use the
-	 * case sensitive name which is specified by user if this is
-	 * for creation.
+	 * Drop the negative dentry, in order to make sure to use the case
+	 * sensitive name which is specified by user if this is for creation.
 	 */
 	if (flags & (LOOKUP_CREATE | LOOKUP_RENAME_TARGET))
 		return 0;
-	return __exfat_revalidate_common(dentry);
+
+	spin_lock(&dentry->d_lock);
+	ret = inode_eq_iversion(d_inode(dentry->d_parent),
+			exfat_d_version(dentry));
+	spin_unlock(&dentry->d_lock);
+	return ret;
 }
 
-
 /* returns the length of a struct qstr, ignoring trailing dots */
-static unsigned int __exfat_striptail_len(unsigned int len, const char *name)
+static unsigned int exfat_striptail_len(unsigned int len, const char *name)
 {
 	while (len && name[len - 1] == '.')
 		len--;
 	return len;
 }
 
-static unsigned int exfat_striptail_len(const struct qstr *qstr)
-{
-	return __exfat_striptail_len(qstr->len, qstr->name);
-}
-
-static inline unsigned long __exfat_init_name_hash(const struct dentry *dentry)
-{
-	return init_name_hash(dentry);
-}
-
 /*
- * Compute the hash for the exfat name corresponding to the dentry.
- * Note: if the name is invalid, we leave the hash code unchanged so
- * that the existing dentry can be used. The exfat fs routines will
- * return ENOENT or EINVAL as appropriate.
+ * Compute the hash for the exfat name corresponding to the dentry.  If the name
+ * is invalid, we leave the hash code unchanged so that the existing dentry can
+ * be used. The exfat fs routines will return ENOENT or EINVAL as appropriate.
  */
 static int exfat_d_hash(const struct dentry *dentry, struct qstr *qstr)
 {
 	struct super_block *sb = dentry->d_sb;
-	const unsigned char *name;
-	unsigned int len;
-	unsigned long hash;
+	struct nls_table *t = EXFAT_SB(sb)->nls_io;
+	const unsigned char *name = qstr->name;
+	unsigned int len = exfat_striptail_len(qstr->len, qstr->name);
+	unsigned long hash = init_name_hash(dentry);
 	int i, charlen;
+	wchar_t c;
 
-	name = qstr->name;
-	len = exfat_striptail_len(qstr);
-
-	hash = __exfat_init_name_hash(dentry);
-
-	if (EXFAT_SB(sb)->options.utf8) {
-		unicode_t u;
-
-		for (i = 0; i < len; i += charlen) {
-			charlen = utf8_to_utf32(&name[i], len - i, &u);
-			if (charlen < 0)
-				return charlen;
-			/*
-			 * Convert to UTF-16: code points above U+FFFF are
-			 * encoded as surrogate pairs.
-			 */
-			if (u > 0xFFFF) {
-				/*
-				 * exfat_toupper() works only for code points
-				 * up to the U+FFFF.
-				 */
-				hash = partial_name_hash(high_surrogate(u),
-						hash);
-				hash = partial_name_hash(low_surrogate(u),
-						hash);
-			} else {
-				hash = partial_name_hash(exfat_toupper(sb,
-						(unsigned short)u), hash);
-			}
-		}
-	} else  {
-		struct nls_table *t = EXFAT_SB(sb)->nls_io;
-		wchar_t c;
-
-		for (i = 0; i < len; i += charlen) {
-			charlen = t->char2uni(&name[i], len - i, &c);
-			if (charlen < 0)
-				return charlen;
-			hash = partial_name_hash(exfat_toupper(sb,
-				(unsigned short)c), hash);
-		}
+	for (i = 0; i < len; i += charlen) {
+		charlen = t->char2uni(&name[i], len - i, &c);
+		if (charlen < 0)
+			return charlen;
+		hash = partial_name_hash(exfat_toupper(sb, c), hash);
 	}
 
 	qstr->hash = end_name_hash(hash);
+	return 0;
+}
+
+static int exfat_d_cmp(const struct dentry *dentry, unsigned int len,
+		const char *str, const struct qstr *name)
+{
+	struct super_block *sb = dentry->d_sb;
+	struct nls_table *t = EXFAT_SB(sb)->nls_io;
+	unsigned int alen = exfat_striptail_len(name->len, name->name);
+	unsigned int blen = exfat_striptail_len(len, str);
+	wchar_t c1, c2;
+	int charlen, i;
+
+	if (alen != blen)
+		return 1;
+
+	for (i = 0; i < len; i += charlen) {
+		charlen = t->char2uni(&name->name[i], alen - i, &c1);
+		if (charlen < 0)
+			return 1;
+		if (charlen != t->char2uni(&str[i], blen - i, &c2))
+			return 1;
+
+		if (exfat_toupper(sb, c1) != exfat_toupper(sb, c2))
+			return 1;
+	}
 
 	return 0;
 }
 
-static int exfat_unicode_cmp(struct super_block *sb, unicode_t a, unicode_t b)
+const struct dentry_operations exfat_dentry_ops = {
+	.d_revalidate	= exfat_d_revalidate,
+	.d_hash		= exfat_d_hash,
+	.d_compare	= exfat_d_cmp,
+};
+
+static int exfat_utf8_d_hash(const struct dentry *dentry, struct qstr *qstr)
 {
-	if (a <= 0xFFFF && b <= 0xFFFF) {
-		if (exfat_toupper(sb, (unsigned short)a) ==
-		    exfat_toupper(sb, (unsigned short)b))
-			return 0;
-	} else if (a > 0xFFFF && b > 0xFFFF) {
-		if (low_surrogate(a) == low_surrogate(b) &&
-		    high_surrogate(a) == high_surrogate(b))
-			return 0;
+	struct super_block *sb = dentry->d_sb;
+	const unsigned char *name = qstr->name;
+	unsigned int len = exfat_striptail_len(qstr->len, qstr->name);
+	unsigned long hash = init_name_hash(dentry);
+	int i, charlen;
+	unicode_t u;
+
+	for (i = 0; i < len; i += charlen) {
+		charlen = utf8_to_utf32(&name[i], len - i, &u);
+		if (charlen < 0)
+			return charlen;
+
+		/*
+		 * Convert to UTF-16: code points above U+FFFF are encoded as
+		 * surrogate pairs.
+		 * exfat_toupper() works only for code points up to the U+FFFF.
+		 */
+		if (u > 0xFFFF) {
+			hash = partial_name_hash(high_surrogate(u), hash);
+			hash = partial_name_hash(low_surrogate(u), hash);
+		} else {
+			hash = partial_name_hash(exfat_toupper(sb, u), hash);
+		}
 	}
 
-	return 1;
+	qstr->hash = end_name_hash(hash);
+	return 0;
 }
 
-static int exfat_cmp(const struct dentry *dentry, unsigned int len,
+static int exfat_utf8_d_cmp(const struct dentry *dentry, unsigned int len,
 		const char *str, const struct qstr *name)
 {
 	struct super_block *sb = dentry->d_sb;
-	unsigned int alen, blen;
-	int i, charlen;
+	unsigned int alen = exfat_striptail_len(name->len, name->name);
+	unsigned int blen = exfat_striptail_len(len, str);
+	unicode_t u_a, u_b;
+	int charlen, i;
 
-	/* A filename cannot end in '.' or we treat it like it has none */
-	alen = exfat_striptail_len(name);
-	blen = __exfat_striptail_len(len, str);
-	if (alen == blen) {
-		if (EXFAT_SB(sb)->options.utf8) {
-			unicode_t u_a, u_b;
+	if (alen != blen)
+		return 1;
 
-			for (i = 0; i < alen; i += charlen) {
-				charlen = utf8_to_utf32(&name->name[i],
-						alen - i, &u_a);
-				if (charlen < 0)
-					return 1;
+	for (i = 0; i < alen; i += charlen) {
+		charlen = utf8_to_utf32(&name->name[i], alen - i, &u_a);
+		if (charlen < 0)
+			return 1;
+		if (charlen != utf8_to_utf32(&str[i], blen - i, &u_b))
+			return 1;
 
-				if (charlen !=
-					utf8_to_utf32(&str[i], blen - i, &u_b))
-					return 1;
-
-				if (exfat_unicode_cmp(sb, u_a, u_b))
-					return 1;
-			}
-
-			return 0;
+		if (u_a <= 0xFFFF && u_b <= 0xFFFF) {
+			if (exfat_toupper(sb, u_a) != exfat_toupper(sb, u_b))
+				return 1;
+		} else if (u_a > 0xFFFF && u_b > 0xFFFF) {
+			if (low_surrogate(u_a) != low_surrogate(u_b) ||
+			    high_surrogate(u_a) != high_surrogate(u_b))
+				return 1;
 		} else {
-			struct nls_table *t = EXFAT_SB(sb)->nls_io;
-			wchar_t c1, c2;
-
-			for (i = 0; i < len; i += charlen) {
-				charlen = t->char2uni(&name->name[i], alen - i,
-						&c1);
-				if (charlen < 0)
-					return 1;
-				if (charlen !=
-				    t->char2uni(&str[i], blen - i, &c2))
-					return 1;
-
-				if (exfat_toupper(sb, (unsigned short)c1) !=
-				    exfat_toupper(sb, (unsigned short)c2))
-					return 1;
-			}
-
-			return 0;
+			return 1;
 		}
 	}
 
 	return 1;
 }
 
-static int exfat_revalidate(struct dentry *dentry, unsigned int flags)
-{
-	if (flags & LOOKUP_RCU)
-		return -ECHILD;
-
-	return __exfat_revalidate(dentry, flags);
-}
-
-const struct dentry_operations exfat_dentry_ops = {
-	.d_revalidate	= exfat_revalidate,
-	.d_hash		= exfat_d_hash,
-	.d_compare	= exfat_cmp,
+const struct dentry_operations exfat_utf8_dentry_ops = {
+	.d_revalidate	= exfat_d_revalidate,
+	.d_hash		= exfat_utf8_d_hash,
+	.d_compare	= exfat_utf8_d_cmp,
 };
 
 /* used only in search empty_slot() */
@@ -457,7 +429,7 @@ static int __exfat_resolve_path(struct inode *inode, const unsigned char *path,
 	struct exfat_inode_info *ei = EXFAT_I(inode);
 
 	/* strip all trailing periods */
-	namelen = __exfat_striptail_len(strlen(path), path);
+	namelen = exfat_striptail_len(strlen(path), path);
 	if (!namelen)
 		return -ENOENT;
 

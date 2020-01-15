@@ -67,7 +67,6 @@ void exfat_msg(struct super_block *sb, const char *level, const char *fmt, ...)
 
 static void exfat_adjust_tz(struct timespec64 *ts, u8 tz_off)
 {
-	/* Treat as UTC time, but need to adjust timezone to UTC0 */
 	if (tz_off <= 0x3F)
 		ts->tv_sec -= TIMEZONE_SEC(tz_off);
 	else /* 0x40 <= (tz_off & 0x7F) <=0x7F */
@@ -76,9 +75,9 @@ static void exfat_adjust_tz(struct timespec64 *ts, u8 tz_off)
 
 static inline int exfat_tz_offset(struct exfat_sb_info *sbi)
 {
-	return ((sbi->options.time_offset ?
-		-sbi->options.time_offset :
-		sys_tz.tz_minuteswest) * SECS_PER_MIN);
+	if (sbi->options.time_offset)
+		return sbi->options.time_offset;
+	return sys_tz.tz_minuteswest;
 }
 
 /* Convert a EXFAT time/date pair to a UNIX date (seconds since 1 1 70). */
@@ -93,9 +92,11 @@ void exfat_get_entry_time(struct exfat_sb_info *sbi, struct timespec64 *ts,
 	ts->tv_nsec = 0;
 
 	if (tz & EXFAT_TZ_VALID)
+		/* Treat as UTC time, but need to adjust timezone to UTC0 */
 		exfat_adjust_tz(ts, tz & ~EXFAT_TZ_VALID);
 	else
-		ts->tv_sec += exfat_tz_offset(sbi); /* Treat as local time */
+		/* Treat as local time */
+		ts->tv_sec -= exfat_tz_offset(sbi) * SECS_PER_MIN;
 }
 
 /* Convert linear UNIX date to a EXFAT time/date pair. */
@@ -106,8 +107,9 @@ void exfat_set_entry_time(struct exfat_sb_info *sbi, struct timespec64 *ts,
 	u16 t, d;
 
 	/* clamp to the range valid in the exfat on-disk representation. */
-	time64_to_tm(clamp(ts->tv_sec, EXFAT_MIN_TIMESTAMP_SECS,
-		EXFAT_MAX_TIMESTAMP_SECS), -exfat_tz_offset(sbi), &tm);
+	time64_to_tm(clamp_t(time64_t, ts->tv_sec, EXFAT_MIN_TIMESTAMP_SECS,
+		EXFAT_MAX_TIMESTAMP_SECS), -exfat_tz_offset(sbi) * SECS_PER_MIN,
+		&tm);
 	t = (tm.tm_hour << 11) | (tm.tm_min << 5) | (tm.tm_sec >> 1);
 	d = ((tm.tm_year - 80) <<  9) | ((tm.tm_mon + 1) << 5) | tm.tm_mday;
 
@@ -118,9 +120,7 @@ void exfat_set_entry_time(struct exfat_sb_info *sbi, struct timespec64 *ts,
 	 * exfat ondisk tz offset field decribes the offset from UTF
 	 * in 15 minute interval.
 	 */
-	*tz = (((sbi->options.time_offset ?
-		 sbi->options.time_offset : sys_tz.tz_minuteswest) / -15) &
-		0x7F) | EXFAT_TZ_VALID;
+	*tz = ((exfat_tz_offset(sbi) / -15) & 0x7F) | EXFAT_TZ_VALID;
 }
 
 unsigned short exfat_calc_chksum_2byte(void *data, int len,
