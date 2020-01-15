@@ -96,7 +96,7 @@ void exfat_get_entry_time(struct exfat_sb_info *sbi, struct timespec64 *ts,
 		exfat_adjust_tz(ts, tz & ~EXFAT_TZ_VALID);
 	else
 		/* Treat as local time */
-		ts->tv_sec -= exfat_tz_offset(sbi);
+		ts->tv_sec -= exfat_tz_offset(sbi) * SECS_PER_MIN;
 }
 
 /* Convert linear UNIX date to a EXFAT time/date pair. */
@@ -108,7 +108,8 @@ void exfat_set_entry_time(struct exfat_sb_info *sbi, struct timespec64 *ts,
 
 	/* clamp to the range valid in the exfat on-disk representation. */
 	time64_to_tm(clamp_t(time64_t, ts->tv_sec, EXFAT_MIN_TIMESTAMP_SECS,
-		EXFAT_MAX_TIMESTAMP_SECS), -exfat_tz_offset(sbi), &tm);
+		EXFAT_MAX_TIMESTAMP_SECS), -exfat_tz_offset(sbi) * SECS_PER_MIN,
+		&tm);
 	t = (tm.tm_hour << 11) | (tm.tm_min << 5) | (tm.tm_sec >> 1);
 	d = ((tm.tm_year - 80) <<  9) | ((tm.tm_mon + 1) << 5) | tm.tm_mday;
 
