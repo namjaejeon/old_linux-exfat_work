@@ -152,8 +152,8 @@ static int exfat_utf8_d_hash(const struct dentry *dentry, struct qstr *qstr)
 		 * exfat_toupper() works only for code points up to the U+FFFF.
 		 */
 		if (u > 0xFFFF) {
-			hash = partial_name_hash(high_surrogate(u), hash);
-			hash = partial_name_hash(low_surrogate(u), hash);
+			hash = partial_name_hash(exfat_high_surrogate(u), hash);
+			hash = partial_name_hash(exfat_low_surrogate(u), hash);
 		} else {
 			hash = partial_name_hash(exfat_toupper(sb, u), hash);
 		}
@@ -186,8 +186,10 @@ static int exfat_utf8_d_cmp(const struct dentry *dentry, unsigned int len,
 			if (exfat_toupper(sb, u_a) != exfat_toupper(sb, u_b))
 				return 1;
 		} else if (u_a > 0xFFFF && u_b > 0xFFFF) {
-			if (low_surrogate(u_a) != low_surrogate(u_b) ||
-			    high_surrogate(u_a) != high_surrogate(u_b))
+			if (exfat_low_surrogate(u_a) !=
+					exfat_low_surrogate(u_b) ||
+			    exfat_high_surrogate(u_a) !=
+					exfat_high_surrogate(u_b))
 				return 1;
 		} else {
 			return 1;
