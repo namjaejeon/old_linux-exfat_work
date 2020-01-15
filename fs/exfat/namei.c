@@ -196,7 +196,7 @@ static int exfat_utf8_d_cmp(const struct dentry *dentry, unsigned int len,
 		}
 	}
 
-	return 1;
+	return 0;
 }
 
 const struct dentry_operations exfat_utf8_dentry_ops = {
