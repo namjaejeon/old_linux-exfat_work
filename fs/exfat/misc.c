@@ -107,7 +107,7 @@ void exfat_set_entry_time(struct exfat_sb_info *sbi, struct timespec64 *ts,
 	u16 t, d;
 
 	/* clamp to the range valid in the exfat on-disk representation. */
-	time64_to_tm(clamp(ts->tv_sec, EXFAT_MIN_TIMESTAMP_SECS,
+	time64_to_tm(clamp_t(time64_t, ts->tv_sec, EXFAT_MIN_TIMESTAMP_SECS,
 		EXFAT_MAX_TIMESTAMP_SECS), -exfat_tz_offset(sbi), &tm);
 	t = (tm.tm_hour << 11) | (tm.tm_min << 5) | (tm.tm_sec >> 1);
 	d = ((tm.tm_year - 80) <<  9) | ((tm.tm_mon + 1) << 5) | tm.tm_mday;
