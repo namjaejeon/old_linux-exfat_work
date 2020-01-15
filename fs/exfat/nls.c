@@ -543,12 +543,12 @@ static int exfat_utf8_to_utf16(struct super_block *sb,
 #define SURROGATE_LOW	0x00000400
 #define SURROGATE_BITS	0x000003ff
 
-unsigned short high_surrogate(unicode_t u)
+unsigned short exfat_high_surrogate(unicode_t u)
 {
 	return ((u - PLANE_SIZE) >> 10) + SURROGATE_PAIR;
 }
 
-unsigned short low_surrogate(unicode_t u)
+unsigned short exfat_low_surrogate(unicode_t u)
 {
 	return ((u - PLANE_SIZE) & SURROGATE_BITS) | SURROGATE_PAIR |
 		SURROGATE_LOW;

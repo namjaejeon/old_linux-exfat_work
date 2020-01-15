@@ -493,8 +493,8 @@ int exfat_nls_to_utf16(struct super_block *sb,
 		struct exfat_uni_name *uniname, int *p_lossy);
 int exfat_create_upcase_table(struct super_block *sb);
 void exfat_free_upcase_table(struct super_block *sb);
-unsigned short high_surrogate(unicode_t u);
-unsigned short low_surrogate(unicode_t u);
+unsigned short exfat_high_surrogate(unicode_t u);
+unsigned short exfat_low_surrogate(unicode_t u);
 
 /* exfat/misc.c */
 void __exfat_fs_error(struct super_block *sb, int report, const char *fmt, ...)
