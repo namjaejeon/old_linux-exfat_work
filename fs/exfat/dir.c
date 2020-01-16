@@ -407,29 +407,6 @@ static void exfat_set_entry_type(struct exfat_dentry *ep, unsigned int type)
 	}
 }
 
-static void exfat_init_file_entry(struct super_block *sb,
-		struct exfat_dentry *ep, unsigned int type,
-		struct timespec64 *ts)
-{
-	struct exfat_sb_info *sbi = EXFAT_SB(sb);
-
-	exfat_set_entry_type(ep, type);
-	exfat_set_entry_time(sbi, ts,
-			&ep->dentry.file.create_time,
-			&ep->dentry.file.create_date,
-			&ep->dentry.file.create_tz);
-	exfat_set_entry_time(sbi, ts,
-			&ep->dentry.file.modify_time,
-			&ep->dentry.file.modify_date,
-			&ep->dentry.file.modify_tz);
-	exfat_set_entry_time(sbi, ts,
-			&ep->dentry.file.access_time,
-			&ep->dentry.file.access_date,
-			&ep->dentry.file.access_tz);
-	ep->dentry.file.create_time_ms = 0;
-	ep->dentry.file.modify_time_ms = 0;
-}
-
 static void exfat_init_stream_entry(struct exfat_dentry *ep,
 		unsigned char flags, unsigned int start_clu,
 		unsigned long long size)
@@ -462,14 +439,11 @@ int exfat_init_dir_entry(struct inode *inode, struct exfat_chain *p_dir,
 		unsigned long long size)
 {
 	struct super_block *sb = inode->i_sb;
+	struct exfat_sb_info *sbi = EXFAT_SB(sb);
+	struct timespec64 ts = current_time(inode);
 	sector_t sector;
-	unsigned char flags;
 	struct exfat_dentry *ep;
 	struct buffer_head *bh;
-	int sync = IS_DIRSYNC(inode);
-	struct timespec64 ts;
-
-	flags = (type == TYPE_FILE) ? ALLOC_FAT_CHAIN : ALLOC_NO_FAT_CHAIN;
 
 	/*
 	 * We cannot use exfat_get_dentry_set here because file ep is not
@@ -479,17 +453,33 @@ int exfat_init_dir_entry(struct inode *inode, struct exfat_chain *p_dir,
 	if (!ep)
 		return -EIO;
 
-	ts = current_time(inode);
-	exfat_init_file_entry(sb, ep, type, &ts);
-	exfat_update_bh(sb, bh, sync);
+	exfat_set_entry_type(ep, type);
+	exfat_set_entry_time(sbi, &ts,
+			&ep->dentry.file.create_time,
+			&ep->dentry.file.create_date,
+			&ep->dentry.file.create_tz);
+	ep->dentry.file.create_time_ms = ts.tv_nsec / NSEC_PER_MSEC;
+	exfat_set_entry_time(sbi, &ts,
+			&ep->dentry.file.modify_time,
+			&ep->dentry.file.modify_date,
+			&ep->dentry.file.modify_tz);
+	ep->dentry.file.modify_time_ms = ts.tv_nsec / NSEC_PER_MSEC;
+	exfat_set_entry_time(sbi, &ts,
+			&ep->dentry.file.access_time,
+			&ep->dentry.file.access_date,
+			&ep->dentry.file.access_tz);
+
+	exfat_update_bh(sb, bh, IS_DIRSYNC(inode));
 	brelse(bh);
 
 	ep = exfat_get_dentry(sb, p_dir, entry + 1, &bh, &sector);
 	if (!ep)
 		return -EIO;
 
-	exfat_init_stream_entry(ep, flags, start_clu, size);
-	exfat_update_bh(sb, bh, sync);
+	exfat_init_stream_entry(ep,
+		(type == TYPE_FILE) ? ALLOC_FAT_CHAIN : ALLOC_NO_FAT_CHAIN,
+		start_clu, size);
+	exfat_update_bh(sb, bh, IS_DIRSYNC(inode));
 	brelse(bh);
 
 	return 0;
