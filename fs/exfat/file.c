@@ -160,7 +160,7 @@ int __exfat_truncate(struct inode *inode, loff_t new_size)
 			return -EIO;
 		ep2 = ep + 1;
 
-		ktime_get_real_ts64(&ts);
+		ts = current_time(inode);
 		exfat_set_entry_time(sbi, &ts,
 				&ep->dentry.file.modify_time,
 				&ep->dentry.file.modify_date,
