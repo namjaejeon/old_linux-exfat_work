@@ -133,7 +133,7 @@ static int exfat_readdir(struct inode *inode, struct exfat_dir_entry *dir_entry)
 			}
 
 			dir_entry->attr = le16_to_cpu(ep->dentry.file.attr);
-			exfat_get_entry_time(sbi, &dir_entry->ctime,
+			exfat_get_entry_time(sbi, &dir_entry->crtime,
 					ep->dentry.file.create_time,
 					ep->dentry.file.create_date,
 					ep->dentry.file.create_tz);

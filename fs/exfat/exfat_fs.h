@@ -191,7 +191,7 @@ struct exfat_dir_entry {
 	unsigned int num_subdirs;
 	struct timespec64 atime;
 	struct timespec64 mtime;
-	struct timespec64 ctime;
+	struct timespec64 crtime;
 	struct exfat_dentry_namebuf namebuf;
 };
 
@@ -302,6 +302,8 @@ struct exfat_inode_info {
 	/* protect bmap against truncate */
 	struct rw_semaphore truncate_lock;
 	struct inode vfs_inode;
+	/* File creation time */
+	struct timespec64 i_crtime;
 };
 
 static inline struct exfat_sb_info *EXFAT_SB(struct super_block *sb)
