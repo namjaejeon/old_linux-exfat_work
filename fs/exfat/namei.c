@@ -581,7 +581,7 @@ static int exfat_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 		goto unlock;
 
 	inode_inc_iversion(dir);
-	dir->i_ctime = dir->i_mtime = dir->i_atime = current_time(dir);
+	dir->i_ctime = dir->i_mtime = current_time(dir);
 	if (IS_DIRSYNC(dir))
 		exfat_sync_inode(dir);
 	else
@@ -882,7 +882,7 @@ static int exfat_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 		goto unlock;
 
 	inode_inc_iversion(dir);
-	dir->i_ctime = dir->i_mtime = dir->i_atime = current_time(dir);
+	dir->i_ctime = dir->i_mtime = current_time(dir);
 	if (IS_DIRSYNC(dir))
 		exfat_sync_inode(dir);
 	else
