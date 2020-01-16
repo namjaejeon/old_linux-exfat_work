@@ -92,10 +92,10 @@ void exfat_get_entry_time(struct exfat_sb_info *sbi, struct timespec64 *ts,
 	ts->tv_nsec = 0;
 
 	if (tz & EXFAT_TZ_VALID)
-		/* Treat as UTC time, but need to adjust timezone to UTC0 */
+		/* Make UTC from UTCOffset and local date */
 		exfat_adjust_tz(ts, tz & ~EXFAT_TZ_VALID);
 	else
-		/* Treat as local time */
+		/* Make fake UTC to show local time as it is */
 		ts->tv_sec += exfat_tz_offset(sbi) * SECS_PER_MIN;
 }
 
