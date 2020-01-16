@@ -458,16 +458,16 @@ int exfat_init_dir_entry(struct inode *inode, struct exfat_chain *p_dir,
 			&ep->dentry.file.create_time,
 			&ep->dentry.file.create_date,
 			&ep->dentry.file.create_tz);
+	ep->dentry.file.create_time_ms = ts.tv_nsec / NSEC_PER_MSEC;
 	exfat_set_entry_time(sbi, &ts,
 			&ep->dentry.file.modify_time,
 			&ep->dentry.file.modify_date,
 			&ep->dentry.file.modify_tz);
+	ep->dentry.file.modify_time_ms = ts.tv_nsec / NSEC_PER_MSEC;
 	exfat_set_entry_time(sbi, &ts,
 			&ep->dentry.file.access_time,
 			&ep->dentry.file.access_date,
 			&ep->dentry.file.access_tz);
-	ep->dentry.file.create_time_ms = 0;
-	ep->dentry.file.modify_time_ms = 0;
 
 	exfat_update_bh(sb, bh, IS_DIRSYNC(inode));
 	brelse(bh);
