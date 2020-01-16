@@ -133,7 +133,7 @@ static int exfat_readdir(struct inode *inode, struct exfat_dir_entry *dir_entry)
 			}
 
 			dir_entry->attr = le16_to_cpu(ep->dentry.file.attr);
-			exfat_get_entry_time(sbi, &dir_entry->ctime,
+			exfat_get_entry_time(sbi, &dir_entry->crtime,
 					ep->dentry.file.create_time,
 					ep->dentry.file.create_date,
 					ep->dentry.file.create_tz);
@@ -408,23 +408,21 @@ static void exfat_set_entry_type(struct exfat_dentry *ep, unsigned int type)
 }
 
 static void exfat_init_file_entry(struct super_block *sb,
-		struct exfat_dentry *ep, unsigned int type)
+		struct exfat_dentry *ep, unsigned int type,
+		struct timespec64 *ts)
 {
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
-	struct timespec64 ts;
-
-	ktime_get_real_ts64(&ts);
 
 	exfat_set_entry_type(ep, type);
-	exfat_set_entry_time(sbi, &ts,
+	exfat_set_entry_time(sbi, ts,
 			&ep->dentry.file.create_time,
 			&ep->dentry.file.create_date,
 			&ep->dentry.file.create_tz);
-	exfat_set_entry_time(sbi, &ts,
+	exfat_set_entry_time(sbi, ts,
 			&ep->dentry.file.modify_time,
 			&ep->dentry.file.modify_date,
 			&ep->dentry.file.modify_tz);
-	exfat_set_entry_time(sbi, &ts,
+	exfat_set_entry_time(sbi, ts,
 			&ep->dentry.file.access_time,
 			&ep->dentry.file.access_date,
 			&ep->dentry.file.access_tz);
@@ -469,6 +467,7 @@ int exfat_init_dir_entry(struct inode *inode, struct exfat_chain *p_dir,
 	struct exfat_dentry *ep;
 	struct buffer_head *bh;
 	int sync = IS_DIRSYNC(inode);
+	struct timespec64 ts;
 
 	flags = (type == TYPE_FILE) ? ALLOC_FAT_CHAIN : ALLOC_NO_FAT_CHAIN;
 
@@ -480,7 +479,8 @@ int exfat_init_dir_entry(struct inode *inode, struct exfat_chain *p_dir,
 	if (!ep)
 		return -EIO;
 
-	exfat_init_file_entry(sb, ep, type);
+	ts = current_time(inode);
+	exfat_init_file_entry(sb, ep, type, &ts);
 	exfat_update_bh(sb, bh, sync);
 	brelse(bh);
 

@@ -76,7 +76,7 @@ static void exfat_adjust_tz(struct timespec64 *ts, u8 tz_off)
 static inline int exfat_tz_offset(struct exfat_sb_info *sbi)
 {
 	if (sbi->options.time_offset)
-		return sbi->options.time_offset;
+		return -sbi->options.time_offset;
 	return sys_tz.tz_minuteswest;
 }
 
@@ -92,11 +92,11 @@ void exfat_get_entry_time(struct exfat_sb_info *sbi, struct timespec64 *ts,
 	ts->tv_nsec = 0;
 
 	if (tz & EXFAT_TZ_VALID)
-		/* Treat as UTC time, but need to adjust timezone to UTC0 */
+		/* Make UTC from UTCOffset and local date */
 		exfat_adjust_tz(ts, tz & ~EXFAT_TZ_VALID);
 	else
-		/* Treat as local time */
-		ts->tv_sec -= exfat_tz_offset(sbi) * SECS_PER_MIN;
+		/* Make fake UTC to show local time as it is */
+		ts->tv_sec += exfat_tz_offset(sbi) * SECS_PER_MIN;
 }
 
 /* Convert linear UNIX date to a EXFAT time/date pair. */
@@ -106,10 +106,7 @@ void exfat_set_entry_time(struct exfat_sb_info *sbi, struct timespec64 *ts,
 	struct tm tm;
 	u16 t, d;
 
-	/* clamp to the range valid in the exfat on-disk representation. */
-	time64_to_tm(clamp_t(time64_t, ts->tv_sec, EXFAT_MIN_TIMESTAMP_SECS,
-		EXFAT_MAX_TIMESTAMP_SECS), -exfat_tz_offset(sbi) * SECS_PER_MIN,
-		&tm);
+	time64_to_tm(ts->tv_sec, -exfat_tz_offset(sbi) * SECS_PER_MIN, &tm);
 	t = (tm.tm_hour << 11) | (tm.tm_min << 5) | (tm.tm_sec >> 1);
 	d = ((tm.tm_year - 80) <<  9) | ((tm.tm_mon + 1) << 5) | tm.tm_mday;
 
@@ -117,7 +114,7 @@ void exfat_set_entry_time(struct exfat_sb_info *sbi, struct timespec64 *ts,
 	*date = cpu_to_le16(d);
 
 	/*
-	 * exfat ondisk tz offset field decribes the offset from UTF
+	 * exfat ondisk tz offset field decribes the offset from UTC
 	 * in 15 minute interval.
 	 */
 	*tz = ((exfat_tz_offset(sbi) / -15) & 0x7F) | EXFAT_TZ_VALID;

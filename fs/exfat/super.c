@@ -353,7 +353,8 @@ static int exfat_read_root(struct inode *inode)
 	EXFAT_I(inode)->i_size_ondisk = i_size_read(inode);
 
 	exfat_save_attr(inode, ATTR_SUBDIR);
-	inode->i_mtime = inode->i_atime = inode->i_ctime = current_time(inode);
+	inode->i_mtime = inode->i_atime = inode->i_ctime = ei->i_crtime =
+		current_time(inode);
 	exfat_cache_init_inode(inode);
 	return 0;
 }
