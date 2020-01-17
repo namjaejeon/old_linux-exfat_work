@@ -134,17 +134,20 @@ static int exfat_readdir(struct inode *inode, struct exfat_dir_entry *dir_entry)
 
 			dir_entry->attr = le16_to_cpu(ep->dentry.file.attr);
 			exfat_get_entry_time(sbi, &dir_entry->crtime,
+					ep->dentry.file.create_tz,
 					ep->dentry.file.create_time,
 					ep->dentry.file.create_date,
-					ep->dentry.file.create_tz);
+					ep->dentry.file.create_time_ms);
 			exfat_get_entry_time(sbi, &dir_entry->mtime,
+					ep->dentry.file.modify_tz,
 					ep->dentry.file.modify_time,
 					ep->dentry.file.modify_date,
-					ep->dentry.file.modify_tz);
+					ep->dentry.file.modify_time_ms);
 			exfat_get_entry_time(sbi, &dir_entry->atime,
+					ep->dentry.file.access_tz,
 					ep->dentry.file.access_time,
 					ep->dentry.file.access_date,
-					ep->dentry.file.access_tz);
+					0);
 
 			*uni_name.name = 0x0;
 			exfat_get_uniname_from_ext_entry(sb, &dir, dentry,
@@ -455,19 +458,20 @@ int exfat_init_dir_entry(struct inode *inode, struct exfat_chain *p_dir,
 
 	exfat_set_entry_type(ep, type);
 	exfat_set_entry_time(sbi, &ts,
+			&ep->dentry.file.create_tz,
 			&ep->dentry.file.create_time,
 			&ep->dentry.file.create_date,
-			&ep->dentry.file.create_tz);
-	ep->dentry.file.create_time_ms = ts.tv_nsec / NSEC_PER_MSEC;
+			&ep->dentry.file.create_time_ms);
 	exfat_set_entry_time(sbi, &ts,
+			&ep->dentry.file.modify_tz,
 			&ep->dentry.file.modify_time,
 			&ep->dentry.file.modify_date,
-			&ep->dentry.file.modify_tz);
-	ep->dentry.file.modify_time_ms = ts.tv_nsec / NSEC_PER_MSEC;
+			&ep->dentry.file.modify_time_ms);
 	exfat_set_entry_time(sbi, &ts,
+			&ep->dentry.file.access_tz,
 			&ep->dentry.file.access_time,
 			&ep->dentry.file.access_date,
-			&ep->dentry.file.access_tz);
+			NULL);
 
 	exfat_update_bh(sb, bh, IS_DIRSYNC(inode));
 	brelse(bh);
