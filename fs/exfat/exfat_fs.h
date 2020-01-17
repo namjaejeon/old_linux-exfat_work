@@ -509,9 +509,9 @@ void __exfat_fs_error(struct super_block *sb, int report, const char *fmt, ...)
 void exfat_msg(struct super_block *sb, const char *lv, const char *fmt, ...)
 		__printf(3, 4) __cold;
 void exfat_get_entry_time(struct exfat_sb_info *sbi, struct timespec64 *ts,
-		__le16 time, __le16 date, u8 tz);
+		u8 tz, __le16 time, __le16 date, u8 time_ms);
 void exfat_set_entry_time(struct exfat_sb_info *sbi, struct timespec64 *ts,
-		__le16 *time, __le16 *date, u8 *tz);
+		u8 *tz, __le16 *time, __le16 *date, u8 *time_ms);
 unsigned short exfat_calc_chksum_2byte(void *data, int len,
 		unsigned short chksum, int type);
 void exfat_update_bh(struct super_block *sb, struct buffer_head *bh, int sync);
