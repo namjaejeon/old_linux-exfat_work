@@ -83,13 +83,12 @@ void exfat_get_entry_time(struct exfat_sb_info *sbi, struct timespec64 *ts,
 	ts->tv_sec = mktime64(1980 + (d >> 9), d >> 5 & 0x000F, d & 0x001F,
 			      t >> 11, (t >> 5) & 0x003F, (t & 0x001F) << 1);
 
-	/* time_ms field represent 0 ~ 199(1990 ms) */
-	if (time_ms > 99) {
-		time_ms -= 100;
-		ts->tv_sec++;
-	}
 
-	ts->tv_nsec = (time_ms * 10) * NSEC_PER_MSEC;
+	/* time_ms field represent 0 ~ 199(1990 ms) */
+	if (time_ms) {
+		ts->tv_sec += time_ms / 100;
+		ts->tv_nsec = (time_ms % 100) * 10 * NSEC_PER_MSEC;
+	}
 
 	if (tz & EXFAT_TZ_VALID)
 		/* Adjust timezone to UTC0. */
@@ -115,7 +114,8 @@ void exfat_set_entry_time(struct exfat_sb_info *sbi, struct timespec64 *ts,
 
 	/* time_ms field represent 0 ~ 199(1990 ms) */
 	if (time_ms)
-		*time_ms = ts->tv_nsec / (10 * NSEC_PER_MSEC);
+		*time_ms = (tm.tm_sec & 1) * 100 +
+			ts->tv_nsec / (10 * NSEC_PER_MSEC);
 
 	/*
 	 * Record 00h value for OffsetFromUtc field and 1 value for OffsetValid
