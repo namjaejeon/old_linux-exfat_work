@@ -474,16 +474,13 @@ static int __exfat_fill_super(struct super_block *sb)
 	sbi->FAT2_start_sector = p_bpb->bsx.num_fats == 1 ?
 		sbi->FAT1_start_sector :
 			sbi->FAT1_start_sector + sbi->num_FAT_sectors;
-	sbi->root_start_sector = le32_to_cpu(p_bpb->bsx.clu_offset);
-	sbi->data_start_sector = sbi->root_start_sector;
+	sbi->data_start_sector = le32_to_cpu(p_bpb->bsx.clu_offset);
 	sbi->num_sectors = le64_to_cpu(p_bpb->bsx.vol_length);
 	/* because the cluster index starts with 2 */
 	sbi->num_clusters = le32_to_cpu(p_bpb->bsx.clu_count) +
 		EXFAT_RESERVED_CLUSTERS;
 
-	sbi->vol_id = le32_to_cpu(p_bpb->bsx.vol_serial);
 	sbi->root_dir = le32_to_cpu(p_bpb->bsx.root_cluster);
-	sbi->dentries_in_root = 0;
 	sbi->dentries_per_clu = 1 <<
 		(sbi->cluster_size_bits - DENTRY_SIZE_BITS);
 
