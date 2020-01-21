@@ -34,10 +34,7 @@ static void exfat_delayed_free(struct rcu_head *p)
 {
 	struct exfat_sb_info *sbi = container_of(p, struct exfat_sb_info, rcu);
 
-	if (sbi->nls_io) {
-		unload_nls(sbi->nls_io);
-		sbi->nls_io = NULL;
-	}
+	unload_nls(sbi->nls_io);
 	exfat_free_iocharset(sbi);
 	kfree(sbi);
 }
@@ -616,8 +613,7 @@ free_table:
 	exfat_free_bitmap(sb);
 
 check_nls_io:
-	if (sbi->nls_io)
-		unload_nls(sbi->nls_io);
+	unload_nls(sbi->nls_io);
 	exfat_free_iocharset(sbi);
 	sb->s_fs_info = NULL;
 	kfree(sbi);
