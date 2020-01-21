@@ -218,8 +218,6 @@ struct exfat_mount_options {
  * EXFAT file system superblock in-memory data
  */
 struct exfat_sb_info {
-	unsigned int vol_type; /* volume FAT type */
-	unsigned int vol_id; /* volume serial number */
 	unsigned long long num_sectors; /* num of sectors in volume */
 	unsigned int num_clusters; /* num of clusters in volume */
 	unsigned int cluster_size; /* cluster size in bytes */
@@ -228,11 +226,9 @@ struct exfat_sb_info {
 	unsigned int sect_per_clus_bits;
 	unsigned long long FAT1_start_sector; /* FAT1 start sector */
 	unsigned long long FAT2_start_sector; /* FAT2 start sector */
-	unsigned long long root_start_sector; /* root dir start sector */
 	unsigned long long data_start_sector; /* data area start sector */
 	unsigned int num_FAT_sectors; /* num of FAT sectors */
 	unsigned int root_dir; /* root dir cluster */
-	unsigned int dentries_in_root; /* num of dentries in root dir */
 	unsigned int dentries_per_clu; /* num of dentries per cluster */
 	unsigned int vol_flag; /* volume dirty flag */
 	struct buffer_head *pbr_bh; /* buffer_head of PBR sector */
@@ -248,13 +244,14 @@ struct exfat_sb_info {
 
 	unsigned long s_state;
 	struct mutex s_lock; /* superblock lock */
-	struct super_block *host_sb; /* sb pointer */
 	struct exfat_mount_options options;
 	struct nls_table *nls_io; /* Charset used for input and display */
 	struct ratelimit_state ratelimit;
 
 	spinlock_t inode_hash_lock;
 	struct hlist_head inode_hashtable[EXFAT_HASH_SIZE];
+
+	struct rcu_head rcu;
 };
 
 /*
