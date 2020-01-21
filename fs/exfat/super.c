@@ -36,6 +36,7 @@ static void exfat_delayed_free(struct rcu_head *p)
 
 	unload_nls(sbi->nls_io);
 	exfat_free_iocharset(sbi);
+	exfat_free_upcase_table(sbi);
 	kfree(sbi);
 }
 
@@ -47,8 +48,7 @@ static void exfat_put_super(struct super_block *sb)
 	if (test_and_clear_bit(EXFAT_SB_DIRTY, &sbi->s_state))
 		sync_blockdev(sb->s_bdev);
 	exfat_set_vol_flags(sb, VOL_CLEAN);
-	exfat_free_upcase_table(sb);
-	exfat_free_bitmap(sb);
+	exfat_free_bitmap(sbi);
 	mutex_unlock(&sbi->s_lock);
 
 	call_rcu(&sbi->rcu, exfat_delayed_free);
@@ -516,9 +516,9 @@ static int __exfat_fill_super(struct super_block *sb)
 	return 0;
 
 free_alloc_bitmap:
-	exfat_free_bitmap(sb);
+	exfat_free_bitmap(sbi);
 free_upcase_table:
-	exfat_free_upcase_table(sb);
+	exfat_free_upcase_table(sbi);
 free_bh:
 	brelse(bh);
 	return ret;
@@ -609,8 +609,8 @@ put_inode:
 	sb->s_root = NULL;
 
 free_table:
-	exfat_free_upcase_table(sb);
-	exfat_free_bitmap(sb);
+	exfat_free_upcase_table(sbi);
+	exfat_free_bitmap(sbi);
 
 check_nls_io:
 	unload_nls(sbi->nls_io);
