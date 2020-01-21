@@ -30,6 +30,18 @@ static void exfat_free_iocharset(struct exfat_sb_info *sbi)
 		kfree(sbi->options.iocharset);
 }
 
+static void exfat_delayed_free(struct rcu_head *p)
+{
+	struct exfat_sb_info *sbi = container_of(p, struct exfat_sb_info, rcu);
+
+	if (sbi->nls_io) {
+		unload_nls(sbi->nls_io);
+		sbi->nls_io = NULL;
+	}
+	exfat_free_iocharset(sbi);
+	kfree(sbi);
+}
+
 static void exfat_put_super(struct super_block *sb)
 {
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
@@ -42,13 +54,7 @@ static void exfat_put_super(struct super_block *sb)
 	exfat_free_bitmap(sb);
 	mutex_unlock(&sbi->s_lock);
 
-	if (sbi->nls_io) {
-		unload_nls(sbi->nls_io);
-		sbi->nls_io = NULL;
-	}
-	exfat_free_iocharset(sbi);
-	sb->s_fs_info = NULL;
-	kfree(sbi);
+	call_rcu(&sbi->rcu, exfat_delayed_free);
 }
 
 static int exfat_sync_fs(struct super_block *sb, int wait)
@@ -182,20 +188,20 @@ static struct inode *exfat_alloc_inode(struct super_block *sb)
 	return &ei->vfs_inode;
 }
 
-static void exfat_destroy_inode(struct inode *inode)
+static void exfat_free_inode(struct inode *inode)
 {
 	kmem_cache_free(exfat_inode_cachep, EXFAT_I(inode));
 }
 
 static const struct super_operations exfat_sops = {
-	.alloc_inode   = exfat_alloc_inode,
-	.destroy_inode = exfat_destroy_inode,
-	.write_inode   = exfat_write_inode,
-	.evict_inode  = exfat_evict_inode,
-	.put_super     = exfat_put_super,
-	.sync_fs       = exfat_sync_fs,
-	.statfs        = exfat_statfs,
-	.show_options  = exfat_show_options,
+	.alloc_inode	= exfat_alloc_inode,
+	.free_inode	= exfat_free_inode,
+	.write_inode	= exfat_write_inode,
+	.evict_inode	= exfat_evict_inode,
+	.put_super	= exfat_put_super,
+	.sync_fs	= exfat_sync_fs,
+	.statfs		= exfat_statfs,
+	.show_options	= exfat_show_options,
 };
 
 enum {
@@ -711,6 +717,11 @@ shutdown_cache:
 
 static void __exit exit_exfat_fs(void)
 {
+	/*
+	 * Make sure all delayed rcu free inodes are flushed before we
+	 * destroy cache.
+	 */
+	rcu_barrier();
 	kmem_cache_destroy(exfat_inode_cachep);
 	unregister_filesystem(&exfat_fs_type);
 	exfat_cache_shutdown();
