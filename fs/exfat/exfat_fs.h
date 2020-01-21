@@ -411,7 +411,7 @@ int exfat_count_num_clusters(struct super_block *sb,
 
 /* balloc.c */
 int exfat_load_bitmap(struct super_block *sb);
-void exfat_free_bitmap(struct super_block *sb);
+void exfat_free_bitmap(struct exfat_sb_info *sbi);
 int exfat_set_bitmap(struct inode *inode, unsigned int clu);
 void exfat_clear_bitmap(struct inode *inode, unsigned int clu);
 unsigned int exfat_find_free_bitmap(struct super_block *sb, unsigned int clu);
@@ -491,7 +491,7 @@ int exfat_nls_to_utf16(struct super_block *sb,
 		const unsigned char *p_cstring, const int len,
 		struct exfat_uni_name *uniname, int *p_lossy);
 int exfat_create_upcase_table(struct super_block *sb);
-void exfat_free_upcase_table(struct super_block *sb);
+void exfat_free_upcase_table(struct exfat_sb_info *sbi);
 unsigned short exfat_high_surrogate(unicode_t u);
 unsigned short exfat_low_surrogate(unicode_t u);
 
