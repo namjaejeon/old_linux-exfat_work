@@ -17,5 +17,5 @@ config EXFAT_DEFAULT_IOCHARSET
 	help
 	  Set this to the default input/output character set to use for
 	  converting between the encoding is used for user visible filename and
-	  UTF-16 character that exfat filesystem use. and can be overridden with
+	  UTF-16 character that exfat filesystem use, and can be overridden with
 	  the "iocharset" mount option for exFAT filesystems.
