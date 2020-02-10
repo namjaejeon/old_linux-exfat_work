@@ -30,16 +30,6 @@ static void exfat_free_iocharset(struct exfat_sb_info *sbi)
 		kfree(sbi->options.iocharset);
 }
 
-static void exfat_delayed_free(struct rcu_head *p)
-{
-	struct exfat_sb_info *sbi = container_of(p, struct exfat_sb_info, rcu);
-
-	unload_nls(sbi->nls_io);
-	exfat_free_iocharset(sbi);
-	exfat_free_upcase_table(sbi);
-	kfree(sbi);
-}
-
 static void exfat_put_super(struct super_block *sb)
 {
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
@@ -48,10 +38,17 @@ static void exfat_put_super(struct super_block *sb)
 	if (test_and_clear_bit(EXFAT_SB_DIRTY, &sbi->s_state))
 		sync_blockdev(sb->s_bdev);
 	exfat_set_vol_flags(sb, VOL_CLEAN);
-	exfat_free_bitmap(sbi);
+	exfat_free_upcase_table(sb);
+	exfat_free_bitmap(sb);
 	mutex_unlock(&sbi->s_lock);
 
-	call_rcu(&sbi->rcu, exfat_delayed_free);
+	if (sbi->nls_io) {
+		unload_nls(sbi->nls_io);
+		sbi->nls_io = NULL;
+	}
+	exfat_free_iocharset(sbi);
+	sb->s_fs_info = NULL;
+	kfree(sbi);
 }
 
 static int exfat_sync_fs(struct super_block *sb, int wait)
@@ -185,20 +182,20 @@ static struct inode *exfat_alloc_inode(struct super_block *sb)
 	return &ei->vfs_inode;
 }
 
-static void exfat_free_inode(struct inode *inode)
+static void exfat_destroy_inode(struct inode *inode)
 {
 	kmem_cache_free(exfat_inode_cachep, EXFAT_I(inode));
 }
 
 static const struct super_operations exfat_sops = {
-	.alloc_inode	= exfat_alloc_inode,
-	.free_inode	= exfat_free_inode,
-	.write_inode	= exfat_write_inode,
-	.evict_inode	= exfat_evict_inode,
-	.put_super	= exfat_put_super,
-	.sync_fs	= exfat_sync_fs,
-	.statfs		= exfat_statfs,
-	.show_options	= exfat_show_options,
+	.alloc_inode   = exfat_alloc_inode,
+	.destroy_inode = exfat_destroy_inode,
+	.write_inode   = exfat_write_inode,
+	.evict_inode  = exfat_evict_inode,
+	.put_super     = exfat_put_super,
+	.sync_fs       = exfat_sync_fs,
+	.statfs        = exfat_statfs,
+	.show_options  = exfat_show_options,
 };
 
 enum {
@@ -286,8 +283,9 @@ static int exfat_parse_param(struct fs_context *fc, struct fs_parameter *param)
 		break;
 	case Opt_time_offset:
 		/*
-		 * Make the limit 24 just in case someone invents something
-		 * unusual.
+		 * GMT+-12 zones may have DST corrections so at least
+		 * 13 hours difference is needed. Make the limit 24
+		 * just in case someone invents something unusual.
 		 */
 		if (result.int_32 < -24 * 60 || result.int_32 > 24 * 60)
 			return -EINVAL;
@@ -355,8 +353,7 @@ static int exfat_read_root(struct inode *inode)
 	EXFAT_I(inode)->i_size_ondisk = i_size_read(inode);
 
 	exfat_save_attr(inode, ATTR_SUBDIR);
-	inode->i_mtime = inode->i_atime = inode->i_ctime = ei->i_crtime =
-		current_time(inode);
+	inode->i_mtime = inode->i_atime = inode->i_ctime = current_time(inode);
 	exfat_cache_init_inode(inode);
 	return 0;
 }
@@ -471,13 +468,16 @@ static int __exfat_fill_super(struct super_block *sb)
 	sbi->FAT2_start_sector = p_bpb->bsx.num_fats == 1 ?
 		sbi->FAT1_start_sector :
 			sbi->FAT1_start_sector + sbi->num_FAT_sectors;
-	sbi->data_start_sector = le32_to_cpu(p_bpb->bsx.clu_offset);
+	sbi->root_start_sector = le32_to_cpu(p_bpb->bsx.clu_offset);
+	sbi->data_start_sector = sbi->root_start_sector;
 	sbi->num_sectors = le64_to_cpu(p_bpb->bsx.vol_length);
 	/* because the cluster index starts with 2 */
 	sbi->num_clusters = le32_to_cpu(p_bpb->bsx.clu_count) +
 		EXFAT_RESERVED_CLUSTERS;
 
+	sbi->vol_id = le32_to_cpu(p_bpb->bsx.vol_serial);
 	sbi->root_dir = le32_to_cpu(p_bpb->bsx.root_cluster);
+	sbi->dentries_in_root = 0;
 	sbi->dentries_per_clu = 1 <<
 		(sbi->cluster_size_bits - DENTRY_SIZE_BITS);
 
@@ -516,9 +516,9 @@ static int __exfat_fill_super(struct super_block *sb)
 	return 0;
 
 free_alloc_bitmap:
-	exfat_free_bitmap(sbi);
+	exfat_free_bitmap(sb);
 free_upcase_table:
-	exfat_free_upcase_table(sbi);
+	exfat_free_upcase_table(sb);
 free_bh:
 	brelse(bh);
 	return ret;
@@ -609,11 +609,12 @@ put_inode:
 	sb->s_root = NULL;
 
 free_table:
-	exfat_free_upcase_table(sbi);
-	exfat_free_bitmap(sbi);
+	exfat_free_upcase_table(sb);
+	exfat_free_bitmap(sb);
 
 check_nls_io:
-	unload_nls(sbi->nls_io);
+	if (sbi->nls_io)
+		unload_nls(sbi->nls_io);
 	exfat_free_iocharset(sbi);
 	sb->s_fs_info = NULL;
 	kfree(sbi);
@@ -710,11 +711,6 @@ shutdown_cache:
 
 static void __exit exit_exfat_fs(void)
 {
-	/*
-	 * Make sure all delayed rcu free inodes are flushed before we
-	 * destroy cache.
-	 */
-	rcu_barrier();
 	kmem_cache_destroy(exfat_inode_cachep);
 	unregister_filesystem(&exfat_fs_type);
 	exfat_cache_shutdown();

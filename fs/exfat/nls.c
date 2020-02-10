@@ -727,7 +727,7 @@ static int exfat_load_upcase_table(struct super_block *sb,
 			index, checksum, utbl_checksum);
 	ret = -EINVAL;
 free_table:
-	exfat_free_upcase_table(sbi);
+	exfat_free_upcase_table(sb);
 	return ret;
 }
 
@@ -764,7 +764,7 @@ static int exfat_load_default_upcase_table(struct super_block *sb)
 		return 0;
 
 	/* FATAL error: default upcase table has error */
-	exfat_free_upcase_table(sbi);
+	exfat_free_upcase_table(sb);
 	return ret;
 }
 
@@ -825,7 +825,10 @@ load_default:
 	return exfat_load_default_upcase_table(sb);
 }
 
-void exfat_free_upcase_table(struct exfat_sb_info *sbi)
+void exfat_free_upcase_table(struct super_block *sb)
 {
+	struct exfat_sb_info *sbi = EXFAT_SB(sb);
+
 	kfree(sbi->vol_utbl);
+	sbi->vol_utbl = NULL;
 }

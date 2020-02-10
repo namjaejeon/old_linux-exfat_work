@@ -168,6 +168,9 @@ struct nfs_inode {
 	struct rw_semaphore	rmdir_sem;
 	struct mutex		commit_mutex;
 
+	/* track last access to cached pages */
+	unsigned long		page_index;
+
 #if IS_ENABLED(CONFIG_NFS_V4)
 	struct nfs4_cached_acl	*nfs4_acl;
         /* NFSv4 state */
@@ -189,13 +192,15 @@ struct nfs_inode {
 
 struct nfs4_copy_state {
 	struct list_head	copies;
+	struct list_head	src_copies;
 	nfs4_stateid		stateid;
 	struct completion	completion;
 	uint64_t		count;
 	struct nfs_writeverf	verf;
 	int			error;
 	int			flags;
-	struct nfs4_state	*parent_state;
+	struct nfs4_state	*parent_src_state;
+	struct nfs4_state	*parent_dst_state;
 };
 
 /*

@@ -133,9 +133,10 @@ int exfat_load_bitmap(struct super_block *sb)
 	return -EINVAL;
 }
 
-void exfat_free_bitmap(struct exfat_sb_info *sbi)
+void exfat_free_bitmap(struct super_block *sb)
 {
 	int i;
+	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 
 	brelse(sbi->pbr_bh);
 
@@ -143,6 +144,7 @@ void exfat_free_bitmap(struct exfat_sb_info *sbi)
 		__brelse(sbi->vol_amap[i]);
 
 	kfree(sbi->vol_amap);
+	sbi->vol_amap = NULL;
 }
 
 /*
