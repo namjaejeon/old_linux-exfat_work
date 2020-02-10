@@ -73,55 +73,54 @@ static void exfat_adjust_tz(struct timespec64 *ts, u8 tz_off)
 		ts->tv_sec += TIMEZONE_SEC(0x80 - tz_off);
 }
 
+static inline int exfat_tz_offset(struct exfat_sb_info *sbi)
+{
+	if (sbi->options.time_offset)
+		return sbi->options.time_offset;
+	return sys_tz.tz_minuteswest;
+}
+
 /* Convert a EXFAT time/date pair to a UNIX date (seconds since 1 1 70). */
 void exfat_get_entry_time(struct exfat_sb_info *sbi, struct timespec64 *ts,
-		u8 tz, __le16 time, __le16 date, u8 time_ms)
+		__le16 time, __le16 date, u8 tz)
 {
 	u16 t = le16_to_cpu(time);
 	u16 d = le16_to_cpu(date);
 
 	ts->tv_sec = mktime64(1980 + (d >> 9), d >> 5 & 0x000F, d & 0x001F,
 			      t >> 11, (t >> 5) & 0x003F, (t & 0x001F) << 1);
-
-
-	/* time_ms field represent 0 ~ 199(1990 ms) */
-	if (time_ms) {
-		ts->tv_sec += time_ms / 100;
-		ts->tv_nsec = (time_ms % 100) * 10 * NSEC_PER_MSEC;
-	}
+	ts->tv_nsec = 0;
 
 	if (tz & EXFAT_TZ_VALID)
-		/* Adjust timezone to UTC0. */
+		/* Treat as UTC time, but need to adjust timezone to UTC0 */
 		exfat_adjust_tz(ts, tz & ~EXFAT_TZ_VALID);
 	else
-		/* Convert from local time to UTC using time_offset. */
-		ts->tv_sec -= sbi->options.time_offset * SECS_PER_MIN;
+		/* Treat as local time */
+		ts->tv_sec -= exfat_tz_offset(sbi) * SECS_PER_MIN;
 }
 
 /* Convert linear UNIX date to a EXFAT time/date pair. */
 void exfat_set_entry_time(struct exfat_sb_info *sbi, struct timespec64 *ts,
-		u8 *tz, __le16 *time, __le16 *date, u8 *time_ms)
+		__le16 *time, __le16 *date, u8 *tz)
 {
 	struct tm tm;
 	u16 t, d;
 
-	time64_to_tm(ts->tv_sec, 0, &tm);
+	/* clamp to the range valid in the exfat on-disk representation. */
+	time64_to_tm(clamp_t(time64_t, ts->tv_sec, EXFAT_MIN_TIMESTAMP_SECS,
+		EXFAT_MAX_TIMESTAMP_SECS), -exfat_tz_offset(sbi) * SECS_PER_MIN,
+		&tm);
 	t = (tm.tm_hour << 11) | (tm.tm_min << 5) | (tm.tm_sec >> 1);
 	d = ((tm.tm_year - 80) <<  9) | ((tm.tm_mon + 1) << 5) | tm.tm_mday;
 
 	*time = cpu_to_le16(t);
 	*date = cpu_to_le16(d);
 
-	/* time_ms field represent 0 ~ 199(1990 ms) */
-	if (time_ms)
-		*time_ms = (tm.tm_sec & 1) * 100 +
-			ts->tv_nsec / (10 * NSEC_PER_MSEC);
-
 	/*
-	 * Record 00h value for OffsetFromUtc field and 1 value for OffsetValid
-	 * to indicate that local time and UTC are the same.
+	 * exfat ondisk tz offset field decribes the offset from UTF
+	 * in 15 minute interval.
 	 */
-	*tz = EXFAT_TZ_VALID;
+	*tz = ((exfat_tz_offset(sbi) / -15) & 0x7F) | EXFAT_TZ_VALID;
 }
 
 unsigned short exfat_calc_chksum_2byte(void *data, int len,
