@@ -294,6 +294,12 @@ void i2sbus_wait_for_stop_both(struct i2sbus_dev *i2sdev)
 }
 #endif
 
+static int i2sbus_hw_params(struct snd_pcm_substream *substream,
+			    struct snd_pcm_hw_params *params)
+{
+	return snd_pcm_lib_malloc_pages(substream, params_buffer_bytes(params));
+}
+
 static inline int i2sbus_hw_free(struct snd_pcm_substream *substream, int in)
 {
 	struct i2sbus_dev *i2sdev = snd_pcm_substream_chip(substream);
@@ -302,6 +308,7 @@ static inline int i2sbus_hw_free(struct snd_pcm_substream *substream, int in)
 	get_pcm_info(i2sdev, in, &pi, NULL);
 	if (pi->dbdma_ring.stopping)
 		i2sbus_wait_for_stop(i2sdev, pi);
+	snd_pcm_lib_free_pages(substream);
 	return 0;
 }
 
@@ -773,6 +780,8 @@ static snd_pcm_uframes_t i2sbus_playback_pointer(struct snd_pcm_substream
 static const struct snd_pcm_ops i2sbus_playback_ops = {
 	.open =		i2sbus_playback_open,
 	.close =	i2sbus_playback_close,
+	.ioctl =	snd_pcm_lib_ioctl,
+	.hw_params =	i2sbus_hw_params,
 	.hw_free =	i2sbus_playback_hw_free,
 	.prepare =	i2sbus_playback_prepare,
 	.trigger =	i2sbus_playback_trigger,
@@ -841,6 +850,8 @@ static snd_pcm_uframes_t i2sbus_record_pointer(struct snd_pcm_substream
 static const struct snd_pcm_ops i2sbus_record_ops = {
 	.open =		i2sbus_record_open,
 	.close =	i2sbus_record_close,
+	.ioctl =	snd_pcm_lib_ioctl,
+	.hw_params =	i2sbus_hw_params,
 	.hw_free =	i2sbus_record_hw_free,
 	.prepare =	i2sbus_record_prepare,
 	.trigger =	i2sbus_record_trigger,
@@ -1015,9 +1026,9 @@ i2sbus_attach_codec(struct soundbus_dev *dev, struct snd_card *card,
 	dev->pcm->private_free = i2sbus_private_free;
 
 	/* well, we really should support scatter/gather DMA */
-	snd_pcm_set_managed_buffer_all(
+	snd_pcm_lib_preallocate_pages_for_all(
 		dev->pcm, SNDRV_DMA_TYPE_DEV,
-		&macio_get_pci_dev(i2sdev->macio)->dev,
+		snd_dma_pci_data(macio_get_pci_dev(i2sdev->macio)),
 		64 * 1024, 64 * 1024);
 
 	return 0;

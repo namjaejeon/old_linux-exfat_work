@@ -248,7 +248,7 @@ out:
 	return NETDEV_TX_OK;
 }
 
-static void qcauart_netdev_tx_timeout(struct net_device *dev, unsigned int txqueue)
+static void qcauart_netdev_tx_timeout(struct net_device *dev)
 {
 	struct qcauart *qca = netdev_priv(dev);
 

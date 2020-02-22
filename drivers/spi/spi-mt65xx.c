@@ -139,6 +139,7 @@ static const struct mtk_spi_compatible mt8183_compat = {
  * supplies it.
  */
 static const struct mtk_chip_config mtk_default_chip_info = {
+	.cs_pol = 0,
 	.sample_sel = 0,
 };
 
@@ -229,12 +230,10 @@ static int mtk_spi_prepare_message(struct spi_master *master,
 #endif
 
 	if (mdata->dev_comp->enhance_timing) {
-		/* set CS polarity */
-		if (spi->mode & SPI_CS_HIGH)
+		if (chip_config->cs_pol)
 			reg_val |= SPI_CMD_CS_POL;
 		else
 			reg_val &= ~SPI_CMD_CS_POL;
-
 		if (chip_config->sample_sel)
 			reg_val |= SPI_CMD_SAMPLE_SEL;
 		else
@@ -264,9 +263,6 @@ static void mtk_spi_set_cs(struct spi_device *spi, bool enable)
 {
 	u32 reg_val;
 	struct mtk_spi *mdata = spi_master_get_devdata(spi->master);
-
-	if (spi->mode & SPI_CS_HIGH)
-		enable = !enable;
 
 	reg_val = readl(mdata->base + SPI_CMD_REG);
 	if (!enable) {
@@ -623,6 +619,7 @@ static int mtk_spi_probe(struct platform_device *pdev)
 	struct spi_master *master;
 	struct mtk_spi *mdata;
 	const struct of_device_id *of_id;
+	struct resource *res;
 	int i, irq, ret, addr_bits;
 
 	master = spi_alloc_master(&pdev->dev, sizeof(*mdata));
@@ -650,10 +647,6 @@ static int mtk_spi_probe(struct platform_device *pdev)
 
 	mdata = spi_master_get_devdata(master);
 	mdata->dev_comp = of_id->data;
-
-	if (mdata->dev_comp->enhance_timing)
-		master->mode_bits |= SPI_CS_HIGH;
-
 	if (mdata->dev_comp->must_tx)
 		master->flags = SPI_MASTER_MUST_TX;
 
@@ -689,7 +682,15 @@ static int mtk_spi_probe(struct platform_device *pdev)
 	}
 
 	platform_set_drvdata(pdev, master);
-	mdata->base = devm_platform_ioremap_resource(pdev, 0);
+
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	if (!res) {
+		ret = -ENODEV;
+		dev_err(&pdev->dev, "failed to determine base address\n");
+		goto err_put_master;
+	}
+
+	mdata->base = devm_ioremap_resource(&pdev->dev, res);
 	if (IS_ERR(mdata->base)) {
 		ret = PTR_ERR(mdata->base);
 		goto err_put_master;

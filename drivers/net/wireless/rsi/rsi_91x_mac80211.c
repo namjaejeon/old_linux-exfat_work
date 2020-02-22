@@ -1140,7 +1140,8 @@ static int rsi_mac80211_ampdu_action(struct ieee80211_hw *hw,
 		else if ((vif->type == NL80211_IFTYPE_AP) ||
 			 (vif->type == NL80211_IFTYPE_P2P_GO))
 			rsta->seq_start[tid] = seq_no;
-		status = IEEE80211_AMPDU_TX_START_IMMEDIATE;
+		ieee80211_start_tx_ba_cb_irqsafe(vif, sta->addr, tid);
+		status = 0;
 		break;
 
 	case IEEE80211_AMPDU_TX_STOP_CONT:

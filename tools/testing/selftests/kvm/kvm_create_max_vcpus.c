@@ -29,9 +29,12 @@ void test_vcpu_creation(int first_vcpu_id, int num_vcpus)
 
 	vm = vm_create(VM_MODE_DEFAULT, DEFAULT_GUEST_PHY_PAGES, O_RDWR);
 
-	for (i = first_vcpu_id; i < first_vcpu_id + num_vcpus; i++)
+	for (i = 0; i < num_vcpus; i++) {
+		int vcpu_id = first_vcpu_id + i;
+
 		/* This asserts that the vCPU was created. */
-		vm_vcpu_add(vm, i);
+		vm_vcpu_add(vm, vcpu_id);
+	}
 
 	kvm_vm_free(vm);
 }

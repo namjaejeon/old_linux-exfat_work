@@ -17,7 +17,6 @@
  *  - http://www.t13.org/
  */
 
-#include <linux/compat.h>
 #include <linux/slab.h>
 #include <linux/kernel.h>
 #include <linux/blkdev.h>
@@ -762,10 +761,6 @@ static int ata_ioc32(struct ata_port *ap)
 	return 0;
 }
 
-/*
- * This handles both native and compat commands, so anything added
- * here must have a compatible argument, or check in_compat_syscall()
- */
 int ata_sas_scsi_ioctl(struct ata_port *ap, struct scsi_device *scsidev,
 		     unsigned int cmd, void __user *arg)
 {
@@ -778,10 +773,6 @@ int ata_sas_scsi_ioctl(struct ata_port *ap, struct scsi_device *scsidev,
 		spin_lock_irqsave(ap->lock, flags);
 		val = ata_ioc32(ap);
 		spin_unlock_irqrestore(ap->lock, flags);
-#ifdef CONFIG_COMPAT
-		if (in_compat_syscall())
-			return put_user(val, (compat_ulong_t __user *)arg);
-#endif
 		return put_user(val, (unsigned long __user *)arg);
 
 	case HDIO_SET_32BIT:

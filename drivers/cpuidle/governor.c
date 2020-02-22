@@ -107,14 +107,11 @@ int cpuidle_register_governor(struct cpuidle_governor *gov)
  * cpuidle_governor_latency_req - Compute a latency constraint for CPU
  * @cpu: Target CPU
  */
-s64 cpuidle_governor_latency_req(unsigned int cpu)
+int cpuidle_governor_latency_req(unsigned int cpu)
 {
 	int global_req = pm_qos_request(PM_QOS_CPU_DMA_LATENCY);
 	struct device *device = get_cpu_device(cpu);
 	int device_req = dev_pm_qos_raw_resume_latency(device);
 
-	if (device_req > global_req)
-		device_req = global_req;
-
-	return (s64)device_req * NSEC_PER_USEC;
+	return device_req < global_req ? device_req : global_req;
 }

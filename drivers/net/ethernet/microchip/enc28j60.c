@@ -1325,7 +1325,7 @@ static irqreturn_t enc28j60_irq(int irq, void *dev_id)
 	return IRQ_HANDLED;
 }
 
-static void enc28j60_tx_timeout(struct net_device *ndev, unsigned int txqueue)
+static void enc28j60_tx_timeout(struct net_device *ndev)
 {
 	struct enc28j60_net *priv = netdev_priv(ndev);
 

@@ -9,7 +9,6 @@
 #include <linux/serial.h>
 #include <linux/serial_sci.h>
 #include <linux/sh_timer.h>
-#include <asm/platform_early.h>
 
 enum {
 	UNUSED = 0,
@@ -170,6 +169,6 @@ static struct platform_device *mxg_early_devices[] __initdata = {
 
 void __init plat_early_device_setup(void)
 {
-	sh_early_platform_add_devices(mxg_early_devices,
+	early_platform_add_devices(mxg_early_devices,
 				   ARRAY_SIZE(mxg_early_devices));
 }

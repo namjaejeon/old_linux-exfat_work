@@ -419,7 +419,7 @@ static void create_debug_files(struct imx21 *imx21)
 {
 	struct dentry *root;
 
-	root = debugfs_create_dir(dev_name(imx21->dev), usb_debug_root);
+	root = debugfs_create_dir(dev_name(imx21->dev), NULL);
 	imx21->debug_root = root;
 
 	debugfs_create_file("status", S_IRUGO, root, imx21, &debug_status_fops);

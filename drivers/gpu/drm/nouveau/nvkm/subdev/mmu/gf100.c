@@ -30,7 +30,7 @@
  * The value 0xff represents an invalid storage type.
  */
 const u8 *
-gf100_mmu_kind(struct nvkm_mmu *mmu, int *count, u8 *invalid)
+gf100_mmu_kind(struct nvkm_mmu *mmu, int *count)
 {
 	static const u8
 	kind[256] = {
@@ -69,7 +69,6 @@ gf100_mmu_kind(struct nvkm_mmu *mmu, int *count, u8 *invalid)
 	};
 
 	*count = ARRAY_SIZE(kind);
-	*invalid = 0xff;
 	return kind;
 }
 

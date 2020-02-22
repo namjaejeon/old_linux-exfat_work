@@ -444,6 +444,7 @@ static int s3c_rtc_probe(struct platform_device *pdev)
 {
 	struct s3c_rtc *info = NULL;
 	struct rtc_time rtc_tm;
+	struct resource *res;
 	int ret;
 
 	info = devm_kzalloc(&pdev->dev, sizeof(*info), GFP_KERNEL);
@@ -474,7 +475,8 @@ static int s3c_rtc_probe(struct platform_device *pdev)
 		info->irq_tick, info->irq_alarm);
 
 	/* get the memory region */
-	info->base = devm_platform_ioremap_resource(pdev, 0);
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	info->base = devm_ioremap_resource(&pdev->dev, res);
 	if (IS_ERR(info->base))
 		return PTR_ERR(info->base);
 

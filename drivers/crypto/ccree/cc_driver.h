@@ -28,6 +28,7 @@
 
 /* Registers definitions from shared/hw/ree_include */
 #include "cc_host_regs.h"
+#define CC_DEV_SHA_MAX 512
 #include "cc_crypto_ctx.h"
 #include "cc_hw_queue_defs.h"
 #include "cc_sram_mgr.h"
@@ -132,11 +133,13 @@ struct cc_crypto_req {
 /**
  * struct cc_drvdata - driver private data context
  * @cc_base:	virt address of the CC registers
- * @irq:	bitmap indicating source of last interrupt
+ * @irq:	device IRQ number
+ * @irq_mask:	Interrupt mask shadow (1 for masked interrupts)
  */
 struct cc_drvdata {
 	void __iomem *cc_base;
 	int irq;
+	u32 irq_mask;
 	struct completion hw_queue_avail; /* wait for HW queue availability */
 	struct platform_device *plat_dev;
 	cc_sram_addr_t mlli_sram_addr;
@@ -158,7 +161,6 @@ struct cc_drvdata {
 	int std_bodies;
 	bool sec_disabled;
 	u32 comp_mask;
-	bool pm_on;
 };
 
 struct cc_crypto_alg {

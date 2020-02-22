@@ -362,10 +362,8 @@ static int ima_calc_file_hash_tfm(struct file *file,
 			rc = rbuf_len;
 			break;
 		}
-		if (rbuf_len == 0) {	/* unexpected EOF */
-			rc = -EINVAL;
+		if (rbuf_len == 0)
 			break;
-		}
 		offset += rbuf_len;
 
 		rc = crypto_shash_update(shash, rbuf, rbuf_len);

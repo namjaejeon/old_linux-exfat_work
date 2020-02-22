@@ -44,7 +44,7 @@ struct xlnx_rtc_dev {
 	void __iomem		*reg_base;
 	int			alarm_irq;
 	int			sec_irq;
-	unsigned int		calibval;
+	int			calibval;
 };
 
 static int xlnx_rtc_set_time(struct device *dev, struct rtc_time *tm)
@@ -94,7 +94,7 @@ static int xlnx_rtc_read_time(struct device *dev, struct rtc_time *tm)
 		 * RTC has updated the CURRENT_TIME with the time written into
 		 * SET_TIME_WRITE register.
 		 */
-		read_time = readl(xrtcdev->reg_base + RTC_CUR_TM);
+		rtc_time64_to_tm(readl(xrtcdev->reg_base + RTC_CUR_TM), tm);
 	} else {
 		/*
 		 * Time written in SET_TIME_WRITE has not yet updated into
@@ -104,8 +104,8 @@ static int xlnx_rtc_read_time(struct device *dev, struct rtc_time *tm)
 		 * reading.
 		 */
 		read_time = readl(xrtcdev->reg_base + RTC_SET_TM_RD) - 1;
+		rtc_time64_to_tm(read_time, tm);
 	}
-	rtc_time64_to_tm(read_time, tm);
 
 	return 0;
 }
@@ -195,6 +195,7 @@ static irqreturn_t xlnx_rtc_interrupt(int irq, void *id)
 static int xlnx_rtc_probe(struct platform_device *pdev)
 {
 	struct xlnx_rtc_dev *xrtcdev;
+	struct resource *res;
 	int ret;
 
 	xrtcdev = devm_kzalloc(&pdev->dev, sizeof(*xrtcdev), GFP_KERNEL);
@@ -210,7 +211,9 @@ static int xlnx_rtc_probe(struct platform_device *pdev)
 	xrtcdev->rtc->ops = &xlnx_rtc_ops;
 	xrtcdev->rtc->range_max = U32_MAX;
 
-	xrtcdev->reg_base = devm_platform_ioremap_resource(pdev, 0);
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+
+	xrtcdev->reg_base = devm_ioremap_resource(&pdev->dev, res);
 	if (IS_ERR(xrtcdev->reg_base))
 		return PTR_ERR(xrtcdev->reg_base);
 

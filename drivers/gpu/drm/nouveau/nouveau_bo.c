@@ -1162,7 +1162,7 @@ nouveau_bo_move_m2mf(struct ttm_buffer_object *bo, int evict, bool intr,
 void
 nouveau_bo_move_init(struct nouveau_drm *drm)
 {
-	static const struct _method_table {
+	static const struct {
 		const char *name;
 		int engine;
 		s32 oclass;
@@ -1192,8 +1192,7 @@ nouveau_bo_move_init(struct nouveau_drm *drm)
 		{  "M2MF", 0, 0x0039, nv04_bo_move_m2mf, nv04_bo_move_init },
 		{},
 		{ "CRYPT", 0, 0x88b4, nv98_bo_move_exec, nv50_bo_move_init },
-	};
-	const struct _method_table *mthd = _methods;
+	}, *mthd = _methods;
 	const char *name = "CPU";
 	int ret;
 

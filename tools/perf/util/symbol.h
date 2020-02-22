@@ -11,7 +11,6 @@
 #include <stdio.h>
 #include "path.h"
 #include "symbol_conf.h"
-#include "spark.h"
 
 #ifdef HAVE_LIBELF_SUPPORT
 #include <libelf.h>
@@ -21,7 +20,7 @@
 
 struct dso;
 struct map;
-struct maps;
+struct map_groups;
 struct option;
 
 /*
@@ -106,9 +105,20 @@ struct ref_reloc_sym {
 	u64		unrelocated_addr;
 };
 
+struct block_info {
+	struct symbol		*sym;
+	u64			start;
+	u64			end;
+	u64			cycles;
+	u64			cycles_aggr;
+	int			num;
+	int			num_aggr;
+	refcount_t		refcnt;
+};
+
 struct addr_location {
+	struct machine *machine;
 	struct thread *thread;
-	struct maps   *maps;
 	struct map    *map;
 	struct symbol *sym;
 	const char    *srcline;
@@ -186,7 +196,7 @@ void __symbols__insert(struct rb_root_cached *symbols, struct symbol *sym,
 void symbols__insert(struct rb_root_cached *symbols, struct symbol *sym);
 void symbols__fixup_duplicate(struct rb_root_cached *symbols);
 void symbols__fixup_end(struct rb_root_cached *symbols);
-void maps__fixup_end(struct maps *maps);
+void map_groups__fixup_end(struct map_groups *mg);
 
 typedef int (*mapfn_t)(u64 start, u64 len, u64 pgoff, void *data);
 int file__read_maps(int fd, bool exe, mapfn_t mapfn, void *data,
@@ -278,5 +288,17 @@ static inline void __mem_info__zput(struct mem_info **mi)
 }
 
 #define mem_info__zput(mi) __mem_info__zput(&mi)
+
+struct block_info *block_info__new(void);
+struct block_info *block_info__get(struct block_info *bi);
+void   block_info__put(struct block_info *bi);
+
+static inline void __block_info__zput(struct block_info **bi)
+{
+	block_info__put(*bi);
+	*bi = NULL;
+}
+
+#define block_info__zput(bi) __block_info__zput(&bi)
 
 #endif /* __PERF_SYMBOL */

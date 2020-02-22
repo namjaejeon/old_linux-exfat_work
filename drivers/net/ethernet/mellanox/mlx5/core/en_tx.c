@@ -93,7 +93,7 @@ u16 mlx5e_select_queue(struct net_device *dev, struct sk_buff *skb,
 	if (txq_ix >= num_channels)
 		txq_ix = priv->txq2sq[txq_ix]->ch_ix;
 
-	return priv->channel_tc2realtxq[txq_ix][up];
+	return priv->channel_tc2txq[txq_ix][up];
 }
 
 static inline int mlx5e_skb_l2_header_offset(struct sk_buff *skb)
@@ -451,17 +451,28 @@ bool mlx5e_poll_tx_cq(struct mlx5e_cq *cq, int napi_budget)
 
 	i = 0;
 	do {
-		struct mlx5e_tx_wqe_info *wi;
 		u16 wqe_counter;
 		bool last_wqe;
-		u16 ci;
 
 		mlx5_cqwq_pop(&cq->wq);
 
 		wqe_counter = be16_to_cpu(cqe->wqe_counter);
 
+		if (unlikely(get_cqe_opcode(cqe) == MLX5_CQE_REQ_ERR)) {
+			if (!test_and_set_bit(MLX5E_SQ_STATE_RECOVERING,
+					      &sq->state)) {
+				mlx5e_dump_error_cqe(sq,
+						     (struct mlx5_err_cqe *)cqe);
+				queue_work(cq->channel->priv->wq,
+					   &sq->recover_work);
+			}
+			stats->cqe_err++;
+		}
+
 		do {
+			struct mlx5e_tx_wqe_info *wi;
 			struct sk_buff *skb;
+			u16 ci;
 			int j;
 
 			last_wqe = (sqcc == wqe_counter);
@@ -498,18 +509,6 @@ bool mlx5e_poll_tx_cq(struct mlx5e_cq *cq, int napi_budget)
 			sqcc += wi->num_wqebbs;
 			napi_consume_skb(skb, napi_budget);
 		} while (!last_wqe);
-
-		if (unlikely(get_cqe_opcode(cqe) == MLX5_CQE_REQ_ERR)) {
-			if (!test_and_set_bit(MLX5E_SQ_STATE_RECOVERING,
-					      &sq->state)) {
-				mlx5e_dump_error_cqe(sq,
-						     (struct mlx5_err_cqe *)cqe);
-				mlx5_wq_cyc_wqe_dump(&sq->wq, ci, wi->num_wqebbs);
-				queue_work(cq->channel->priv->wq,
-					   &sq->recover_work);
-			}
-			stats->cqe_err++;
-		}
 
 	} while ((++i < MLX5E_TX_CQ_POLL_BUDGET) && (cqe = mlx5_cqwq_get_cqe(&cq->wq)));
 

@@ -456,14 +456,14 @@ static void zero_nfs_fh3(struct nfs_fh *fh)
  *		uint32	nseconds;
  *	};
  */
-static __be32 *xdr_encode_nfstime3(__be32 *p, const struct timespec64 *timep)
+static __be32 *xdr_encode_nfstime3(__be32 *p, const struct timespec *timep)
 {
-	*p++ = cpu_to_be32((u32)timep->tv_sec);
+	*p++ = cpu_to_be32(timep->tv_sec);
 	*p++ = cpu_to_be32(timep->tv_nsec);
 	return p;
 }
 
-static __be32 *xdr_decode_nfstime3(__be32 *p, struct timespec64 *timep)
+static __be32 *xdr_decode_nfstime3(__be32 *p, struct timespec *timep)
 {
 	timep->tv_sec = be32_to_cpup(p++);
 	timep->tv_nsec = be32_to_cpup(p++);
@@ -533,6 +533,7 @@ static __be32 *xdr_decode_nfstime3(__be32 *p, struct timespec64 *timep)
 static void encode_sattr3(struct xdr_stream *xdr, const struct iattr *attr,
 		struct user_namespace *userns)
 {
+	struct timespec ts;
 	u32 nbytes;
 	__be32 *p;
 
@@ -582,8 +583,10 @@ static void encode_sattr3(struct xdr_stream *xdr, const struct iattr *attr,
 		*p++ = xdr_zero;
 
 	if (attr->ia_valid & ATTR_ATIME_SET) {
+		struct timespec ts;
 		*p++ = xdr_two;
-		p = xdr_encode_nfstime3(p, &attr->ia_atime);
+		ts = timespec64_to_timespec(attr->ia_atime);
+		p = xdr_encode_nfstime3(p, &ts);
 	} else if (attr->ia_valid & ATTR_ATIME) {
 		*p++ = xdr_one;
 	} else
@@ -591,7 +594,8 @@ static void encode_sattr3(struct xdr_stream *xdr, const struct iattr *attr,
 
 	if (attr->ia_valid & ATTR_MTIME_SET) {
 		*p++ = xdr_two;
-		xdr_encode_nfstime3(p, &attr->ia_mtime);
+		ts = timespec64_to_timespec(attr->ia_mtime);
+		xdr_encode_nfstime3(p, &ts);
 	} else if (attr->ia_valid & ATTR_MTIME) {
 		*p = xdr_one;
 	} else
@@ -2334,7 +2338,6 @@ static int nfs3_xdr_dec_commit3res(struct rpc_rqst *req,
 				   void *data)
 {
 	struct nfs_commitres *result = data;
-	struct nfs_writeverf *verf = result->verf;
 	enum nfs_stat status;
 	int error;
 
@@ -2347,9 +2350,7 @@ static int nfs3_xdr_dec_commit3res(struct rpc_rqst *req,
 	result->op_status = status;
 	if (status != NFS3_OK)
 		goto out_status;
-	error = decode_writeverf3(xdr, &verf->verifier);
-	if (!error)
-		verf->committed = NFS_FILE_SYNC;
+	error = decode_writeverf3(xdr, &result->verf->verifier);
 out:
 	return error;
 out_status:

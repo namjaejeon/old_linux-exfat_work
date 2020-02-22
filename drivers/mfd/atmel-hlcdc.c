@@ -19,7 +19,6 @@
 
 struct atmel_hlcdc_regmap {
 	void __iomem *regs;
-	struct device *dev;
 };
 
 static const struct mfd_cell atmel_hlcdc_cells[] = {
@@ -40,17 +39,10 @@ static int regmap_atmel_hlcdc_reg_write(void *context, unsigned int reg,
 
 	if (reg <= ATMEL_HLCDC_DIS) {
 		u32 status;
-		int ret;
 
-		ret = readl_poll_timeout_atomic(hregmap->regs + ATMEL_HLCDC_SR,
-						status,
-						!(status & ATMEL_HLCDC_SIP),
-						1, 100);
-		if (ret) {
-			dev_err(hregmap->dev,
-				"Timeout! Clock domain synchronization is in progress!\n");
-			return ret;
-		}
+		readl_poll_timeout_atomic(hregmap->regs + ATMEL_HLCDC_SR,
+					  status, !(status & ATMEL_HLCDC_SIP),
+					  1, 100);
 	}
 
 	writel(val, hregmap->regs + reg);
@@ -97,8 +89,6 @@ static int atmel_hlcdc_probe(struct platform_device *pdev)
 	hregmap->regs = devm_ioremap_resource(dev, res);
 	if (IS_ERR(hregmap->regs))
 		return PTR_ERR(hregmap->regs);
-
-	hregmap->dev = &pdev->dev;
 
 	hlcdc->irq = platform_get_irq(pdev, 0);
 	if (hlcdc->irq < 0)

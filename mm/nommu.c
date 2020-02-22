@@ -155,11 +155,11 @@ void *__vmalloc_node_flags(unsigned long size, int node, gfp_t flags)
 	return __vmalloc(size, flags, PAGE_KERNEL);
 }
 
-static void *__vmalloc_user_flags(unsigned long size, gfp_t flags)
+void *vmalloc_user(unsigned long size)
 {
 	void *ret;
 
-	ret = __vmalloc(size, flags, PAGE_KERNEL);
+	ret = __vmalloc(size, GFP_KERNEL | __GFP_ZERO, PAGE_KERNEL);
 	if (ret) {
 		struct vm_area_struct *vma;
 
@@ -172,18 +172,7 @@ static void *__vmalloc_user_flags(unsigned long size, gfp_t flags)
 
 	return ret;
 }
-
-void *vmalloc_user(unsigned long size)
-{
-	return __vmalloc_user_flags(size, GFP_KERNEL | __GFP_ZERO);
-}
 EXPORT_SYMBOL(vmalloc_user);
-
-void *vmalloc_user_node_flags(unsigned long size, int node, gfp_t flags)
-{
-	return __vmalloc_user_flags(size, flags | __GFP_ZERO);
-}
-EXPORT_SYMBOL(vmalloc_user_node_flags);
 
 struct page *vmalloc_to_page(const void *addr)
 {
@@ -648,7 +637,7 @@ static void add_vma_to_mm(struct mm_struct *mm, struct vm_area_struct *vma)
 	if (rb_prev)
 		prev = rb_entry(rb_prev, struct vm_area_struct, vm_rb);
 
-	__vma_link_list(mm, vma, prev);
+	__vma_link_list(mm, vma, prev, parent);
 }
 
 /*
@@ -684,7 +673,13 @@ static void delete_vma_from_mm(struct vm_area_struct *vma)
 	/* remove from the MM's tree and list */
 	rb_erase(&vma->vm_rb, &mm->mm_rb);
 
-	__vma_unlink_list(mm, vma);
+	if (vma->vm_prev)
+		vma->vm_prev->vm_next = vma->vm_next;
+	else
+		mm->mmap = vma->vm_next;
+
+	if (vma->vm_next)
+		vma->vm_next->vm_prev = vma->vm_prev;
 }
 
 /*

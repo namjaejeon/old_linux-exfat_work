@@ -7,6 +7,7 @@
  * This file based on panel-ilitek-ili9881c.c
  */
 
+#include <linux/backlight.h>
 #include <linux/delay.h>
 #include <linux/device.h>
 #include <linux/err.h>
@@ -28,6 +29,7 @@
 struct rb070d30_panel {
 	struct drm_panel panel;
 	struct mipi_dsi_device *dsi;
+	struct backlight_device *backlight;
 	struct regulator *supply;
 
 	struct {
@@ -82,13 +84,22 @@ static int rb070d30_panel_enable(struct drm_panel *panel)
 	if (ret)
 		return ret;
 
+	ret = backlight_enable(ctx->backlight);
+	if (ret)
+		goto out;
+
 	return 0;
+
+out:
+	mipi_dsi_dcs_enter_sleep_mode(ctx->dsi);
+	return ret;
 }
 
 static int rb070d30_panel_disable(struct drm_panel *panel)
 {
 	struct rb070d30_panel *ctx = panel_to_rb070d30_panel(panel);
 
+	backlight_disable(ctx->backlight);
 	return mipi_dsi_dcs_enter_sleep_mode(ctx->dsi);
 }
 
@@ -109,14 +120,14 @@ static const struct drm_display_mode default_mode = {
 	.height_mm	= 85,
 };
 
-static int rb070d30_panel_get_modes(struct drm_panel *panel,
-				    struct drm_connector *connector)
+static int rb070d30_panel_get_modes(struct drm_panel *panel)
 {
+	struct drm_connector *connector = panel->connector;
 	struct rb070d30_panel *ctx = panel_to_rb070d30_panel(panel);
 	struct drm_display_mode *mode;
 	static const u32 bus_format = MEDIA_BUS_FMT_RGB888_1X24;
 
-	mode = drm_mode_duplicate(connector->dev, &default_mode);
+	mode = drm_mode_duplicate(panel->drm, &default_mode);
 	if (!mode) {
 		DRM_DEV_ERROR(&ctx->dsi->dev,
 			      "Failed to add mode " DRM_MODE_FMT "\n",
@@ -129,9 +140,9 @@ static int rb070d30_panel_get_modes(struct drm_panel *panel,
 	mode->type = DRM_MODE_TYPE_DRIVER | DRM_MODE_TYPE_PREFERRED;
 	drm_mode_probed_add(connector, mode);
 
-	connector->display_info.bpc = 8;
-	connector->display_info.width_mm = mode->width_mm;
-	connector->display_info.height_mm = mode->height_mm;
+	panel->connector->display_info.bpc = 8;
+	panel->connector->display_info.width_mm = mode->width_mm;
+	panel->connector->display_info.height_mm = mode->height_mm;
 	drm_display_info_set_bus_formats(&connector->display_info,
 					 &bus_format, 1);
 
@@ -162,8 +173,9 @@ static int rb070d30_panel_dsi_probe(struct mipi_dsi_device *dsi)
 	mipi_dsi_set_drvdata(dsi, ctx);
 	ctx->dsi = dsi;
 
-	drm_panel_init(&ctx->panel, &dsi->dev, &rb070d30_panel_funcs,
-		       DRM_MODE_CONNECTOR_DSI);
+	drm_panel_init(&ctx->panel);
+	ctx->panel.dev = &dsi->dev;
+	ctx->panel.funcs = &rb070d30_panel_funcs;
 
 	ctx->gpios.reset = devm_gpiod_get(&dsi->dev, "reset", GPIOD_OUT_LOW);
 	if (IS_ERR(ctx->gpios.reset)) {
@@ -197,9 +209,11 @@ static int rb070d30_panel_dsi_probe(struct mipi_dsi_device *dsi)
 		return PTR_ERR(ctx->gpios.shlr);
 	}
 
-	ret = drm_panel_of_backlight(&ctx->panel);
-	if (ret)
-		return ret;
+	ctx->backlight = devm_of_find_backlight(&dsi->dev);
+	if (IS_ERR(ctx->backlight)) {
+		DRM_DEV_ERROR(&dsi->dev, "Couldn't get our backlight\n");
+		return PTR_ERR(ctx->backlight);
+	}
 
 	ret = drm_panel_add(&ctx->panel);
 	if (ret < 0)

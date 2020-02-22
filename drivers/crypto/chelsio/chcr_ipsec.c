@@ -673,16 +673,16 @@ static inline void txq_advance(struct sge_txq *q, unsigned int n)
 int chcr_ipsec_xmit(struct sk_buff *skb, struct net_device *dev)
 {
 	struct xfrm_state *x = xfrm_input_state(skb);
-	unsigned int last_desc, ndesc, flits = 0;
 	struct ipsec_sa_entry *sa_entry;
 	u64 *pos, *end, *before, *sgl;
-	struct tx_sw_desc *sgl_sdesc;
 	int qidx, left, credits;
-	bool immediate = false;
-	struct sge_eth_txq *q;
+	unsigned int flits = 0, ndesc;
 	struct adapter *adap;
+	struct sge_eth_txq *q;
 	struct port_info *pi;
+	dma_addr_t addr[MAX_SKB_FRAGS + 1];
 	struct sec_path *sp;
+	bool immediate = false;
 
 	if (!x->xso.offload_handle)
 		return NETDEV_TX_BUSY;
@@ -715,14 +715,8 @@ out_free:       dev_kfree_skb_any(skb);
 		return NETDEV_TX_BUSY;
 	}
 
-	last_desc = q->q.pidx + ndesc - 1;
-	if (last_desc >= q->q.size)
-		last_desc -= q->q.size;
-	sgl_sdesc = &q->q.sdesc[last_desc];
-
 	if (!immediate &&
-	    unlikely(cxgb4_map_skb(adap->pdev_dev, skb, sgl_sdesc->addr) < 0)) {
-		memset(sgl_sdesc->addr, 0, sizeof(sgl_sdesc->addr));
+	    unlikely(cxgb4_map_skb(adap->pdev_dev, skb, addr) < 0)) {
 		q->mapping_err++;
 		goto out_free;
 	}
@@ -748,10 +742,17 @@ out_free:       dev_kfree_skb_any(skb);
 		cxgb4_inline_tx_skb(skb, &q->q, sgl);
 		dev_consume_skb_any(skb);
 	} else {
+		int last_desc;
+
 		cxgb4_write_sgl(skb, &q->q, (void *)sgl, end,
-				0, sgl_sdesc->addr);
+				0, addr);
 		skb_orphan(skb);
-		sgl_sdesc->skb = skb;
+
+		last_desc = q->q.pidx + ndesc - 1;
+		if (last_desc >= q->q.size)
+			last_desc -= q->q.size;
+		q->q.sdesc[last_desc].skb = skb;
+		q->q.sdesc[last_desc].sgl = (struct ulptx_sgl *)sgl;
 	}
 	txq_advance(&q->q, ndesc);
 

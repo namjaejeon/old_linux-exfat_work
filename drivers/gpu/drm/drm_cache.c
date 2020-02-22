@@ -62,10 +62,10 @@ static void drm_cache_flush_clflush(struct page *pages[],
 {
 	unsigned long i;
 
-	mb(); /*Full memory barrier used before so that CLFLUSH is ordered*/
+	mb();
 	for (i = 0; i < num_pages; i++)
 		drm_clflush_page(*pages++);
-	mb(); /*Also used after CLFLUSH so that all cache is flushed*/
+	mb();
 }
 #endif
 
@@ -92,7 +92,6 @@ drm_clflush_pages(struct page *pages[], unsigned long num_pages)
 
 #elif defined(__powerpc__)
 	unsigned long i;
-
 	for (i = 0; i < num_pages; i++) {
 		struct page *page = pages[i];
 		void *page_virtual;
@@ -126,10 +125,10 @@ drm_clflush_sg(struct sg_table *st)
 	if (static_cpu_has(X86_FEATURE_CLFLUSH)) {
 		struct sg_page_iter sg_iter;
 
-		mb(); /*CLFLUSH is ordered only by using memory barriers*/
+		mb();
 		for_each_sg_page(st->sgl, &sg_iter, st->nents, 0)
 			drm_clflush_page(sg_page_iter_page(&sg_iter));
-		mb(); /*Make sure that all cache line entry is flushed*/
+		mb();
 
 		return;
 	}
@@ -158,13 +157,12 @@ drm_clflush_virt_range(void *addr, unsigned long length)
 	if (static_cpu_has(X86_FEATURE_CLFLUSH)) {
 		const int size = boot_cpu_data.x86_clflush_size;
 		void *end = addr + length;
-
 		addr = (void *)(((unsigned long)addr) & -size);
-		mb(); /*CLFLUSH is only ordered with a full memory barrier*/
+		mb();
 		for (; addr < end; addr += size)
 			clflushopt(addr);
 		clflushopt(end - 1); /* force serialisation */
-		mb(); /*Ensure that evry data cache line entry is flushed*/
+		mb();
 		return;
 	}
 

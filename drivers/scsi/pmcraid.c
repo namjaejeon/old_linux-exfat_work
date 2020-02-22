@@ -3973,7 +3973,9 @@ static const struct file_operations pmcraid_fops = {
 	.open = pmcraid_chr_open,
 	.fasync = pmcraid_chr_fasync,
 	.unlocked_ioctl = pmcraid_chr_ioctl,
-	.compat_ioctl = compat_ptr_ioctl,
+#ifdef CONFIG_COMPAT
+	.compat_ioctl = pmcraid_chr_ioctl,
+#endif
 	.llseek = noop_llseek,
 };
 

@@ -180,7 +180,10 @@ static int ftm_rtc_alarm_irq_enable(struct device *dev,
  */
 static int ftm_rtc_read_time(struct device *dev, struct rtc_time *tm)
 {
-	rtc_time64_to_tm(ktime_get_real_seconds(), tm);
+	struct timespec64 ts64;
+
+	ktime_get_real_ts64(&ts64);
+	rtc_time_to_tm(ts64.tv_sec, tm);
 
 	return 0;
 }
@@ -203,14 +206,16 @@ static int ftm_rtc_read_alarm(struct device *dev, struct rtc_wkalrm *alm)
  */
 static int ftm_rtc_set_alarm(struct device *dev, struct rtc_wkalrm *alm)
 {
-	time64_t alm_time;
-	unsigned long long cycle;
+	struct rtc_time tm;
+	unsigned long now, alm_time, cycle;
 	struct ftm_rtc *rtc = dev_get_drvdata(dev);
 
-	alm_time = rtc_tm_to_time64(&alm->time);
+	ftm_rtc_read_time(dev, &tm);
+	rtc_tm_to_time(&tm, &now);
+	rtc_tm_to_time(&alm->time, &alm_time);
 
 	ftm_clean_alarm(rtc);
-	cycle = (alm_time - ktime_get_real_seconds()) * rtc->alarm_freq;
+	cycle = (alm_time - now) * rtc->alarm_freq;
 	if (cycle > MAX_COUNT_VAL) {
 		pr_err("Out of alarm range {0~262} seconds.\n");
 		return -ERANGE;
@@ -243,6 +248,7 @@ static const struct rtc_class_ops ftm_rtc_ops = {
 static int ftm_rtc_probe(struct platform_device *pdev)
 {
 	struct device_node *np = pdev->dev.of_node;
+	struct resource *r;
 	int irq;
 	int ret;
 	struct ftm_rtc *rtc;
@@ -259,7 +265,13 @@ static int ftm_rtc_probe(struct platform_device *pdev)
 	if (IS_ERR(rtc->rtc_dev))
 		return PTR_ERR(rtc->rtc_dev);
 
-	rtc->base = devm_platform_ioremap_resource(pdev, 0);
+	r = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	if (!r) {
+		dev_err(&pdev->dev, "cannot get resource for rtc\n");
+		return -ENODEV;
+	}
+
+	rtc->base = devm_ioremap_resource(&pdev->dev, r);
 	if (IS_ERR(rtc->base)) {
 		dev_err(&pdev->dev, "cannot ioremap resource for rtc\n");
 		return PTR_ERR(rtc->base);

@@ -518,9 +518,6 @@ static const struct block_device_operations gdrom_bdops = {
 	.release		= gdrom_bdops_release,
 	.check_events		= gdrom_bdops_check_events,
 	.ioctl			= gdrom_bdops_ioctl,
-#ifdef CONFIG_COMPAT
-	.ioctl			= blkdev_compat_ptr_ioctl,
-#endif
 };
 
 static irqreturn_t gdrom_command_interrupt(int irq, void *dev_id)
@@ -745,7 +742,7 @@ static int probe_gdrom(struct platform_device *devptr)
 	int err;
 	/* Start the device */
 	if (gdrom_execute_diagnostic() != 1) {
-		pr_warn("ATA Probe for GDROM failed\n");
+		pr_warning("ATA Probe for GDROM failed\n");
 		return -ENODEV;
 	}
 	/* Print out firmware ID */
@@ -817,7 +814,7 @@ probe_fail_no_disk:
 probe_fail_no_mem:
 	unregister_blkdev(gdrom_major, GDROM_DEV_NAME);
 	gdrom_major = 0;
-	pr_warn("Probe failed - error is 0x%X\n", err);
+	pr_warning("Probe failed - error is 0x%X\n", err);
 	return err;
 }
 

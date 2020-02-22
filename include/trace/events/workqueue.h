@@ -8,6 +8,23 @@
 #include <linux/tracepoint.h>
 #include <linux/workqueue.h>
 
+DECLARE_EVENT_CLASS(workqueue_work,
+
+	TP_PROTO(struct work_struct *work),
+
+	TP_ARGS(work),
+
+	TP_STRUCT__entry(
+		__field( void *,	work	)
+	),
+
+	TP_fast_assign(
+		__entry->work		= work;
+	),
+
+	TP_printk("work struct %p", __entry->work)
+);
+
 struct pool_workqueue;
 
 /**
@@ -56,21 +73,11 @@ TRACE_EVENT(workqueue_queue_work,
  * which happens immediately after queueing unless @max_active limit
  * is reached.
  */
-TRACE_EVENT(workqueue_activate_work,
+DEFINE_EVENT(workqueue_work, workqueue_activate_work,
 
 	TP_PROTO(struct work_struct *work),
 
-	TP_ARGS(work),
-
-	TP_STRUCT__entry(
-		__field( void *,	work	)
-	),
-
-	TP_fast_assign(
-		__entry->work		= work;
-	),
-
-	TP_printk("work struct %p", __entry->work)
+	TP_ARGS(work)
 );
 
 /**
@@ -101,27 +108,14 @@ TRACE_EVENT(workqueue_execute_start,
 /**
  * workqueue_execute_end - called immediately after the workqueue callback
  * @work:	pointer to struct work_struct
- * @function:   pointer to worker function
  *
  * Allows to track workqueue execution.
  */
-TRACE_EVENT(workqueue_execute_end,
+DEFINE_EVENT(workqueue_work, workqueue_execute_end,
 
-	TP_PROTO(struct work_struct *work, work_func_t function),
+	TP_PROTO(struct work_struct *work),
 
-	TP_ARGS(work, function),
-
-	TP_STRUCT__entry(
-		__field( void *,	work	)
-		__field( void *,	function)
-	),
-
-	TP_fast_assign(
-		__entry->work		= work;
-		__entry->function	= function;
-	),
-
-	TP_printk("work struct %p: function %ps", __entry->work, __entry->function)
+	TP_ARGS(work)
 );
 
 #endif /*  _TRACE_WORKQUEUE_H */

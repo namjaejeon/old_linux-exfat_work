@@ -7,7 +7,6 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/sort.h>
-#include <linux/moduleloader.h>
 
 #include <asm/cache.h>
 #include <asm/opcodes.h>

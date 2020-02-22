@@ -14,7 +14,6 @@
 #include <linux/sh_timer.h>
 #include <linux/sh_intc.h>
 #include <asm/mmzone.h>
-#include <asm/platform_early.h>
 #include <cpu/dma-register.h>
 
 static struct plat_sci_port scif0_platform_data = {
@@ -354,7 +353,7 @@ static struct platform_device *sh7785_early_devices[] __initdata = {
 
 void __init plat_early_device_setup(void)
 {
-	sh_early_platform_add_devices(sh7785_early_devices,
+	early_platform_add_devices(sh7785_early_devices,
 				   ARRAY_SIZE(sh7785_early_devices));
 }
 

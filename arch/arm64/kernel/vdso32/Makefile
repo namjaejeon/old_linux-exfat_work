@@ -115,9 +115,9 @@ VDSO_LDFLAGS += $(call cc32-ldoption,-fuse-ld=bfd)
 
 # Borrow vdsomunge.c from the arm vDSO
 # We have to use a relative path because scripts/Makefile.host prefixes
-# $(hostprogs) with $(obj)
+# $(hostprogs-y) with $(obj)
 munge := ../../../arm/vdso/vdsomunge
-hostprogs := $(munge)
+hostprogs-y := $(munge)
 
 c-obj-vdso := note.o
 c-obj-vdso-gettimeofday := vgettimeofday.o

@@ -715,7 +715,9 @@ static const struct file_operations envctrl_fops = {
 	.owner =		THIS_MODULE,
 	.read =			envctrl_read,
 	.unlocked_ioctl =	envctrl_ioctl,
-	.compat_ioctl =		compat_ptr_ioctl,
+#ifdef CONFIG_COMPAT
+	.compat_ioctl =		envctrl_ioctl,
+#endif
 	.open =			envctrl_open,
 	.release =		envctrl_release,
 	.llseek =		noop_llseek,

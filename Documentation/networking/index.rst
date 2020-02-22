@@ -13,8 +13,9 @@ Contents:
    can_ucan_protocol
    device_drivers/index
    dsa/index
-   devlink/index
-   ethtool-netlink
+   devlink-info-versions
+   devlink-trap
+   devlink-trap-netdevsim
    ieee802154
    j1939
    kapi
@@ -32,7 +33,6 @@ Contents:
    scaling
    tls
    tls-offload
-   nfc
 
 .. only::  subproject and html
 

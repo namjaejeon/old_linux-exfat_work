@@ -49,15 +49,6 @@
 	".previous\n"
 #endif
 
-#define BUG_ENTRY(insn, flags, ...)			\
-	__asm__ __volatile__(				\
-		"1:	" insn "\n"			\
-		_EMIT_BUG_ENTRY				\
-		: : "i" (__FILE__), "i" (__LINE__),	\
-		  "i" (flags),				\
-		  "i" (sizeof(struct bug_entry)),	\
-		  ##__VA_ARGS__)
-
 /*
  * BUG_ON() and WARN_ON() do their best to cooperate with compile-time
  * optimisations. However depending on the complexity of the condition
@@ -65,7 +56,11 @@
  */
 
 #define BUG() do {						\
-	BUG_ENTRY("twi 31, 0, 0", 0);				\
+	__asm__ __volatile__(					\
+		"1:	twi 31,0,0\n"				\
+		_EMIT_BUG_ENTRY					\
+		: : "i" (__FILE__), "i" (__LINE__),		\
+		    "i" (0), "i"  (sizeof(struct bug_entry)));	\
 	unreachable();						\
 } while (0)
 
@@ -74,11 +69,23 @@
 		if (x)						\
 			BUG();					\
 	} else {						\
-		BUG_ENTRY(PPC_TLNEI " %4, 0", 0, "r" ((__force long)(x)));	\
+		__asm__ __volatile__(				\
+		"1:	"PPC_TLNEI"	%4,0\n"			\
+		_EMIT_BUG_ENTRY					\
+		: : "i" (__FILE__), "i" (__LINE__), "i" (0),	\
+		  "i" (sizeof(struct bug_entry)),		\
+		  "r" ((__force long)(x)));			\
 	}							\
 } while (0)
 
-#define __WARN_FLAGS(flags) BUG_ENTRY("twi 31, 0, 0", BUGFLAG_WARNING | (flags))
+#define __WARN_FLAGS(flags) do {				\
+	__asm__ __volatile__(					\
+		"1:	twi 31,0,0\n"				\
+		_EMIT_BUG_ENTRY					\
+		: : "i" (__FILE__), "i" (__LINE__),		\
+		  "i" (BUGFLAG_WARNING|(flags)),		\
+		  "i" (sizeof(struct bug_entry)));		\
+} while (0)
 
 #define WARN_ON(x) ({						\
 	int __ret_warn_on = !!(x);				\
@@ -86,9 +93,13 @@
 		if (__ret_warn_on)				\
 			__WARN();				\
 	} else {						\
-		BUG_ENTRY(PPC_TLNEI " %4, 0",			\
-			  BUGFLAG_WARNING | BUGFLAG_TAINT(TAINT_WARN),	\
-			  "r" (__ret_warn_on));	\
+		__asm__ __volatile__(				\
+		"1:	"PPC_TLNEI"	%4,0\n"			\
+		_EMIT_BUG_ENTRY					\
+		: : "i" (__FILE__), "i" (__LINE__),		\
+		  "i" (BUGFLAG_WARNING|BUGFLAG_TAINT(TAINT_WARN)),\
+		  "i" (sizeof(struct bug_entry)),		\
+		  "r" (__ret_warn_on));				\
 	}							\
 	unlikely(__ret_warn_on);				\
 })

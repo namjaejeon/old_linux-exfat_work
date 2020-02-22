@@ -298,6 +298,7 @@ static int pic32_rtc_remove(struct platform_device *pdev)
 static int pic32_rtc_probe(struct platform_device *pdev)
 {
 	struct pic32_rtc_dev *pdata;
+	struct resource *res;
 	int ret;
 
 	pdata = devm_kzalloc(&pdev->dev, sizeof(*pdata), GFP_KERNEL);
@@ -310,7 +311,8 @@ static int pic32_rtc_probe(struct platform_device *pdev)
 	if (pdata->alarm_irq < 0)
 		return pdata->alarm_irq;
 
-	pdata->reg_base = devm_platform_ioremap_resource(pdev, 0);
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	pdata->reg_base = devm_ioremap_resource(&pdev->dev, res);
 	if (IS_ERR(pdata->reg_base))
 		return PTR_ERR(pdata->reg_base);
 

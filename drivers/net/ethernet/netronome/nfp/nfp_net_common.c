@@ -47,7 +47,6 @@
 #include "nfp_net_sriov.h"
 #include "nfp_port.h"
 #include "crypto/crypto.h"
-#include "crypto/fw.h"
 
 /**
  * nfp_net_get_fw_version() - Read and parse the FW version
@@ -873,8 +872,7 @@ nfp_net_tls_tx(struct nfp_net_dp *dp, struct nfp_net_r_vector *r_vec,
 
 		/* jump forward, a TX may have gotten lost, need to sync TX */
 		if (!resync_pending && seq - ntls->next_seq < U32_MAX / 4)
-			tls_offload_tx_resync_request(nskb->sk, seq,
-						      ntls->next_seq);
+			tls_offload_tx_resync_request(nskb->sk);
 
 		*nr_frags = 0;
 		return nskb;
@@ -1322,11 +1320,17 @@ nfp_net_tx_ring_reset(struct nfp_net_dp *dp, struct nfp_net_tx_ring *tx_ring)
 	netdev_tx_reset_queue(nd_q);
 }
 
-static void nfp_net_tx_timeout(struct net_device *netdev, unsigned int txqueue)
+static void nfp_net_tx_timeout(struct net_device *netdev)
 {
 	struct nfp_net *nn = netdev_priv(netdev);
+	int i;
 
-	nn_warn(nn, "TX watchdog timeout on ring: %u\n", txqueue);
+	for (i = 0; i < nn->dp.netdev->real_num_tx_queues; i++) {
+		if (!netif_tx_queue_stopped(netdev_get_tx_queue(netdev, i)))
+			continue;
+		nn_warn(nn, "TX timeout on ring: %d\n", i);
+	}
+	nn_warn(nn, "TX watchdog timeout\n");
 }
 
 /* Receive processing
@@ -1662,9 +1666,9 @@ nfp_net_set_hash_desc(struct net_device *netdev, struct nfp_meta_parsed *meta,
 			 &rx_hash->hash);
 }
 
-static bool
+static void *
 nfp_net_parse_meta(struct net_device *netdev, struct nfp_meta_parsed *meta,
-		   void *data, void *pkt, unsigned int pkt_len, int meta_len)
+		   void *data, int meta_len)
 {
 	u32 meta_info;
 
@@ -1694,20 +1698,14 @@ nfp_net_parse_meta(struct net_device *netdev, struct nfp_meta_parsed *meta,
 				(__force __wsum)__get_unaligned_cpu32(data);
 			data += 4;
 			break;
-		case NFP_NET_META_RESYNC_INFO:
-			if (nfp_net_tls_rx_resync_req(netdev, data, pkt,
-						      pkt_len))
-				return NULL;
-			data += sizeof(struct nfp_net_tls_resync_req);
-			break;
 		default:
-			return true;
+			return NULL;
 		}
 
 		meta_info >>= NFP_NET_META_FIELD_SIZE;
 	}
 
-	return data != pkt;
+	return data;
 }
 
 static void
@@ -1892,10 +1890,12 @@ static int nfp_net_rx(struct nfp_net_rx_ring *rx_ring, int budget)
 			nfp_net_set_hash_desc(dp->netdev, &meta,
 					      rxbuf->frag + meta_off, rxd);
 		} else if (meta_len) {
-			if (unlikely(nfp_net_parse_meta(dp->netdev, &meta,
-							rxbuf->frag + meta_off,
-							rxbuf->frag + pkt_off,
-							pkt_len, meta_len))) {
+			void *end;
+
+			end = nfp_net_parse_meta(dp->netdev, &meta,
+						 rxbuf->frag + meta_off,
+						 meta_len);
+			if (unlikely(end != rxbuf->frag + pkt_off)) {
 				nn_dp_warn(dp, "invalid RX packet metadata\n");
 				nfp_net_rx_drop(dp, r_vec, rx_ring, rxbuf,
 						NULL);

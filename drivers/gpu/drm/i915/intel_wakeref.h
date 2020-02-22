@@ -9,7 +9,6 @@
 
 #include <linux/atomic.h>
 #include <linux/bits.h>
-#include <linux/lockdep.h>
 #include <linux/mutex.h>
 #include <linux/refcount.h>
 #include <linux/stackdepot.h>
@@ -30,6 +29,9 @@ typedef depot_stack_handle_t intel_wakeref_t;
 struct intel_wakeref_ops {
 	int (*get)(struct intel_wakeref *wf);
 	int (*put)(struct intel_wakeref *wf);
+
+	unsigned long flags;
+#define INTEL_WAKEREF_PUT_ASYNC BIT(0)
 };
 
 struct intel_wakeref {
@@ -44,27 +46,24 @@ struct intel_wakeref {
 	struct work_struct work;
 };
 
-struct intel_wakeref_lockclass {
-	struct lock_class_key mutex;
-	struct lock_class_key work;
-};
-
 void __intel_wakeref_init(struct intel_wakeref *wf,
 			  struct intel_runtime_pm *rpm,
 			  const struct intel_wakeref_ops *ops,
-			  struct intel_wakeref_lockclass *key);
+			  struct lock_class_key *key);
 #define intel_wakeref_init(wf, rpm, ops) do {				\
-	static struct intel_wakeref_lockclass __key;			\
+	static struct lock_class_key __key;				\
 									\
 	__intel_wakeref_init((wf), (rpm), (ops), &__key);		\
 } while (0)
 
 int __intel_wakeref_get_first(struct intel_wakeref *wf);
-void __intel_wakeref_put_last(struct intel_wakeref *wf, unsigned long flags);
+void __intel_wakeref_put_last(struct intel_wakeref *wf);
 
 /**
  * intel_wakeref_get: Acquire the wakeref
+ * @i915: the drm_i915_private device
  * @wf: the wakeref
+ * @fn: callback for acquired the wakeref, called only on first acquire.
  *
  * Acquire a hold on the wakeref. The first user to do so, will acquire
  * the runtime pm wakeref and then call the @fn underneath the wakeref
@@ -79,27 +78,10 @@ void __intel_wakeref_put_last(struct intel_wakeref *wf, unsigned long flags);
 static inline int
 intel_wakeref_get(struct intel_wakeref *wf)
 {
-	might_sleep();
 	if (unlikely(!atomic_inc_not_zero(&wf->count)))
 		return __intel_wakeref_get_first(wf);
 
 	return 0;
-}
-
-/**
- * __intel_wakeref_get: Acquire the wakeref, again
- * @wf: the wakeref
- *
- * Increment the wakeref counter, only valid if it is already held by
- * the caller.
- *
- * See intel_wakeref_get().
- */
-static inline void
-__intel_wakeref_get(struct intel_wakeref *wf)
-{
-	INTEL_WAKEREF_BUG_ON(atomic_read(&wf->count) <= 0);
-	atomic_inc(&wf->count);
 }
 
 /**
@@ -118,9 +100,10 @@ intel_wakeref_get_if_active(struct intel_wakeref *wf)
 }
 
 /**
- * intel_wakeref_put_flags: Release the wakeref
+ * intel_wakeref_put: Release the wakeref
+ * @i915: the drm_i915_private device
  * @wf: the wakeref
- * @flags: control flags
+ * @fn: callback for releasing the wakeref, called only on final release.
  *
  * Release our hold on the wakeref. When there are no more users,
  * the runtime pm wakeref will be released after the @fn callback is called
@@ -133,25 +116,11 @@ intel_wakeref_get_if_active(struct intel_wakeref *wf)
  * code otherwise.
  */
 static inline void
-__intel_wakeref_put(struct intel_wakeref *wf, unsigned long flags)
-#define INTEL_WAKEREF_PUT_ASYNC BIT(0)
+intel_wakeref_put(struct intel_wakeref *wf)
 {
 	INTEL_WAKEREF_BUG_ON(atomic_read(&wf->count) <= 0);
 	if (unlikely(!atomic_add_unless(&wf->count, -1, 1)))
-		__intel_wakeref_put_last(wf, flags);
-}
-
-static inline void
-intel_wakeref_put(struct intel_wakeref *wf)
-{
-	might_sleep();
-	__intel_wakeref_put(wf, 0);
-}
-
-static inline void
-intel_wakeref_put_async(struct intel_wakeref *wf)
-{
-	__intel_wakeref_put(wf, INTEL_WAKEREF_PUT_ASYNC);
+		__intel_wakeref_put_last(wf);
 }
 
 /**
@@ -183,21 +152,6 @@ intel_wakeref_unlock(struct intel_wakeref *wf)
 }
 
 /**
- * intel_wakeref_unlock_wait: Wait until the active callback is complete
- * @wf: the wakeref
- *
- * Waits for the active callback (under the @wf->mutex or another CPU) is
- * complete.
- */
-static inline void
-intel_wakeref_unlock_wait(struct intel_wakeref *wf)
-{
-	mutex_lock(&wf->mutex);
-	mutex_unlock(&wf->mutex);
-	flush_work(&wf->work);
-}
-
-/**
  * intel_wakeref_is_active: Query whether the wakeref is currently held
  * @wf: the wakeref
  *
@@ -216,7 +170,6 @@ intel_wakeref_is_active(const struct intel_wakeref *wf)
 static inline void
 __intel_wakeref_defer_park(struct intel_wakeref *wf)
 {
-	lockdep_assert_held(&wf->mutex);
 	INTEL_WAKEREF_BUG_ON(atomic_read(&wf->count));
 	atomic_set_release(&wf->count, 1);
 }

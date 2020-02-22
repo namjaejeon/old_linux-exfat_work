@@ -26,17 +26,30 @@ ENTRY(startup_continue)
 0:	larl	%r1,tod_clock_base
 	mvc	0(16,%r1),__LC_BOOT_CLOCK
 	larl	%r13,.LPG1		# get base
+	larl	%r0,boot_vdso_data
+	stg	%r0,__LC_VDSO_PER_CPU
 #
 # Setup stack
 #
 	larl	%r14,init_task
 	stg	%r14,__LC_CURRENT
-	larl	%r15,init_thread_union+THREAD_SIZE-STACK_FRAME_OVERHEAD-__PT_SIZE
+	larl	%r15,init_thread_union+THREAD_SIZE-STACK_FRAME_OVERHEAD
 #ifdef CONFIG_KASAN
 	brasl	%r14,kasan_early_init
 #endif
-	brasl	%r14,startup_init		# s390 specific early init
-	brasl	%r14,start_kernel		# common init code
+#
+# Early machine initialization and detection functions.
+#
+	brasl	%r14,startup_init
+
+# check control registers
+	stctg	%c0,%c15,0(%r15)
+	oi	6(%r15),0x60		# enable sigp emergency & external call
+	oi	4(%r15),0x10		# switch on low address proctection
+	lctlg	%c0,%c15,0(%r15)
+
+	lam	0,15,.Laregs-.LPG1(%r13)	# load acrs needed by uaccess
+	brasl	%r14,start_kernel		# go to C code
 #
 # We returned from start_kernel ?!? PANIK
 #
@@ -46,3 +59,4 @@ ENTRY(startup_continue)
 	.align	16
 .LPG1:
 .Ldw:	.quad	0x0002000180000000,0x0000000000000000
+.Laregs:.long	0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0

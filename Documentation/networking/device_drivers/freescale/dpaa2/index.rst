@@ -8,4 +8,3 @@ DPAA2 Documentation
    overview
    dpio-driver
    ethernet-driver
-   mac-phy-support

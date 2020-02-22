@@ -206,7 +206,7 @@ enum pxa_ssp_type {
 };
 
 struct ssp_device {
-	struct device	*dev;
+	struct platform_device *pdev;
 	struct list_head	node;
 
 	struct clk	*clk;

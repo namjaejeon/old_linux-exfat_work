@@ -244,9 +244,7 @@ static int keep_resources(struct snd_oxfw *oxfw, struct amdtp_stream *stream)
 
 int snd_oxfw_stream_reserve_duplex(struct snd_oxfw *oxfw,
 				   struct amdtp_stream *stream,
-				   unsigned int rate, unsigned int pcm_channels,
-				   unsigned int frames_per_period,
-				   unsigned int frames_per_buffer)
+				   unsigned int rate, unsigned int pcm_channels)
 {
 	struct snd_oxfw_stream_formation formation;
 	enum avc_general_plug_dir dir;
@@ -307,15 +305,6 @@ int snd_oxfw_stream_reserve_duplex(struct snd_oxfw *oxfw,
 				return err;
 			}
 		}
-
-		err = amdtp_domain_set_events_per_period(&oxfw->domain,
-					frames_per_period, frames_per_buffer);
-		if (err < 0) {
-			cmp_connection_release(&oxfw->in_conn);
-			if (oxfw->has_output)
-				cmp_connection_release(&oxfw->out_conn);
-			return err;
-		}
 	}
 
 	return 0;
@@ -355,7 +344,7 @@ int snd_oxfw_stream_start_duplex(struct snd_oxfw *oxfw)
 			}
 		}
 
-		err = amdtp_domain_start(&oxfw->domain, 0);
+		err = amdtp_domain_start(&oxfw->domain);
 		if (err < 0)
 			goto error;
 
@@ -513,7 +502,7 @@ int snd_oxfw_stream_parse_format(u8 *format,
 	 *  Level 1:	AM824 Compound  (0x40)
 	 */
 	if ((format[0] != 0x90) || (format[1] != 0x40))
-		return -ENXIO;
+		return -ENOSYS;
 
 	/* check the sampling rate */
 	for (i = 0; i < ARRAY_SIZE(avc_stream_rate_table); i++) {
@@ -521,7 +510,7 @@ int snd_oxfw_stream_parse_format(u8 *format,
 			break;
 	}
 	if (i == ARRAY_SIZE(avc_stream_rate_table))
-		return -ENXIO;
+		return -ENOSYS;
 
 	formation->rate = oxfw_rate_table[i];
 
@@ -565,13 +554,13 @@ int snd_oxfw_stream_parse_format(u8 *format,
 		/* Don't care */
 		case 0xff:
 		default:
-			return -ENXIO;	/* not supported */
+			return -ENOSYS;	/* not supported */
 		}
 	}
 
 	if (formation->pcm  > AM824_MAX_CHANNELS_FOR_PCM ||
 	    formation->midi > AM824_MAX_CHANNELS_FOR_MIDI)
-		return -ENXIO;
+		return -ENOSYS;
 
 	return 0;
 }
@@ -656,7 +645,7 @@ static int fill_stream_formats(struct snd_oxfw *oxfw,
 	/* get first entry */
 	len = AVC_GENERIC_FRAME_MAXIMUM_BYTES;
 	err = avc_stream_get_format_list(oxfw->unit, dir, 0, buf, &len, 0);
-	if (err == -ENXIO) {
+	if (err == -ENOSYS) {
 		/* LIST subfunction is not implemented */
 		len = AVC_GENERIC_FRAME_MAXIMUM_BYTES;
 		err = assume_stream_formats(oxfw, dir, pid, buf, &len,
@@ -728,63 +717,49 @@ int snd_oxfw_stream_discover(struct snd_oxfw *oxfw)
 			err);
 		goto end;
 	} else if ((plugs[0] == 0) && (plugs[1] == 0)) {
-		err = -ENXIO;
+		err = -ENOSYS;
 		goto end;
 	}
 
 	/* use oPCR[0] if exists */
 	if (plugs[1] > 0) {
 		err = fill_stream_formats(oxfw, AVC_GENERAL_PLUG_DIR_OUT, 0);
-		if (err < 0) {
-			if (err != -ENXIO)
-				return err;
+		if (err < 0)
+			goto end;
 
-			// The oPCR is not available for isoc communication.
-			err = 0;
-		} else {
-			for (i = 0; i < SND_OXFW_STREAM_FORMAT_ENTRIES; i++) {
-				format = oxfw->tx_stream_formats[i];
-				if (format == NULL)
-					continue;
-				err = snd_oxfw_stream_parse_format(format,
-								   &formation);
-				if (err < 0)
-					continue;
+		for (i = 0; i < SND_OXFW_STREAM_FORMAT_ENTRIES; i++) {
+			format = oxfw->tx_stream_formats[i];
+			if (format == NULL)
+				continue;
+			err = snd_oxfw_stream_parse_format(format, &formation);
+			if (err < 0)
+				continue;
 
-				/* Add one MIDI port. */
-				if (formation.midi > 0)
-					oxfw->midi_input_ports = 1;
-			}
-
-			oxfw->has_output = true;
+			/* Add one MIDI port. */
+			if (formation.midi > 0)
+				oxfw->midi_input_ports = 1;
 		}
+
+		oxfw->has_output = true;
 	}
 
 	/* use iPCR[0] if exists */
 	if (plugs[0] > 0) {
 		err = fill_stream_formats(oxfw, AVC_GENERAL_PLUG_DIR_IN, 0);
-		if (err < 0) {
-			if (err != -ENXIO)
-				return err;
+		if (err < 0)
+			goto end;
 
-			// The iPCR is not available for isoc communication.
-			err = 0;
-		} else {
-			for (i = 0; i < SND_OXFW_STREAM_FORMAT_ENTRIES; i++) {
-				format = oxfw->rx_stream_formats[i];
-				if (format == NULL)
-					continue;
-				err = snd_oxfw_stream_parse_format(format,
-								   &formation);
-				if (err < 0)
-					continue;
+		for (i = 0; i < SND_OXFW_STREAM_FORMAT_ENTRIES; i++) {
+			format = oxfw->rx_stream_formats[i];
+			if (format == NULL)
+				continue;
+			err = snd_oxfw_stream_parse_format(format, &formation);
+			if (err < 0)
+				continue;
 
-				/* Add one MIDI port. */
-				if (formation.midi > 0)
-					oxfw->midi_output_ports = 1;
-			}
-
-			oxfw->has_input = true;
+			/* Add one MIDI port. */
+			if (formation.midi > 0)
+				oxfw->midi_output_ports = 1;
 		}
 	}
 end:

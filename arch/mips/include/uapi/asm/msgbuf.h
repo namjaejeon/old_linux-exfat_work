@@ -2,7 +2,6 @@
 #ifndef _ASM_MSGBUF_H
 #define _ASM_MSGBUF_H
 
-#include <asm/ipcbuf.h>
 
 /*
  * The msqid64_ds structure for the MIPS architecture.
@@ -16,9 +15,9 @@
 #if defined(__mips64)
 struct msqid64_ds {
 	struct ipc64_perm msg_perm;
-	long msg_stime;			/* last msgsnd time */
-	long msg_rtime;			/* last msgrcv time */
-	long msg_ctime;			/* last change time */
+	__kernel_time_t msg_stime;	/* last msgsnd time */
+	__kernel_time_t msg_rtime;	/* last msgrcv time */
+	__kernel_time_t msg_ctime;	/* last change time */
 	unsigned long  msg_cbytes;	/* current number of bytes on queue */
 	unsigned long  msg_qnum;	/* number of messages in queue */
 	unsigned long  msg_qbytes;	/* max number of bytes on queue */

@@ -36,19 +36,6 @@ static bool update_stack_info(struct unwind_state *state, unsigned long sp)
 	return true;
 }
 
-static inline bool is_final_pt_regs(struct unwind_state *state,
-				    struct pt_regs *regs)
-{
-	/* user mode or kernel thread pt_regs at the bottom of task stack */
-	if (task_pt_regs(state->task) == regs)
-		return true;
-
-	/* user mode pt_regs at the bottom of irq stack */
-	return state->stack_info.type == STACK_TYPE_IRQ &&
-	       state->stack_info.end - sizeof(struct pt_regs) == (unsigned long)regs &&
-	       READ_ONCE_NOCHECK(regs->psw.mask) & PSW_MASK_PSTATE;
-}
-
 bool unwind_next_frame(struct unwind_state *state)
 {
 	struct stack_info *info = &state->stack_info;
@@ -59,16 +46,20 @@ bool unwind_next_frame(struct unwind_state *state)
 
 	regs = state->regs;
 	if (unlikely(regs)) {
-		sp = state->sp;
+		if (state->reuse_sp) {
+			sp = state->sp;
+			state->reuse_sp = false;
+		} else {
+			sp = READ_ONCE_NOCHECK(regs->gprs[15]);
+			if (unlikely(outside_of_stack(state, sp))) {
+				if (!update_stack_info(state, sp))
+					goto out_err;
+			}
+		}
 		sf = (struct stack_frame *) sp;
 		ip = READ_ONCE_NOCHECK(sf->gprs[8]);
 		reliable = false;
 		regs = NULL;
-		if (!__kernel_text_address(ip)) {
-			/* skip bogus %r14 */
-			state->regs = NULL;
-			return unwind_next_frame(state);
-		}
 	} else {
 		sf = (struct stack_frame *) state->sp;
 		sp = READ_ONCE_NOCHECK(sf->back_chain);
@@ -85,25 +76,21 @@ bool unwind_next_frame(struct unwind_state *state)
 			/* No back-chain, look for a pt_regs structure */
 			sp = state->sp + STACK_FRAME_OVERHEAD;
 			if (!on_stack(info, sp, sizeof(struct pt_regs)))
-				goto out_err;
+				goto out_stop;
 			regs = (struct pt_regs *) sp;
-			if (is_final_pt_regs(state, regs))
+			if (READ_ONCE_NOCHECK(regs->psw.mask) & PSW_MASK_PSTATE)
 				goto out_stop;
 			ip = READ_ONCE_NOCHECK(regs->psw.addr);
-			sp = READ_ONCE_NOCHECK(regs->gprs[15]);
-			if (unlikely(outside_of_stack(state, sp))) {
-				if (!update_stack_info(state, sp))
-					goto out_err;
-			}
 			reliable = true;
 		}
 	}
 
-	/* Sanity check: ABI requires SP to be aligned 8 bytes. */
-	if (sp & 0x7)
-		goto out_err;
-
-	ip = ftrace_graph_ret_addr(state->task, &state->graph_idx, ip, (void *) sp);
+#ifdef CONFIG_FUNCTION_GRAPH_TRACER
+	/* Decode any ftrace redirection */
+	if (ip == (unsigned long) return_to_handler)
+		ip = ftrace_graph_ret_addr(state->task, &state->graph_idx,
+					   ip, (void *) sp);
+#endif
 
 	/* Update unwind state */
 	state->sp = sp;
@@ -121,11 +108,13 @@ out_stop:
 EXPORT_SYMBOL_GPL(unwind_next_frame);
 
 void __unwind_start(struct unwind_state *state, struct task_struct *task,
-		    struct pt_regs *regs, unsigned long first_frame)
+		    struct pt_regs *regs, unsigned long sp)
 {
 	struct stack_info *info = &state->stack_info;
+	unsigned long *mask = &state->stack_mask;
+	bool reliable, reuse_sp;
 	struct stack_frame *sf;
-	unsigned long ip, sp;
+	unsigned long ip;
 
 	memset(state, 0, sizeof(*state));
 	state->task = task;
@@ -137,46 +126,38 @@ void __unwind_start(struct unwind_state *state, struct task_struct *task,
 		return;
 	}
 
-	/* Get the instruction pointer from pt_regs or the stack frame */
-	if (regs) {
-		ip = regs->psw.addr;
-		sp = regs->gprs[15];
-	} else if (task == current) {
-		sp = current_frame_address();
-	} else {
-		sp = task->thread.ksp;
-	}
-
 	/* Get current stack pointer and initialize stack info */
-	if (!update_stack_info(state, sp)) {
+	if (get_stack_info(sp, task, info, mask) != 0 ||
+	    !on_stack(info, sp, sizeof(struct stack_frame))) {
 		/* Something is wrong with the stack pointer */
 		info->type = STACK_TYPE_UNKNOWN;
 		state->error = true;
 		return;
 	}
 
-	if (!regs) {
-		/* Stack frame is within valid stack */
-		sf = (struct stack_frame *)sp;
+	/* Get the instruction pointer from pt_regs or the stack frame */
+	if (regs) {
+		ip = READ_ONCE_NOCHECK(regs->psw.addr);
+		reliable = true;
+		reuse_sp = true;
+	} else {
+		sf = (struct stack_frame *) sp;
 		ip = READ_ONCE_NOCHECK(sf->gprs[8]);
+		reliable = false;
+		reuse_sp = false;
 	}
 
-	ip = ftrace_graph_ret_addr(state->task, &state->graph_idx, ip, NULL);
+#ifdef CONFIG_FUNCTION_GRAPH_TRACER
+	/* Decode any ftrace redirection */
+	if (ip == (unsigned long) return_to_handler)
+		ip = ftrace_graph_ret_addr(state->task, &state->graph_idx,
+					   ip, NULL);
+#endif
 
 	/* Update unwind state */
 	state->sp = sp;
 	state->ip = ip;
-	state->reliable = true;
-
-	if (!first_frame)
-		return;
-	/* Skip through the call chain to the specified starting frame */
-	while (!unwind_done(state)) {
-		if (on_stack(&state->stack_info, first_frame, sizeof(struct stack_frame))) {
-			if (state->sp >= first_frame)
-				break;
-		}
-		unwind_next_frame(state);
-	}
+	state->reliable = reliable;
+	state->reuse_sp = reuse_sp;
 }
 EXPORT_SYMBOL_GPL(__unwind_start);

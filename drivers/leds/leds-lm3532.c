@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 // TI LM3532 LED driver
 // Copyright (C) 2019 Texas Instruments Incorporated - http://www.ti.com/
-// http://www.ti.com/lit/ds/symlink/lm3532.pdf
 
 #include <linux/i2c.h>
 #include <linux/leds.h>
@@ -578,12 +577,6 @@ static int lm3532_parse_node(struct lm3532_data *priv)
 		priv->runtime_ramp_down = lm3532_get_ramp_index(ramp_time);
 
 	device_for_each_child_node(priv->dev, child) {
-		struct led_init_data idata = {
-			.fwnode = child,
-			.default_label = ":",
-			.devicename = priv->client->name,
-		};
-
 		led = &priv->leds[i];
 
 		ret = fwnode_property_read_u32(child, "reg", &control_bank);
@@ -630,7 +623,7 @@ static int lm3532_parse_node(struct lm3532_data *priv)
 
 		led->num_leds = fwnode_property_count_u32(child, "led-sources");
 		if (led->num_leds > LM3532_MAX_LED_STRINGS) {
-			dev_err(&priv->client->dev, "Too many LED string defined\n");
+			dev_err(&priv->client->dev, "To many LED string defined\n");
 			continue;
 		}
 
@@ -658,7 +651,7 @@ static int lm3532_parse_node(struct lm3532_data *priv)
 		led->led_dev.name = led->label;
 		led->led_dev.brightness_set_blocking = lm3532_brightness_set;
 
-		ret = devm_led_classdev_register_ext(priv->dev, &led->led_dev, &idata);
+		ret = devm_led_classdev_register(priv->dev, &led->led_dev);
 		if (ret) {
 			dev_err(&priv->client->dev, "led register err: %d\n",
 				ret);

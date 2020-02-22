@@ -645,8 +645,7 @@ static void ksz8795_w_phy(struct ksz_device *dev, u16 phy, u16 reg, u16 val)
 }
 
 static enum dsa_tag_protocol ksz8795_get_tag_protocol(struct dsa_switch *ds,
-						      int port,
-						      enum dsa_tag_protocol mp)
+						      int port)
 {
 	return DSA_TAG_PROTO_KSZ8795;
 }

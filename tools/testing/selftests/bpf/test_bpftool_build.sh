@@ -1,30 +1,6 @@
 #!/bin/bash
 # SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
 
-case $1 in
-	-h|--help)
-		echo -e "$0 [-j <n>]"
-		echo -e "\tTest the different ways of building bpftool."
-		echo -e ""
-		echo -e "\tOptions:"
-		echo -e "\t\t-j <n>:\tPass -j flag to 'make'."
-		exit 0
-		;;
-esac
-
-J=$*
-
-# Assume script is located under tools/testing/selftests/bpf/. We want to start
-# build attempts from the top of kernel repository.
-SCRIPT_REL_PATH=$(realpath --relative-to=$PWD $0)
-SCRIPT_REL_DIR=$(dirname $SCRIPT_REL_PATH)
-KDIR_ROOT_DIR=$(realpath $PWD/$SCRIPT_REL_DIR/../../../../)
-cd $KDIR_ROOT_DIR
-if [ ! -e tools/bpf/bpftool/Makefile ]; then
-	echo -e "skip:    bpftool files not found!\n"
-	exit 0
-fi
-
 ERROR=0
 TMPDIR=
 
@@ -36,6 +12,26 @@ return_value() {
 	exit $ERROR
 }
 trap return_value EXIT
+
+case $1 in
+	-h|--help)
+		echo -e "$0 [-j <n>]"
+		echo -e "\tTest the different ways of building bpftool."
+		echo -e ""
+		echo -e "\tOptions:"
+		echo -e "\t\t-j <n>:\tPass -j flag to 'make'."
+		exit
+		;;
+esac
+
+J=$*
+
+# Assume script is located under tools/testing/selftests/bpf/. We want to start
+# build attempts from the top of kernel repository.
+SCRIPT_REL_PATH=$(realpath --relative-to=$PWD $0)
+SCRIPT_REL_DIR=$(dirname $SCRIPT_REL_PATH)
+KDIR_ROOT_DIR=$(realpath $PWD/$SCRIPT_REL_DIR/../../../../)
+cd $KDIR_ROOT_DIR
 
 check() {
 	local dir=$(realpath $1)

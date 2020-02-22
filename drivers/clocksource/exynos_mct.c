@@ -4,7 +4,7 @@
  * Copyright (c) 2011 Samsung Electronics Co., Ltd.
  *		http://www.samsung.com
  *
- * Exynos4 MCT(Multi-Core Timer) support
+ * EXYNOS4 MCT(Multi-Core Timer) support
 */
 
 #include <linux/interrupt.h>

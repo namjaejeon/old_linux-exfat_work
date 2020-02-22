@@ -61,7 +61,7 @@ struct sdhci_acpi_slot {
 	mmc_pm_flag_t	pm_caps;
 	unsigned int	flags;
 	size_t		priv_size;
-	int (*probe_slot)(struct platform_device *, struct acpi_device *);
+	int (*probe_slot)(struct platform_device *, const char *, const char *);
 	int (*remove_slot)(struct platform_device *);
 	int (*free_slot)(struct platform_device *pdev);
 	int (*setup_host)(struct platform_device *pdev);
@@ -325,10 +325,12 @@ static bool sdhci_acpi_cht_pci_wifi(unsigned int vendor, unsigned int device,
  * wifi card in the expected slot with an ACPI companion node, is used to
  * indicate that acpi_device_fix_up_power() should be avoided.
  */
-static inline bool sdhci_acpi_no_fixup_child_power(struct acpi_device *adev)
+static inline bool sdhci_acpi_no_fixup_child_power(const char *hid,
+						   const char *uid)
 {
 	return sdhci_acpi_cht() &&
-	       acpi_dev_hid_uid_match(adev, "80860F14", "2") &&
+	       !strcmp(hid, "80860F14") &&
+	       !strcmp(uid, "2") &&
 	       sdhci_acpi_cht_pci_wifi(0x14e4, 0x43ec, 0, 28);
 }
 
@@ -343,7 +345,8 @@ static inline bool sdhci_acpi_byt_defer(struct device *dev)
 	return false;
 }
 
-static inline bool sdhci_acpi_no_fixup_child_power(struct acpi_device *adev)
+static inline bool sdhci_acpi_no_fixup_child_power(const char *hid,
+						   const char *uid)
 {
 	return false;
 }
@@ -372,18 +375,19 @@ out:
 	return ret;
 }
 
-static int intel_probe_slot(struct platform_device *pdev, struct acpi_device *adev)
+static int intel_probe_slot(struct platform_device *pdev, const char *hid,
+			    const char *uid)
 {
 	struct sdhci_acpi_host *c = platform_get_drvdata(pdev);
 	struct intel_host *intel_host = sdhci_acpi_priv(c);
 	struct sdhci_host *host = c->host;
 
-	if (acpi_dev_hid_uid_match(adev, "80860F14", "1") &&
+	if (hid && uid && !strcmp(hid, "80860F14") && !strcmp(uid, "1") &&
 	    sdhci_readl(host, SDHCI_CAPABILITIES) == 0x446cc8b2 &&
 	    sdhci_readl(host, SDHCI_CAPABILITIES_1) == 0x00000807)
 		host->timeout_clk = 1000; /* 1000 kHz i.e. 1 MHz */
 
-	if (acpi_dev_hid_uid_match(adev, "80865ACA", NULL))
+	if (hid && !strcmp(hid, "80865ACA"))
 		host->mmc_host_ops.get_cd = bxt_get_cd;
 
 	intel_dsm_init(intel_host, &pdev->dev, host->mmc);
@@ -469,7 +473,8 @@ static irqreturn_t sdhci_acpi_qcom_handler(int irq, void *ptr)
 	return IRQ_HANDLED;
 }
 
-static int qcom_probe_slot(struct platform_device *pdev, struct acpi_device *adev)
+static int qcom_probe_slot(struct platform_device *pdev, const char *hid,
+			   const char *uid)
 {
 	struct sdhci_acpi_host *c = platform_get_drvdata(pdev);
 	struct sdhci_host *host = c->host;
@@ -477,7 +482,7 @@ static int qcom_probe_slot(struct platform_device *pdev, struct acpi_device *ade
 
 	*irq = -EINVAL;
 
-	if (!acpi_dev_hid_uid_match(adev, "QCOM8051", NULL))
+	if (strcmp(hid, "QCOM8051"))
 		return 0;
 
 	*irq = platform_get_irq(pdev, 1);
@@ -496,12 +501,14 @@ static int qcom_free_slot(struct platform_device *pdev)
 	struct sdhci_host *host = c->host;
 	struct acpi_device *adev;
 	int *irq = sdhci_acpi_priv(c);
+	const char *hid;
 
 	adev = ACPI_COMPANION(dev);
 	if (!adev)
 		return -ENODEV;
 
-	if (!acpi_dev_hid_uid_match(adev, "QCOM8051", NULL))
+	hid = acpi_device_hid(adev);
+	if (strcmp(hid, "QCOM8051"))
 		return 0;
 
 	if (*irq < 0)
@@ -576,7 +583,7 @@ static const struct sdhci_acpi_chip sdhci_acpi_chip_amd = {
 };
 
 static int sdhci_acpi_emmc_amd_probe_slot(struct platform_device *pdev,
-					  struct acpi_device *adev)
+					  const char *hid, const char *uid)
 {
 	struct sdhci_acpi_host *c = platform_get_drvdata(pdev);
 	struct sdhci_host *host   = c->host;
@@ -647,12 +654,17 @@ static const struct acpi_device_id sdhci_acpi_ids[] = {
 };
 MODULE_DEVICE_TABLE(acpi, sdhci_acpi_ids);
 
-static const struct sdhci_acpi_slot *sdhci_acpi_get_slot(struct acpi_device *adev)
+static const struct sdhci_acpi_slot *sdhci_acpi_get_slot(const char *hid,
+							 const char *uid)
 {
 	const struct sdhci_acpi_uid_slot *u;
 
 	for (u = sdhci_acpi_uids; u->hid; u++) {
-		if (acpi_dev_hid_uid_match(adev, u->hid, u->uid))
+		if (strcmp(u->hid, hid))
+			continue;
+		if (!u->uid)
+			return u->slot;
+		if (uid && !strcmp(u->uid, uid))
 			return u->slot;
 	}
 	return NULL;
@@ -668,17 +680,22 @@ static int sdhci_acpi_probe(struct platform_device *pdev)
 	struct resource *iomem;
 	resource_size_t len;
 	size_t priv_size;
+	const char *hid;
+	const char *uid;
 	int err;
 
 	device = ACPI_COMPANION(dev);
 	if (!device)
 		return -ENODEV;
 
-	slot = sdhci_acpi_get_slot(device);
+	hid = acpi_device_hid(device);
+	uid = acpi_device_uid(device);
+
+	slot = sdhci_acpi_get_slot(hid, uid);
 
 	/* Power on the SDHCI controller and its children */
 	acpi_device_fix_up_power(device);
-	if (!sdhci_acpi_no_fixup_child_power(device)) {
+	if (!sdhci_acpi_no_fixup_child_power(hid, uid)) {
 		list_for_each_entry(child, &device->children, node)
 			if (child->status.present && child->status.enabled)
 				acpi_device_fix_up_power(child);
@@ -719,7 +736,7 @@ static int sdhci_acpi_probe(struct platform_device *pdev)
 		goto err_free;
 	}
 
-	host->ioaddr = devm_ioremap(dev, iomem->start,
+	host->ioaddr = devm_ioremap_nocache(dev, iomem->start,
 					    resource_size(iomem));
 	if (host->ioaddr == NULL) {
 		err = -ENOMEM;
@@ -728,7 +745,7 @@ static int sdhci_acpi_probe(struct platform_device *pdev)
 
 	if (c->slot) {
 		if (c->slot->probe_slot) {
-			err = c->slot->probe_slot(pdev, device);
+			err = c->slot->probe_slot(pdev, hid, uid);
 			if (err)
 				goto err_free;
 		}
@@ -752,7 +769,7 @@ static int sdhci_acpi_probe(struct platform_device *pdev)
 	if (sdhci_acpi_flag(c, SDHCI_ACPI_SD_CD)) {
 		bool v = sdhci_acpi_flag(c, SDHCI_ACPI_SD_CD_OVERRIDE_LEVEL);
 
-		err = mmc_gpiod_request_cd(host->mmc, NULL, 0, v, 0);
+		err = mmc_gpiod_request_cd(host->mmc, NULL, 0, v, 0, NULL);
 		if (err) {
 			if (err == -EPROBE_DEFER)
 				goto err_free;

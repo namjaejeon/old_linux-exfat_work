@@ -893,7 +893,7 @@ static void hix5hd2_tx_timeout_task(struct work_struct *work)
 	hix5hd2_net_open(priv->netdev);
 }
 
-static void hix5hd2_net_timeout(struct net_device *dev, unsigned int txqueue)
+static void hix5hd2_net_timeout(struct net_device *dev)
 {
 	struct hix5hd2_priv *priv = netdev_priv(dev);
 
@@ -1193,9 +1193,10 @@ static int hix5hd2_dev_probe(struct platform_device *pdev)
 	if (ret)
 		goto err_free_mdio;
 
-	ret = of_get_phy_mode(node, &priv->phy_mode);
-	if (ret) {
+	priv->phy_mode = of_get_phy_mode(node);
+	if ((int)priv->phy_mode < 0) {
 		netdev_err(ndev, "not find phy-mode\n");
+		ret = -EINVAL;
 		goto err_mdiobus;
 	}
 

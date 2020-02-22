@@ -47,16 +47,16 @@ struct vif_entry_notifier_info {
 };
 
 static inline int mr_call_vif_notifier(struct notifier_block *nb,
+				       struct net *net,
 				       unsigned short family,
 				       enum fib_event_type event_type,
 				       struct vif_device *vif,
-				       unsigned short vif_index, u32 tb_id,
-				       struct netlink_ext_ack *extack)
+				       unsigned short vif_index, u32 tb_id)
 {
 	struct vif_entry_notifier_info info = {
 		.info = {
 			.family = family,
-			.extack = extack,
+			.net = net,
 		},
 		.dev = vif->dev,
 		.vif_index = vif_index,
@@ -64,7 +64,7 @@ static inline int mr_call_vif_notifier(struct notifier_block *nb,
 		.tb_id = tb_id,
 	};
 
-	return call_fib_notifier(nb, event_type, &info.info);
+	return call_fib_notifier(nb, net, event_type, &info.info);
 }
 
 static inline int mr_call_vif_notifiers(struct net *net,
@@ -77,6 +77,7 @@ static inline int mr_call_vif_notifiers(struct net *net,
 	struct vif_entry_notifier_info info = {
 		.info = {
 			.family = family,
+			.net = net,
 		},
 		.dev = vif->dev,
 		.vif_index = vif_index,
@@ -172,21 +173,21 @@ struct mfc_entry_notifier_info {
 };
 
 static inline int mr_call_mfc_notifier(struct notifier_block *nb,
+				       struct net *net,
 				       unsigned short family,
 				       enum fib_event_type event_type,
-				       struct mr_mfc *mfc, u32 tb_id,
-				       struct netlink_ext_ack *extack)
+				       struct mr_mfc *mfc, u32 tb_id)
 {
 	struct mfc_entry_notifier_info info = {
 		.info = {
 			.family = family,
-			.extack = extack,
+			.net = net,
 		},
 		.mfc = mfc,
 		.tb_id = tb_id
 	};
 
-	return call_fib_notifier(nb, event_type, &info.info);
+	return call_fib_notifier(nb, net, event_type, &info.info);
 }
 
 static inline int mr_call_mfc_notifiers(struct net *net,
@@ -198,6 +199,7 @@ static inline int mr_call_mfc_notifiers(struct net *net,
 	struct mfc_entry_notifier_info info = {
 		.info = {
 			.family = family,
+			.net = net,
 		},
 		.mfc = mfc,
 		.tb_id = tb_id
@@ -299,11 +301,10 @@ int mr_rtm_dumproute(struct sk_buff *skb, struct netlink_callback *cb,
 
 int mr_dump(struct net *net, struct notifier_block *nb, unsigned short family,
 	    int (*rules_dump)(struct net *net,
-			      struct notifier_block *nb,
-			      struct netlink_ext_ack *extack),
+			      struct notifier_block *nb),
 	    struct mr_table *(*mr_iter)(struct net *net,
 					struct mr_table *mrt),
-	    rwlock_t *mrt_lock, struct netlink_ext_ack *extack);
+	    rwlock_t *mrt_lock);
 #else
 static inline void vif_device_init(struct vif_device *v,
 				   struct net_device *dev,
@@ -354,11 +355,10 @@ mr_rtm_dumproute(struct sk_buff *skb, struct netlink_callback *cb,
 static inline int mr_dump(struct net *net, struct notifier_block *nb,
 			  unsigned short family,
 			  int (*rules_dump)(struct net *net,
-					    struct notifier_block *nb,
-					    struct netlink_ext_ack *extack),
+					    struct notifier_block *nb),
 			  struct mr_table *(*mr_iter)(struct net *net,
 						      struct mr_table *mrt),
-			  rwlock_t *mrt_lock, struct netlink_ext_ack *extack)
+			  rwlock_t *mrt_lock)
 {
 	return -EINVAL;
 }

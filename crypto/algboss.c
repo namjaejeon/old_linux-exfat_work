@@ -58,6 +58,7 @@ static int cryptomgr_probe(void *data)
 {
 	struct cryptomgr_param *param = data;
 	struct crypto_template *tmpl;
+	struct crypto_instance *inst;
 	int err;
 
 	tmpl = crypto_lookup_template(param->template);
@@ -65,7 +66,16 @@ static int cryptomgr_probe(void *data)
 		goto out;
 
 	do {
-		err = tmpl->create(tmpl, param->tb);
+		if (tmpl->create) {
+			err = tmpl->create(tmpl, param->tb);
+			continue;
+		}
+
+		inst = tmpl->alloc(param->tb);
+		if (IS_ERR(inst))
+			err = PTR_ERR(inst);
+		else if ((err = crypto_register_instance(tmpl, inst)))
+			tmpl->free(inst);
 	} while (err == -EAGAIN && !signal_pending(current));
 
 	crypto_tmpl_put(tmpl);

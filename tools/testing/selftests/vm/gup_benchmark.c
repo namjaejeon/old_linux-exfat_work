@@ -18,9 +18,6 @@
 #define GUP_LONGTERM_BENCHMARK	_IOWR('g', 2, struct gup_benchmark)
 #define GUP_BENCHMARK		_IOWR('g', 3, struct gup_benchmark)
 
-/* Just the flags we need, copied from mm.h: */
-#define FOLL_WRITE	0x01	/* check pte is writable */
-
 struct gup_benchmark {
 	__u64 get_delta_usec;
 	__u64 put_delta_usec;
@@ -74,7 +71,7 @@ int main(int argc, char **argv)
 			flags |= MAP_SHARED;
 			break;
 		case 'H':
-			flags |= (MAP_HUGETLB | MAP_ANONYMOUS);
+			flags |= MAP_HUGETLB;
 			break;
 		default:
 			return -1;
@@ -88,8 +85,7 @@ int main(int argc, char **argv)
 	}
 
 	gup.nr_pages_per_call = nr_pages;
-	if (write)
-		gup.flags |= FOLL_WRITE;
+	gup.flags = write;
 
 	fd = open("/sys/kernel/debug/gup_benchmark", O_RDWR);
 	if (fd == -1)

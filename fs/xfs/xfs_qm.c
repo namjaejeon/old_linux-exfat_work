@@ -22,7 +22,6 @@
 #include "xfs_qm.h"
 #include "xfs_trace.h"
 #include "xfs_icache.h"
-#include "xfs_error.h"
 
 /*
  * The global quota manager. There is only one of these for the entire
@@ -30,10 +29,10 @@
  * quota functionality, including maintaining the freelist and hash
  * tables of dquots.
  */
-STATIC int	xfs_qm_init_quotainos(struct xfs_mount *mp);
-STATIC int	xfs_qm_init_quotainfo(struct xfs_mount *mp);
+STATIC int	xfs_qm_init_quotainos(xfs_mount_t *);
+STATIC int	xfs_qm_init_quotainfo(xfs_mount_t *);
 
-STATIC void	xfs_qm_destroy_quotainos(struct xfs_quotainfo *qi);
+STATIC void	xfs_qm_destroy_quotainos(xfs_quotainfo_t *qi);
 STATIC void	xfs_qm_dqfree_one(struct xfs_dquot *dqp);
 /*
  * We use the batch lookup interface to iterate over the dquots as it
@@ -244,14 +243,14 @@ xfs_qm_unmount_quotas(
 
 STATIC int
 xfs_qm_dqattach_one(
-	struct xfs_inode	*ip,
-	xfs_dqid_t		id,
-	uint			type,
-	bool			doalloc,
-	struct xfs_dquot	**IO_idqpp)
+	xfs_inode_t	*ip,
+	xfs_dqid_t	id,
+	uint		type,
+	bool		doalloc,
+	xfs_dquot_t	**IO_idqpp)
 {
-	struct xfs_dquot	*dqp;
-	int			error;
+	xfs_dquot_t	*dqp;
+	int		error;
 
 	ASSERT(xfs_isilocked(ip, XFS_ILOCK_EXCL));
 	error = 0;
@@ -342,7 +341,7 @@ xfs_qm_dqattach_locked(
 	}
 
 	if (XFS_IS_PQUOTA_ON(mp) && !ip->i_pdquot) {
-		error = xfs_qm_dqattach_one(ip, ip->i_d.di_projid, XFS_DQ_PROJ,
+		error = xfs_qm_dqattach_one(ip, xfs_get_projid(ip), XFS_DQ_PROJ,
 				doalloc, &ip->i_pdquot);
 		if (error)
 			goto done;
@@ -540,12 +539,12 @@ xfs_qm_shrink_count(
 
 STATIC void
 xfs_qm_set_defquota(
-	struct xfs_mount	*mp,
-	uint			type,
-	struct xfs_quotainfo	*qinf)
+	xfs_mount_t	*mp,
+	uint		type,
+	xfs_quotainfo_t	*qinf)
 {
-	struct xfs_dquot	*dqp;
-	struct xfs_def_quota	*defq;
+	xfs_dquot_t		*dqp;
+	struct xfs_def_quota    *defq;
 	struct xfs_disk_dquot	*ddqp;
 	int			error;
 
@@ -643,7 +642,7 @@ xfs_qm_init_quotainfo(
 
 	ASSERT(XFS_IS_QUOTA_RUNNING(mp));
 
-	qinf = mp->m_quotainfo = kmem_zalloc(sizeof(struct xfs_quotainfo), 0);
+	qinf = mp->m_quotainfo = kmem_zalloc(sizeof(xfs_quotainfo_t), 0);
 
 	error = list_lru_init(&qinf->qi_lru);
 	if (error)
@@ -710,9 +709,9 @@ out_free_qinf:
  */
 void
 xfs_qm_destroy_quotainfo(
-	struct xfs_mount	*mp)
+	xfs_mount_t	*mp)
 {
-	struct xfs_quotainfo	*qi;
+	xfs_quotainfo_t *qi;
 
 	qi = mp->m_quotainfo;
 	ASSERT(qi != NULL);
@@ -755,15 +754,11 @@ xfs_qm_qino_alloc(
 		if ((flags & XFS_QMOPT_PQUOTA) &&
 			     (mp->m_sb.sb_gquotino != NULLFSINO)) {
 			ino = mp->m_sb.sb_gquotino;
-			if (XFS_IS_CORRUPT(mp,
-					   mp->m_sb.sb_pquotino != NULLFSINO))
-				return -EFSCORRUPTED;
+			ASSERT(mp->m_sb.sb_pquotino == NULLFSINO);
 		} else if ((flags & XFS_QMOPT_GQUOTA) &&
 			     (mp->m_sb.sb_pquotino != NULLFSINO)) {
 			ino = mp->m_sb.sb_pquotino;
-			if (XFS_IS_CORRUPT(mp,
-					   mp->m_sb.sb_gquotino != NULLFSINO))
-				return -EFSCORRUPTED;
+			ASSERT(mp->m_sb.sb_gquotino == NULLFSINO);
 		}
 		if (ino != NULLFSINO) {
 			error = xfs_iget(mp, NULL, ino, 0, 0, ip);
@@ -1564,7 +1559,7 @@ error_rele:
 
 STATIC void
 xfs_qm_destroy_quotainos(
-	struct xfs_quotainfo	*qi)
+	xfs_quotainfo_t	*qi)
 {
 	if (qi->qi_uquotaip) {
 		xfs_irele(qi->qi_uquotaip);
@@ -1698,7 +1693,7 @@ xfs_qm_vop_dqalloc(
 		}
 	}
 	if ((flags & XFS_QMOPT_PQUOTA) && XFS_IS_PQUOTA_ON(mp)) {
-		if (ip->i_d.di_projid != prid) {
+		if (xfs_get_projid(ip) != prid) {
 			xfs_iunlock(ip, lockflags);
 			error = xfs_qm_dqget(mp, (xfs_dqid_t)prid, XFS_DQ_PROJ,
 					true, &pq);
@@ -1742,14 +1737,14 @@ error_rele:
  * Actually transfer ownership, and do dquot modifications.
  * These were already reserved.
  */
-struct xfs_dquot *
+xfs_dquot_t *
 xfs_qm_vop_chown(
-	struct xfs_trans	*tp,
-	struct xfs_inode	*ip,
-	struct xfs_dquot	**IO_olddq,
-	struct xfs_dquot	*newdq)
+	xfs_trans_t	*tp,
+	xfs_inode_t	*ip,
+	xfs_dquot_t	**IO_olddq,
+	xfs_dquot_t	*newdq)
 {
-	struct xfs_dquot	*prevdq;
+	xfs_dquot_t	*prevdq;
 	uint		bfield = XFS_IS_REALTIME_INODE(ip) ?
 				 XFS_TRANS_DQ_RTBCOUNT : XFS_TRANS_DQ_BCOUNT;
 
@@ -1832,7 +1827,7 @@ xfs_qm_vop_chown_reserve(
 	}
 
 	if (XFS_IS_PQUOTA_ON(ip->i_mount) && pdqp &&
-	    ip->i_d.di_projid != be32_to_cpu(pdqp->q_core.d_id)) {
+	    xfs_get_projid(ip) != be32_to_cpu(pdqp->q_core.d_id)) {
 		prjflags = XFS_QMOPT_ENOSPC;
 		pdq_delblks = pdqp;
 		if (delblks) {
@@ -1933,7 +1928,7 @@ xfs_qm_vop_create_dqattach(
 	}
 	if (pdqp && XFS_IS_PQUOTA_ON(mp)) {
 		ASSERT(ip->i_pdquot == NULL);
-		ASSERT(ip->i_d.di_projid == be32_to_cpu(pdqp->q_core.d_id));
+		ASSERT(xfs_get_projid(ip) == be32_to_cpu(pdqp->q_core.d_id));
 
 		ip->i_pdquot = xfs_qm_dqhold(pdqp);
 		xfs_trans_mod_dquot(tp, pdqp, XFS_TRANS_DQ_ICOUNT, 1);

@@ -25,7 +25,7 @@ enum{
  * When we want to enable write operation, we should change to pwr on state.
  * When we stop write, we should switch to 500k mode and disable LDO 2.5V.
  */
-static void efuse_power_switch(struct adapter *pAdapter, u8 write, u8 pwrstate)
+void efuse_power_switch(struct adapter *pAdapter, u8 write, u8 pwrstate)
 {
 	u8 tempval;
 	u16 tmpv16;
@@ -402,6 +402,7 @@ static u16 Efuse_GetCurrentSize(struct adapter *pAdapter)
 int Efuse_PgPacketRead(struct adapter *pAdapter, u8 offset, u8 *data)
 {
 	u8 ReadState = PG_STATE_HEADER;
+	int	bContinual = true;
 	int	bDataEmpty = true;
 	u8 efuse_data, word_cnts = 0;
 	u16	efuse_addr = 0;
@@ -421,7 +422,7 @@ int Efuse_PgPacketRead(struct adapter *pAdapter, u8 offset, u8 *data)
 	/*  <Roger_TODO> Efuse has been pre-programmed dummy 5Bytes at the end of Efuse by CP. */
 	/*  Skip dummy parts to prevent unexpected data read from Efuse. */
 	/*  By pass right now. 2009.02.19. */
-	while (AVAILABLE_EFUSE_ADDR(efuse_addr)) {
+	while (bContinual && AVAILABLE_EFUSE_ADDR(efuse_addr)) {
 		/*   Header Read ------------- */
 		if (ReadState & PG_STATE_HEADER) {
 			if (efuse_OneByteRead(pAdapter, efuse_addr, &efuse_data) && (efuse_data != 0xFF)) {
@@ -463,7 +464,7 @@ int Efuse_PgPacketRead(struct adapter *pAdapter, u8 offset, u8 *data)
 					ReadState = PG_STATE_HEADER;
 				}
 			} else {
-				break;
+				bContinual = false;
 			}
 		} else if (ReadState & PG_STATE_DATA) {
 			/*   Data section Read ------------- */
@@ -497,8 +498,8 @@ static bool hal_EfuseFixHeaderProcess(struct adapter *pAdapter, u8 efuseType, st
 
 			if (!PgWriteSuccess)
 				return false;
-
-			efuse_addr = Efuse_GetCurrentSize(pAdapter);
+			else
+				efuse_addr = Efuse_GetCurrentSize(pAdapter);
 		} else {
 			efuse_addr = efuse_addr + (pFixPkt->word_cnts * 2) + 1;
 		}
@@ -614,9 +615,10 @@ static bool hal_EfusePgPacketWrite1ByteHeader(struct adapter *pAdapter, u8 efuse
 static bool hal_EfusePgPacketWriteData(struct adapter *pAdapter, u8 efuseType, u16 *pAddr, struct pgpkt *pTargetPkt)
 {
 	u16	efuse_addr = *pAddr;
-	u8 badworden;
+	u8 badworden = 0;
 	u32	PgWriteSuccess = 0;
 
+	badworden = 0x0f;
 	badworden = Efuse_WordEnableDataWrite(pAdapter, efuse_addr + 1, pTargetPkt->word_en, pTargetPkt->data);
 	if (badworden == 0x0F) {
 		/*  write ok */
@@ -713,9 +715,10 @@ static bool hal_EfusePartialWriteCheck(struct adapter *pAdapter, u8 efuseType, u
 				if (ALL_WORDS_DISABLED(efuse_data)) {
 					ret = false;
 					break;
+				} else {
+					curPkt.offset = ((cur_header & 0xE0) >> 5) | ((efuse_data & 0xF0) >> 1);
+					curPkt.word_en = efuse_data & 0x0F;
 				}
-				curPkt.offset = ((cur_header & 0xE0) >> 5) | ((efuse_data & 0xF0) >> 1);
-				curPkt.word_en = efuse_data & 0x0F;
 			} else {
 				cur_header  =  efuse_data;
 				curPkt.offset = (cur_header >> 4) & 0x0F;

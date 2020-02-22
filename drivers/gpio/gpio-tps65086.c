@@ -21,7 +21,7 @@ static int tps65086_gpio_get_direction(struct gpio_chip *chip,
 				       unsigned offset)
 {
 	/* This device is output only */
-	return GPIO_LINE_DIRECTION_OUT;
+	return 0;
 }
 
 static int tps65086_gpio_direction_input(struct gpio_chip *chip,

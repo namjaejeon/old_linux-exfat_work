@@ -449,16 +449,18 @@ static void cfg_ref(struct hantro_ctx *ctx,
 {
 	struct hantro_dev *vpu = ctx->dev;
 	struct vb2_v4l2_buffer *vb2_dst;
+	struct vb2_queue *cap_q;
 	dma_addr_t ref;
 
+	cap_q = v4l2_m2m_get_vq(ctx->fh.m2m_ctx, V4L2_BUF_TYPE_VIDEO_CAPTURE);
 	vb2_dst = hantro_get_dst_buf(ctx);
 
-	ref = hantro_get_ref(ctx, hdr->last_frame_ts);
+	ref = hantro_get_ref(cap_q, hdr->last_frame_ts);
 	if (!ref)
 		ref = vb2_dma_contig_plane_dma_addr(&vb2_dst->vb2_buf, 0);
 	vdpu_write_relaxed(vpu, ref, VDPU_REG_VP8_ADDR_REF0);
 
-	ref = hantro_get_ref(ctx, hdr->golden_frame_ts);
+	ref = hantro_get_ref(cap_q, hdr->golden_frame_ts);
 	WARN_ON(!ref && hdr->golden_frame_ts);
 	if (!ref)
 		ref = vb2_dma_contig_plane_dma_addr(&vb2_dst->vb2_buf, 0);
@@ -466,7 +468,7 @@ static void cfg_ref(struct hantro_ctx *ctx,
 		ref |= VDPU_REG_VP8_GREF_SIGN_BIAS;
 	vdpu_write_relaxed(vpu, ref, VDPU_REG_VP8_ADDR_REF2_5(2));
 
-	ref = hantro_get_ref(ctx, hdr->alt_frame_ts);
+	ref = hantro_get_ref(cap_q, hdr->alt_frame_ts);
 	WARN_ON(!ref && hdr->alt_frame_ts);
 	if (!ref)
 		ref = vb2_dma_contig_plane_dma_addr(&vb2_dst->vb2_buf, 0);
@@ -513,7 +515,7 @@ void rk3399_vpu_vp8_dec_run(struct hantro_ctx *ctx)
 	u32 mb_width, mb_height;
 	u32 reg;
 
-	hantro_start_prepare_run(ctx);
+	hantro_prepare_run(ctx);
 
 	hdr = hantro_get_ctrl(ctx, V4L2_CID_MPEG_VIDEO_VP8_FRAME_HEADER);
 	if (WARN_ON(!hdr))
@@ -561,8 +563,8 @@ void rk3399_vpu_vp8_dec_run(struct hantro_ctx *ctx)
 		hantro_reg_write(vpu, &vp8_dec_filter_disable, 1);
 
 	/* Frame dimensions */
-	mb_width = MB_WIDTH(width);
-	mb_height = MB_HEIGHT(height);
+	mb_width = VP8_MB_WIDTH(width);
+	mb_height = VP8_MB_HEIGHT(height);
 
 	hantro_reg_write(vpu, &vp8_dec_mb_width, mb_width);
 	hantro_reg_write(vpu, &vp8_dec_mb_height, mb_height);
@@ -587,7 +589,7 @@ void rk3399_vpu_vp8_dec_run(struct hantro_ctx *ctx)
 	cfg_ref(ctx, hdr);
 	cfg_buffers(ctx, hdr);
 
-	hantro_end_prepare_run(ctx);
+	hantro_finish_run(ctx);
 
 	hantro_reg_write(vpu, &vp8_dec_start_dec, 1);
 }

@@ -13,7 +13,6 @@
 #include "debug.h"
 #include "util/mmap.h"
 #include <errno.h>
-#include <perf/mmap.h>
 
 #ifndef O_DIRECTORY
 #define O_DIRECTORY    00200000
@@ -93,10 +92,10 @@ int test__syscall_openat_tp_fields(struct test *test __maybe_unused, int subtest
 			struct mmap *md;
 
 			md = &evlist->mmap[i];
-			if (perf_mmap__read_init(&md->core) < 0)
+			if (perf_mmap__read_init(md) < 0)
 				continue;
 
-			while ((event = perf_mmap__read_event(&md->core)) != NULL) {
+			while ((event = perf_mmap__read_event(md)) != NULL) {
 				const u32 type = event->header.type;
 				int tp_flags;
 				struct perf_sample sample;
@@ -104,7 +103,7 @@ int test__syscall_openat_tp_fields(struct test *test __maybe_unused, int subtest
 				++nr_events;
 
 				if (type != PERF_RECORD_SAMPLE) {
-					perf_mmap__consume(&md->core);
+					perf_mmap__consume(md);
 					continue;
 				}
 
@@ -124,7 +123,7 @@ int test__syscall_openat_tp_fields(struct test *test __maybe_unused, int subtest
 
 				goto out_ok;
 			}
-			perf_mmap__read_done(&md->core);
+			perf_mmap__read_done(md);
 		}
 
 		if (nr_events == before)

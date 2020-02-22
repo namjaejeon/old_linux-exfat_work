@@ -141,8 +141,7 @@ unsigned int stack_trace_save_tsk(struct task_struct *tsk, unsigned long *store,
 	struct stacktrace_cookie c = {
 		.store	= store,
 		.size	= size,
-		/* skip this function if they are tracing us */
-		.skip	= skipnr + (current == tsk),
+		.skip	= skipnr + 1,
 	};
 
 	if (!try_get_task_stack(tsk))
@@ -299,8 +298,7 @@ unsigned int stack_trace_save_tsk(struct task_struct *task,
 	struct stack_trace trace = {
 		.entries	= store,
 		.max_entries	= size,
-		/* skip this function if they are tracing us */
-		.skip	= skipnr + (current == task),
+		.skip		= skipnr + 1,
 	};
 
 	save_stack_trace_tsk(task, &trace);

@@ -224,6 +224,7 @@ static int keep_dual_resources(struct snd_dice *dice, unsigned int rate,
 		struct amdtp_stream *stream;
 		struct fw_iso_resources *resources;
 		unsigned int pcm_cache;
+		unsigned int midi_cache;
 		unsigned int pcm_chs;
 		unsigned int midi_ports;
 
@@ -232,6 +233,7 @@ static int keep_dual_resources(struct snd_dice *dice, unsigned int rate,
 			resources = &dice->tx_resources[i];
 
 			pcm_cache = dice->tx_pcm_chs[i][mode];
+			midi_cache = dice->tx_midi_ports[i];
 			err = snd_dice_transaction_read_tx(dice,
 					params->size * i + TX_NUMBER_AUDIO,
 					reg, sizeof(reg));
@@ -240,6 +242,7 @@ static int keep_dual_resources(struct snd_dice *dice, unsigned int rate,
 			resources = &dice->rx_resources[i];
 
 			pcm_cache = dice->rx_pcm_chs[i][mode];
+			midi_cache = dice->rx_midi_ports[i];
 			err = snd_dice_transaction_read_rx(dice,
 					params->size * i + RX_NUMBER_AUDIO,
 					reg, sizeof(reg));
@@ -250,10 +253,10 @@ static int keep_dual_resources(struct snd_dice *dice, unsigned int rate,
 		midi_ports = be32_to_cpu(reg[1]);
 
 		// These are important for developer of this driver.
-		if (pcm_chs != pcm_cache) {
+		if (pcm_chs != pcm_cache || midi_ports != midi_cache) {
 			dev_info(&dice->unit->device,
-				 "cache mismatch: pcm: %u:%u, midi: %u\n",
-				 pcm_chs, pcm_cache, midi_ports);
+				 "cache mismatch: pcm: %u:%u, midi: %u:%u\n",
+				 pcm_chs, pcm_cache, midi_ports, midi_cache);
 			return -EPROTO;
 		}
 
@@ -275,9 +278,7 @@ static void finish_session(struct snd_dice *dice, struct reg_params *tx_params,
 	snd_dice_transaction_clear_enable(dice);
 }
 
-int snd_dice_stream_reserve_duplex(struct snd_dice *dice, unsigned int rate,
-				   unsigned int events_per_period,
-				   unsigned int events_per_buffer)
+int snd_dice_stream_reserve_duplex(struct snd_dice *dice, unsigned int rate)
 {
 	unsigned int curr_rate;
 	int err;
@@ -321,11 +322,6 @@ int snd_dice_stream_reserve_duplex(struct snd_dice *dice, unsigned int rate,
 
 		err = keep_dual_resources(dice, rate, AMDTP_OUT_STREAM,
 					  &rx_params);
-		if (err < 0)
-			goto error;
-
-		err = amdtp_domain_set_events_per_period(&dice->domain,
-					events_per_period, events_per_buffer);
 		if (err < 0)
 			goto error;
 	}
@@ -459,7 +455,7 @@ int snd_dice_stream_start_duplex(struct snd_dice *dice)
 			goto error;
 		}
 
-		err = amdtp_domain_start(&dice->domain, 0);
+		err = amdtp_domain_start(&dice->domain);
 		if (err < 0)
 			goto error;
 

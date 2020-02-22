@@ -14,7 +14,6 @@
 
 #include <drm/drm_crtc_helper.h>
 #include <drm/drm_drv.h>
-#include <drm/drm_fb_helper.h>
 #include <drm/drm_file.h>
 #include <drm/drm_ioctl.h>
 
@@ -32,6 +31,10 @@ static const struct pci_device_id pciidlist[] = {
 	{ }
 };
 MODULE_DEVICE_TABLE(pci, pciidlist);
+
+static const struct drm_fb_helper_funcs vbox_fb_helper_funcs = {
+	.fb_probe = vboxfb_create,
+};
 
 static int vbox_pci_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 {
@@ -76,16 +79,20 @@ static int vbox_pci_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
 	if (ret)
 		goto err_mode_fini;
 
-	ret = drm_fbdev_generic_setup(&vbox->ddev, 32);
+	ret = drm_fb_helper_fbdev_setup(&vbox->ddev, &vbox->fb_helper,
+					&vbox_fb_helper_funcs, 32,
+					vbox->num_crtcs);
 	if (ret)
 		goto err_irq_fini;
 
 	ret = drm_dev_register(&vbox->ddev, 0);
 	if (ret)
-		goto err_irq_fini;
+		goto err_fbdev_fini;
 
 	return 0;
 
+err_fbdev_fini:
+	vbox_fbdev_fini(vbox);
 err_irq_fini:
 	vbox_irq_fini(vbox);
 err_mode_fini:
@@ -106,6 +113,7 @@ static void vbox_pci_remove(struct pci_dev *pdev)
 	struct vbox_private *vbox = pci_get_drvdata(pdev);
 
 	drm_dev_unregister(&vbox->ddev);
+	vbox_fbdev_fini(vbox);
 	vbox_irq_fini(vbox);
 	vbox_mode_fini(vbox);
 	vbox_mm_fini(vbox);
@@ -181,7 +189,10 @@ static struct pci_driver vbox_pci_driver = {
 #endif
 };
 
-DEFINE_DRM_GEM_FOPS(vbox_fops);
+static const struct file_operations vbox_fops = {
+	.owner = THIS_MODULE,
+	DRM_VRAM_MM_FILE_OPERATIONS
+};
 
 static struct drm_driver driver = {
 	.driver_features =

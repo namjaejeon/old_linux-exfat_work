@@ -55,6 +55,19 @@ static void trigger_event(struct work_struct *work)
 	dm_table_event(sc->ti->table);
 }
 
+static inline struct stripe_c *alloc_context(unsigned int stripes)
+{
+	size_t len;
+
+	if (dm_array_too_big(sizeof(struct stripe_c), sizeof(struct stripe),
+			     stripes))
+		return NULL;
+
+	len = sizeof(struct stripe_c) + (sizeof(struct stripe) * stripes);
+
+	return kmalloc(len, GFP_KERNEL);
+}
+
 /*
  * Parse a single <dev> <sector> pair
  */
@@ -129,7 +142,7 @@ static int stripe_ctr(struct dm_target *ti, unsigned int argc, char **argv)
 		return -EINVAL;
 	}
 
-	sc = kmalloc(struct_size(sc, stripe, stripes), GFP_KERNEL);
+	sc = alloc_context(stripes);
 	if (!sc) {
 		ti->error = "Memory allocation for striped context "
 		    "failed";

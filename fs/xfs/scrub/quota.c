@@ -93,10 +93,6 @@ xchk_quota_item(
 	unsigned long long	rcount;
 	xfs_ino_t		fs_icount;
 	xfs_dqid_t		id = be32_to_cpu(d->d_id);
-	int			error = 0;
-
-	if (xchk_should_terminate(sc, &error))
-		return error;
 
 	/*
 	 * Except for the root dquot, the actual dquot we got must either have
@@ -181,9 +177,6 @@ xchk_quota_item(
 		xchk_fblock_set_warning(sc, XFS_DATA_FORK, offset);
 	if (id != 0 && rhard != 0 && rcount > rhard)
 		xchk_fblock_set_warning(sc, XFS_DATA_FORK, offset);
-
-	if (sc->sm->sm_flags & XFS_SCRUB_OFLAG_CORRUPT)
-		return -EFSCORRUPTED;
 
 	return 0;
 }

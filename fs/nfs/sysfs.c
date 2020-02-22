@@ -121,7 +121,8 @@ static void nfs_netns_client_release(struct kobject *kobj)
 			struct nfs_netns_client,
 			kobject);
 
-	kfree(c->identifier);
+	if (c->identifier)
+		kfree(c->identifier);
 	kfree(c);
 }
 

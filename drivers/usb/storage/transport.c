@@ -1284,7 +1284,8 @@ int usb_stor_Bulk_transport(struct scsi_cmnd *srb, struct us_data *us)
 
 		} else {
 			residue = min(residue, transfer_length);
-			scsi_set_resid(srb, max(scsi_get_resid(srb), residue));
+			scsi_set_resid(srb, max(scsi_get_resid(srb),
+			                                       (int) residue));
 		}
 	}
 

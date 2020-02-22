@@ -52,18 +52,21 @@ static int __exfat_write_inode(struct inode *inode, int sync)
 	ep->dentry.file.attr = cpu_to_le16(exfat_make_attr(inode));
 
 	/* set FILE_INFO structure using the acquired struct exfat_dentry */
-	exfat_set_entry_time(sbi, &inode->i_ctime,
+	exfat_set_entry_time(sbi, &ei->i_crtime,
+			&ep->dentry.file.create_tz,
 			&ep->dentry.file.create_time,
 			&ep->dentry.file.create_date,
-			&ep->dentry.file.create_tz);
+			&ep->dentry.file.create_time_ms);
 	exfat_set_entry_time(sbi, &inode->i_mtime,
+			&ep->dentry.file.modify_tz,
 			&ep->dentry.file.modify_time,
 			&ep->dentry.file.modify_date,
-			&ep->dentry.file.modify_tz);
+			&ep->dentry.file.modify_time_ms);
 	exfat_set_entry_time(sbi, &inode->i_atime,
+			&ep->dentry.file.access_tz,
 			&ep->dentry.file.access_time,
 			&ep->dentry.file.access_date,
-			&ep->dentry.file.access_tz);
+			NULL);
 
 	/* File size should be zero if there is no cluster allocated */
 	on_disk_size = i_size_read(inode);
@@ -613,7 +616,8 @@ static int exfat_fill_inode(struct inode *inode, struct exfat_dir_entry *info)
 	inode->i_blocks = ((i_size_read(inode) + (sbi->cluster_size - 1)) &
 		~(sbi->cluster_size - 1)) >> inode->i_blkbits;
 	inode->i_mtime = info->mtime;
-	inode->i_ctime = info->ctime;
+	inode->i_ctime = info->mtime;
+	ei->i_crtime = info->crtime;
 	inode->i_atime = info->atime;
 
 	exfat_cache_init_inode(inode);

@@ -27,6 +27,7 @@ xfs-y				+= $(addprefix libxfs/, \
 				   xfs_bmap_btree.o \
 				   xfs_btree.o \
 				   xfs_da_btree.o \
+				   xfs_da_format.o \
 				   xfs_defer.o \
 				   xfs_dir2.o \
 				   xfs_dir2_block.o \

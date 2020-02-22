@@ -287,7 +287,7 @@ struct nb8800_priv {
 	struct device_node		*phy_node;
 
 	/* PHY connection type from DT */
-	phy_interface_t			phy_mode;
+	int				phy_mode;
 
 	/* Current link status */
 	int				speed;

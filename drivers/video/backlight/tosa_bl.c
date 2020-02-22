@@ -18,7 +18,7 @@
 
 #include <asm/mach/sharpsl_param.h>
 
-#include "tosa_bl.h"
+#include <mach/tosa.h>
 
 #define COMADJ_DEFAULT	97
 
@@ -28,7 +28,6 @@
 struct tosa_bl_data {
 	struct i2c_client *i2c;
 	struct backlight_device *bl;
-	struct gpio_desc *gpio;
 
 	int comadj;
 };
@@ -43,7 +42,7 @@ static void tosa_bl_set_backlight(struct tosa_bl_data *data, int brightness)
 	i2c_smbus_write_byte_data(data->i2c, DAC_CH2, (u8)(brightness & 0xff));
 
 	/* SetBacklightVR */
-	gpiod_set_value(data->gpio, brightness & 0x100);
+	gpio_set_value(TOSA_GPIO_BL_C20MA, brightness & 0x100);
 
 	tosa_bl_enable(spi, brightness);
 }
@@ -88,8 +87,9 @@ static int tosa_bl_probe(struct i2c_client *client,
 		return -ENOMEM;
 
 	data->comadj = sharpsl_param.comadj == -1 ? COMADJ_DEFAULT : sharpsl_param.comadj;
-	data->gpio = devm_gpiod_get(&client->dev, "backlight", GPIOD_OUT_LOW);
-	ret = PTR_ERR_OR_ZERO(data->gpio);
+
+	ret = devm_gpio_request_one(&client->dev, TOSA_GPIO_BL_C20MA,
+				GPIOF_OUT_INIT_LOW, "backlight");
 	if (ret) {
 		dev_dbg(&data->bl->dev, "Unable to request gpio!\n");
 		return ret;

@@ -51,7 +51,7 @@ struct apbps2_regs {
 
 struct apbps2_priv {
 	struct serio		*io;
-	struct apbps2_regs	__iomem *regs;
+	struct apbps2_regs	*regs;
 };
 
 static int apbps2_idx;

@@ -54,8 +54,7 @@ int __intel_wakeref_get_first(struct intel_wakeref *wf)
 
 static void ____intel_wakeref_put_last(struct intel_wakeref *wf)
 {
-	INTEL_WAKEREF_BUG_ON(atomic_read(&wf->count) <= 0);
-	if (unlikely(!atomic_dec_and_test(&wf->count)))
+	if (!atomic_dec_and_test(&wf->count))
 		goto unlock;
 
 	/* ops->put() must reschedule its own release on error/deferral */
@@ -68,12 +67,13 @@ unlock:
 	mutex_unlock(&wf->mutex);
 }
 
-void __intel_wakeref_put_last(struct intel_wakeref *wf, unsigned long flags)
+void __intel_wakeref_put_last(struct intel_wakeref *wf)
 {
 	INTEL_WAKEREF_BUG_ON(work_pending(&wf->work));
 
 	/* Assume we are not in process context and so cannot sleep. */
-	if (flags & INTEL_WAKEREF_PUT_ASYNC || !mutex_trylock(&wf->mutex)) {
+	if (wf->ops->flags & INTEL_WAKEREF_PUT_ASYNC ||
+	    !mutex_trylock(&wf->mutex)) {
 		schedule_work(&wf->work);
 		return;
 	}
@@ -95,32 +95,22 @@ static void __intel_wakeref_put_work(struct work_struct *wrk)
 void __intel_wakeref_init(struct intel_wakeref *wf,
 			  struct intel_runtime_pm *rpm,
 			  const struct intel_wakeref_ops *ops,
-			  struct intel_wakeref_lockclass *key)
+			  struct lock_class_key *key)
 {
 	wf->rpm = rpm;
 	wf->ops = ops;
 
-	__mutex_init(&wf->mutex, "wakeref.mutex", &key->mutex);
+	__mutex_init(&wf->mutex, "wakeref", key);
 	atomic_set(&wf->count, 0);
 	wf->wakeref = 0;
 
 	INIT_WORK(&wf->work, __intel_wakeref_put_work);
-	lockdep_init_map(&wf->work.lockdep_map, "wakeref.work", &key->work, 0);
 }
 
 int intel_wakeref_wait_for_idle(struct intel_wakeref *wf)
 {
-	int err;
-
-	might_sleep();
-
-	err = wait_var_event_killable(&wf->wakeref,
-				      !intel_wakeref_is_active(wf));
-	if (err)
-		return err;
-
-	intel_wakeref_unlock_wait(wf);
-	return 0;
+	return wait_var_event_killable(&wf->wakeref,
+				       !intel_wakeref_is_active(wf));
 }
 
 static void wakeref_auto_timeout(struct timer_list *t)

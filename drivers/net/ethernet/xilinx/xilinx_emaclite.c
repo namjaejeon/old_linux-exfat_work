@@ -521,7 +521,7 @@ static int xemaclite_set_mac_address(struct net_device *dev, void *address)
  *
  * This function is called when Tx time out occurs for Emaclite device.
  */
-static void xemaclite_tx_timeout(struct net_device *dev, unsigned int txqueue)
+static void xemaclite_tx_timeout(struct net_device *dev)
 {
 	struct net_local *lp = netdev_priv(dev);
 	unsigned long flags;

@@ -35,7 +35,6 @@
 #include <asm/debug-monitors.h>
 #include <asm/esr.h>
 #include <asm/insn.h>
-#include <asm/kprobes.h>
 #include <asm/traps.h>
 #include <asm/smp.h>
 #include <asm/stack_pointer.h>
@@ -144,12 +143,9 @@ void show_stack(struct task_struct *tsk, unsigned long *sp)
 
 #ifdef CONFIG_PREEMPT
 #define S_PREEMPT " PREEMPT"
-#elif defined(CONFIG_PREEMPT_RT)
-#define S_PREEMPT " PREEMPT_RT"
 #else
 #define S_PREEMPT ""
 #endif
-
 #define S_SMP " SMP"
 
 static int __die(const char *str, int err, struct pt_regs *regs)
@@ -397,7 +393,7 @@ void arm64_notify_segfault(unsigned long addr)
 	force_signal_inject(SIGSEGV, code, addr);
 }
 
-void do_undefinstr(struct pt_regs *regs)
+asmlinkage void __exception do_undefinstr(struct pt_regs *regs)
 {
 	/* check for AArch32 breakpoint instructions */
 	if (!aarch32_break_handler(regs))
@@ -409,7 +405,6 @@ void do_undefinstr(struct pt_regs *regs)
 	BUG_ON(!user_mode(regs));
 	force_signal_inject(SIGILL, ILL_ILLOPC, regs->pc);
 }
-NOKPROBE_SYMBOL(do_undefinstr);
 
 #define __user_cache_maint(insn, address, res)			\
 	if (address >= user_addr_max()) {			\
@@ -474,15 +469,6 @@ static void ctr_read_handler(unsigned int esr, struct pt_regs *regs)
 {
 	int rt = ESR_ELx_SYS64_ISS_RT(esr);
 	unsigned long val = arm64_ftr_reg_user_value(&arm64_ftr_reg_ctrel0);
-
-	if (cpus_have_const_cap(ARM64_WORKAROUND_1542419)) {
-		/* Hide DIC so that we can trap the unnecessary maintenance...*/
-		val &= ~BIT(CTR_DIC_SHIFT);
-
-		/* ... and fake IminLine to reduce the number of traps. */
-		val &= ~CTR_IMINLINE_MASK;
-		val |= (PAGE_SHIFT - 2) & CTR_IMINLINE_MASK;
-	}
 
 	pt_regs_write_reg(regs, rt, val);
 
@@ -681,7 +667,7 @@ static const struct sys64_hook cp15_64_hooks[] = {
 	{},
 };
 
-void do_cp15instr(unsigned int esr, struct pt_regs *regs)
+asmlinkage void __exception do_cp15instr(unsigned int esr, struct pt_regs *regs)
 {
 	const struct sys64_hook *hook, *hook_base;
 
@@ -719,10 +705,9 @@ void do_cp15instr(unsigned int esr, struct pt_regs *regs)
 	 */
 	do_undefinstr(regs);
 }
-NOKPROBE_SYMBOL(do_cp15instr);
 #endif
 
-void do_sysinstr(unsigned int esr, struct pt_regs *regs)
+asmlinkage void __exception do_sysinstr(unsigned int esr, struct pt_regs *regs)
 {
 	const struct sys64_hook *hook;
 
@@ -739,7 +724,6 @@ void do_sysinstr(unsigned int esr, struct pt_regs *regs)
 	 */
 	do_undefinstr(regs);
 }
-NOKPROBE_SYMBOL(do_sysinstr);
 
 static const char *esr_class_str[] = {
 	[0 ... ESR_ELx_EC_MAX]		= "UNRECOGNIZED EC",
@@ -809,7 +793,7 @@ asmlinkage void bad_mode(struct pt_regs *regs, int reason, unsigned int esr)
  * bad_el0_sync handles unexpected, but potentially recoverable synchronous
  * exceptions taken from EL0. Unlike bad_mode, this returns.
  */
-void bad_el0_sync(struct pt_regs *regs, int reason, unsigned int esr)
+asmlinkage void bad_el0_sync(struct pt_regs *regs, int reason, unsigned int esr)
 {
 	void __user *pc = (void __user *)instruction_pointer(regs);
 

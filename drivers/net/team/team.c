@@ -2074,8 +2074,7 @@ static int team_ethtool_get_link_ksettings(struct net_device *dev,
 	cmd->base.duplex = DUPLEX_UNKNOWN;
 	cmd->base.port = PORT_OTHER;
 
-	rcu_read_lock();
-	list_for_each_entry_rcu(port, &team->port_list, list) {
+	list_for_each_entry(port, &team->port_list, list) {
 		if (team_port_txable(port)) {
 			if (port->state.speed != SPEED_UNKNOWN)
 				speed += port->state.speed;
@@ -2084,8 +2083,6 @@ static int team_ethtool_get_link_ksettings(struct net_device *dev,
 				cmd->base.duplex = port->state.duplex;
 		}
 	}
-	rcu_read_unlock();
-
 	cmd->base.speed = speed ? : SPEED_UNKNOWN;
 
 	return 0;

@@ -393,7 +393,7 @@ u32 qed_vfid_to_concrete(struct qed_hwfn *p_hwfn, u8 vfid)
 
 /* DMAE */
 #define QED_DMAE_FLAGS_IS_SET(params, flag) \
-	((params) != NULL && GET_FIELD((params)->flags, QED_DMAE_PARAMS_##flag))
+	((params) != NULL && ((params)->flags & QED_DMAE_FLAG_##flag))
 
 static void qed_dmae_opcode(struct qed_hwfn *p_hwfn,
 			    const u8 is_src_type_grc,
@@ -408,55 +408,62 @@ static void qed_dmae_opcode(struct qed_hwfn *p_hwfn,
 	 * 0- The source is the PCIe
 	 * 1- The source is the GRC.
 	 */
-	SET_FIELD(opcode, DMAE_CMD_SRC,
-		  (is_src_type_grc ? dmae_cmd_src_grc : dmae_cmd_src_pcie));
-	src_pfid = QED_DMAE_FLAGS_IS_SET(p_params, SRC_PF_VALID) ?
-	    p_params->src_pfid : p_hwfn->rel_pf_id;
-	SET_FIELD(opcode, DMAE_CMD_SRC_PF_ID, src_pfid);
+	opcode |= (is_src_type_grc ? DMAE_CMD_SRC_MASK_GRC
+				   : DMAE_CMD_SRC_MASK_PCIE) <<
+		   DMAE_CMD_SRC_SHIFT;
+	src_pfid = QED_DMAE_FLAGS_IS_SET(p_params, PF_SRC) ?
+		   p_params->src_pfid : p_hwfn->rel_pf_id;
+	opcode |= ((src_pfid & DMAE_CMD_SRC_PF_ID_MASK) <<
+		   DMAE_CMD_SRC_PF_ID_SHIFT);
 
 	/* The destination of the DMA can be: 0-None 1-PCIe 2-GRC 3-None */
-	SET_FIELD(opcode, DMAE_CMD_DST,
-		  (is_dst_type_grc ? dmae_cmd_dst_grc : dmae_cmd_dst_pcie));
-	dst_pfid = QED_DMAE_FLAGS_IS_SET(p_params, DST_PF_VALID) ?
-	    p_params->dst_pfid : p_hwfn->rel_pf_id;
-	SET_FIELD(opcode, DMAE_CMD_DST_PF_ID, dst_pfid);
-
+	opcode |= (is_dst_type_grc ? DMAE_CMD_DST_MASK_GRC
+				   : DMAE_CMD_DST_MASK_PCIE) <<
+		   DMAE_CMD_DST_SHIFT;
+	dst_pfid = QED_DMAE_FLAGS_IS_SET(p_params, PF_DST) ?
+		   p_params->dst_pfid : p_hwfn->rel_pf_id;
+	opcode |= ((dst_pfid & DMAE_CMD_DST_PF_ID_MASK) <<
+		   DMAE_CMD_DST_PF_ID_SHIFT);
 
 	/* Whether to write a completion word to the completion destination:
 	 * 0-Do not write a completion word
 	 * 1-Write the completion word
 	 */
-	SET_FIELD(opcode, DMAE_CMD_COMP_WORD_EN, 1);
-	SET_FIELD(opcode, DMAE_CMD_SRC_ADDR_RESET, 1);
+	opcode |= (DMAE_CMD_COMP_WORD_EN_MASK << DMAE_CMD_COMP_WORD_EN_SHIFT);
+	opcode |= (DMAE_CMD_SRC_ADDR_RESET_MASK <<
+		   DMAE_CMD_SRC_ADDR_RESET_SHIFT);
 
 	if (QED_DMAE_FLAGS_IS_SET(p_params, COMPLETION_DST))
-		SET_FIELD(opcode, DMAE_CMD_COMP_FUNC, 1);
+		opcode |= (1 << DMAE_CMD_COMP_FUNC_SHIFT);
 
-	/* swapping mode 3 - big endian */
-	SET_FIELD(opcode, DMAE_CMD_ENDIANITY_MODE, DMAE_CMD_ENDIANITY);
+	opcode |= (DMAE_CMD_ENDIANITY << DMAE_CMD_ENDIANITY_MODE_SHIFT);
 
-	port_id = (QED_DMAE_FLAGS_IS_SET(p_params, PORT_VALID)) ?
-	    p_params->port_id : p_hwfn->port_id;
-	SET_FIELD(opcode, DMAE_CMD_PORT_ID, port_id);
+	port_id = (QED_DMAE_FLAGS_IS_SET(p_params, PORT)) ?
+		   p_params->port_id : p_hwfn->port_id;
+	opcode |= (port_id << DMAE_CMD_PORT_ID_SHIFT);
 
 	/* reset source address in next go */
-	SET_FIELD(opcode, DMAE_CMD_SRC_ADDR_RESET, 1);
+	opcode |= (DMAE_CMD_SRC_ADDR_RESET_MASK <<
+		   DMAE_CMD_SRC_ADDR_RESET_SHIFT);
 
 	/* reset dest address in next go */
-	SET_FIELD(opcode, DMAE_CMD_DST_ADDR_RESET, 1);
+	opcode |= (DMAE_CMD_DST_ADDR_RESET_MASK <<
+		   DMAE_CMD_DST_ADDR_RESET_SHIFT);
 
 	/* SRC/DST VFID: all 1's - pf, otherwise VF id */
-	if (QED_DMAE_FLAGS_IS_SET(p_params, SRC_VF_VALID)) {
-		SET_FIELD(opcode, DMAE_CMD_SRC_VF_ID_VALID, 1);
-		SET_FIELD(opcode_b, DMAE_CMD_SRC_VF_ID, p_params->src_vfid);
+	if (QED_DMAE_FLAGS_IS_SET(p_params, VF_SRC)) {
+		opcode |= 1 << DMAE_CMD_SRC_VF_ID_VALID_SHIFT;
+		opcode_b |= p_params->src_vfid << DMAE_CMD_SRC_VF_ID_SHIFT;
 	} else {
-		SET_FIELD(opcode_b, DMAE_CMD_SRC_VF_ID, 0xFF);
+		opcode_b |= DMAE_CMD_SRC_VF_ID_MASK <<
+			    DMAE_CMD_SRC_VF_ID_SHIFT;
 	}
-	if (QED_DMAE_FLAGS_IS_SET(p_params, DST_VF_VALID)) {
-		SET_FIELD(opcode, DMAE_CMD_DST_VF_ID_VALID, 1);
-		SET_FIELD(opcode_b, DMAE_CMD_DST_VF_ID, p_params->dst_vfid);
+
+	if (QED_DMAE_FLAGS_IS_SET(p_params, VF_DST)) {
+		opcode |= 1 << DMAE_CMD_DST_VF_ID_VALID_SHIFT;
+		opcode_b |= p_params->dst_vfid << DMAE_CMD_DST_VF_ID_SHIFT;
 	} else {
-		SET_FIELD(opcode_b, DMAE_CMD_DST_VF_ID, 0xFF);
+		opcode_b |= DMAE_CMD_DST_VF_ID_MASK << DMAE_CMD_DST_VF_ID_SHIFT;
 	}
 
 	p_hwfn->dmae_info.p_dmae_cmd->opcode = cpu_to_le32(opcode);

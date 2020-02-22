@@ -6,8 +6,6 @@
 #endif
 
 #define BSS_FIRST_SECTIONS *(.bss.prominit)
-#define EMITS_PT_NOTE
-#define RO_EXCEPTION_TABLE_ALIGN	0
 
 #include <asm/page.h>
 #include <asm-generic/vmlinux.lds.h>
@@ -20,8 +18,22 @@
 ENTRY(_stext)
 
 PHDRS {
-	text PT_LOAD FLAGS(7); /* RWX */
-	note PT_NOTE FLAGS(0);
+	kernel PT_LOAD FLAGS(7); /* RWX */
+	notes PT_NOTE FLAGS(0);
+	dummy PT_NOTE FLAGS(0);
+
+	/* binutils < 2.18 has a bug that makes it misbehave when taking an
+	   ELF file with all segments at load address 0 as input.  This
+	   happens when running "strip" on vmlinux, because of the AT() magic
+	   in this linker script.  People using GCC >= 4.2 won't run into
+	   this problem, because the "build-id" support will put some data
+	   into the "notes" segment (at a non-zero load address).
+
+	   To work around this, we force some data into both the "dummy"
+	   segment and the kernel segment, so the dummy segment will get a
+	   non-zero load address.  It's not enough to always create the
+	   "notes" segment, since if nothing gets assigned to it, its load
+	   address will be zero.  */
 }
 
 #ifdef CONFIG_PPC64
@@ -65,7 +77,7 @@ SECTIONS
 #else /* !CONFIG_PPC64 */
 		HEAD_TEXT
 #endif
-	} :text
+	} :kernel
 
 	__head_end = .;
 
@@ -114,7 +126,7 @@ SECTIONS
 		__got2_end = .;
 #endif /* CONFIG_PPC32 */
 
-	} :text
+	} :kernel
 
 	. = ALIGN(ETEXT_ALIGN_SIZE);
 	_etext = .;
@@ -163,6 +175,17 @@ SECTIONS
 		__stop__btb_flush_fixup = .;
 	}
 #endif
+	EXCEPTION_TABLE(0)
+
+	NOTES :kernel :notes
+
+	/* The dummy segment contents for the bug workaround mentioned above
+	   near PHDRS.  */
+	.dummy : AT(ADDR(.dummy) - LOAD_OFFSET) {
+		LONG(0)
+		LONG(0)
+		LONG(0)
+	} :kernel :dummy
 
 /*
  * Init sections discarded at runtime
@@ -177,7 +200,7 @@ SECTIONS
 #ifdef CONFIG_PPC64
 		*(.tramp.ftrace.init);
 #endif
-	} :text
+	} :kernel
 
 	/* .exit.text is discarded at runtime, not link time,
 	 * to deal with references from __bug_table
@@ -323,7 +346,7 @@ SECTIONS
 #endif
 
 	/* The initial task and kernel stack */
-	INIT_TASK_DATA_SECTION(THREAD_ALIGN)
+	INIT_TASK_DATA_SECTION(THREAD_SIZE)
 
 	.data..page_aligned : AT(ADDR(.data..page_aligned) - LOAD_OFFSET) {
 		PAGE_ALIGNED_DATA(PAGE_SIZE)

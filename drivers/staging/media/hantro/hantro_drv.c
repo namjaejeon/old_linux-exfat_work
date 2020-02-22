@@ -43,9 +43,8 @@ void *hantro_get_ctrl(struct hantro_ctx *ctx, u32 id)
 	return ctrl ? ctrl->p_cur.p : NULL;
 }
 
-dma_addr_t hantro_get_ref(struct hantro_ctx *ctx, u64 ts)
+dma_addr_t hantro_get_ref(struct vb2_queue *q, u64 ts)
 {
-	struct vb2_queue *q = v4l2_m2m_get_dst_vq(ctx->fh.m2m_ctx);
 	struct vb2_buffer *buf;
 	int index;
 
@@ -53,7 +52,7 @@ dma_addr_t hantro_get_ref(struct hantro_ctx *ctx, u64 ts)
 	if (index < 0)
 		return 0;
 	buf = vb2_get_buffer(q, index);
-	return hantro_get_dec_buf_addr(ctx, buf);
+	return vb2_dma_contig_plane_dma_addr(buf, 0);
 }
 
 static int
@@ -152,21 +151,16 @@ void hantro_watchdog(struct work_struct *work)
 	}
 }
 
-void hantro_start_prepare_run(struct hantro_ctx *ctx)
+void hantro_prepare_run(struct hantro_ctx *ctx)
 {
 	struct vb2_v4l2_buffer *src_buf;
 
 	src_buf = hantro_get_src_buf(ctx);
 	v4l2_ctrl_request_setup(src_buf->vb2_buf.req_obj.req,
 				&ctx->ctrl_handler);
-
-	if (hantro_needs_postproc(ctx, ctx->vpu_dst_fmt))
-		hantro_postproc_enable(ctx);
-	else
-		hantro_postproc_disable(ctx);
 }
 
-void hantro_end_prepare_run(struct hantro_ctx *ctx)
+void hantro_finish_run(struct hantro_ctx *ctx)
 {
 	struct vb2_v4l2_buffer *src_buf;
 
@@ -419,18 +413,20 @@ static int hantro_open(struct file *filp)
 	if (func->id == MEDIA_ENT_F_PROC_VIDEO_ENCODER) {
 		allowed_codecs = vpu->variant->codec & HANTRO_ENCODERS;
 		ctx->buf_finish = hantro_enc_buf_finish;
+		ctx->fh.m2m_ctx = v4l2_m2m_ctx_init(vpu->m2m_dev, ctx,
+						    queue_init);
 	} else if (func->id == MEDIA_ENT_F_PROC_VIDEO_DECODER) {
 		allowed_codecs = vpu->variant->codec & HANTRO_DECODERS;
 		ctx->buf_finish = hantro_dec_buf_finish;
+		ctx->fh.m2m_ctx = v4l2_m2m_ctx_init(vpu->m2m_dev, ctx,
+						    queue_init);
 	} else {
-		ret = -ENODEV;
-		goto err_ctx_free;
+		ctx->fh.m2m_ctx = ERR_PTR(-ENODEV);
 	}
-
-	ctx->fh.m2m_ctx = v4l2_m2m_ctx_init(vpu->m2m_dev, ctx, queue_init);
 	if (IS_ERR(ctx->fh.m2m_ctx)) {
 		ret = PTR_ERR(ctx->fh.m2m_ctx);
-		goto err_ctx_free;
+		kfree(ctx);
+		return ret;
 	}
 
 	v4l2_fh_init(&ctx->fh, vdev);
@@ -451,7 +447,6 @@ static int hantro_open(struct file *filp)
 err_fh_free:
 	v4l2_fh_del(&ctx->fh);
 	v4l2_fh_exit(&ctx->fh);
-err_ctx_free:
 	kfree(ctx);
 	return ret;
 }

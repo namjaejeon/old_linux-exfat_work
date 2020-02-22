@@ -1,7 +1,4 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-
-#define RO_EXCEPTION_TABLE_ALIGN	16
-
 #include <asm-generic/vmlinux.lds.h>
 #include <asm/page.h>
 #include <asm/thread_info.h>
@@ -40,7 +37,9 @@ SECTIONS
 #endif
 	_etext = . ;
 	}
-	RO_DATA(4)
+	EXCEPTION_TABLE(16)
+	NOTES
+	RO_DATA_SECTION(4)
 	ROMEND = .;
 #if defined(CONFIG_ROMKERNEL)
 	. = RAMTOP;
@@ -49,7 +48,7 @@ SECTIONS
 #endif
 	_sdata = . ;
 	__data_start = . ;
-	RW_DATA(0, PAGE_SIZE, THREAD_SIZE)
+	RW_DATA_SECTION(0, PAGE_SIZE, THREAD_SIZE)
 #if defined(CONFIG_ROMKERNEL)
 #undef ADDR
 #endif

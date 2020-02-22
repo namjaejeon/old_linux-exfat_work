@@ -590,16 +590,16 @@
 };
 
 &sysram {
-	smp-sram@0 {
+	smp-sysram@0 {
 		status = "disabled";
 	};
 
-	smp-sram@5000 {
+	smp-sysram@5000 {
 		compatible = "samsung,exynos4210-sysram";
 		reg = <0x5000 0x1000>;
 	};
 
-	smp-sram@1f000 {
+	smp-sysram@1f000 {
 		status = "disabled";
 	};
 };

@@ -29,12 +29,8 @@ static int msm_hdmi_phy_resource_init(struct hdmi_phy *phy)
 		reg = devm_regulator_get(dev, cfg->reg_names[i]);
 		if (IS_ERR(reg)) {
 			ret = PTR_ERR(reg);
-			if (ret != -EPROBE_DEFER) {
-				DRM_DEV_ERROR(dev,
-					      "failed to get phy regulator: %s (%d)\n",
-					      cfg->reg_names[i], ret);
-			}
-
+			DRM_DEV_ERROR(dev, "failed to get phy regulator: %s (%d)\n",
+				cfg->reg_names[i], ret);
 			return ret;
 		}
 

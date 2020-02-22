@@ -30,14 +30,13 @@ enum sw_flow_mac_proto {
 	MAC_PROTO_ETHERNET,
 };
 #define SW_FLOW_KEY_INVALID	0x80
-#define MPLS_LABEL_DEPTH       3
 
 /* Store options at the end of the array if they are less than the
  * maximum size. This allows us to get the benefits of variable length
  * matching for small options.
  */
 #define TUN_METADATA_OFFSET(opt_len) \
-	(sizeof_field(struct sw_flow_key, tun_opts) - opt_len)
+	(FIELD_SIZEOF(struct sw_flow_key, tun_opts) - opt_len)
 #define TUN_METADATA_OPTS(flow_key, opt_len) \
 	((void *)((flow_key)->tun_opts + TUN_METADATA_OFFSET(opt_len)))
 
@@ -52,7 +51,7 @@ struct vlan_head {
 
 #define OVS_SW_FLOW_KEY_METADATA_SIZE			\
 	(offsetof(struct sw_flow_key, recirc_id) +	\
-	sizeof_field(struct sw_flow_key, recirc_id))
+	FIELD_SIZEOF(struct sw_flow_key, recirc_id))
 
 struct ovs_key_nsh {
 	struct ovs_nsh_key_base base;
@@ -85,6 +84,9 @@ struct sw_flow_key {
 					 * protocol.
 					 */
 	union {
+		struct {
+			__be32 top_lse;	/* top label stack entry */
+		} mpls;
 		struct {
 			u8     proto;	/* IP protocol or lower 8 bits of ARP opcode. */
 			u8     tos;	    /* IP ToS. */
@@ -133,11 +135,6 @@ struct sw_flow_key {
 				} nd;
 			};
 		} ipv6;
-		struct {
-			u32 num_labels_mask;    /* labels present bitmap of effective length MPLS_LABEL_DEPTH */
-			__be32 lse[MPLS_LABEL_DEPTH];     /* label stack entry  */
-		} mpls;
-
 		struct ovs_key_nsh nsh;         /* network service header */
 	};
 	struct {
@@ -169,6 +166,7 @@ struct sw_flow_key_range {
 struct sw_flow_mask {
 	int ref_count;
 	struct rcu_head rcu;
+	struct list_head list;
 	struct sw_flow_key_range range;
 	struct sw_flow_key key;
 };

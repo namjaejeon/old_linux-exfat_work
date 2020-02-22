@@ -17,7 +17,6 @@
 #include "xfs_bmap.h"
 #include "xfs_bmap_btree.h"
 #include "xfs_quota.h"
-#include "xfs_symlink.h"
 #include "xfs_trans_space.h"
 #include "xfs_trace.h"
 #include "xfs_trans.h"
@@ -53,10 +52,20 @@ xfs_readlink_bmap_ilocked(
 		d = XFS_FSB_TO_DADDR(mp, mval[n].br_startblock);
 		byte_cnt = XFS_FSB_TO_B(mp, mval[n].br_blockcount);
 
-		error = xfs_buf_read(mp->m_ddev_targp, d, BTOBB(byte_cnt), 0,
-				&bp, &xfs_symlink_buf_ops);
-		if (error)
-			return error;
+		bp = xfs_buf_read(mp->m_ddev_targp, d, BTOBB(byte_cnt), 0,
+				  &xfs_symlink_buf_ops);
+		if (!bp)
+			return -ENOMEM;
+		error = bp->b_error;
+		if (error) {
+			xfs_buf_ioerror_alert(bp, __func__);
+			xfs_buf_relse(bp);
+
+			/* bad CRC means corrupted metadata */
+			if (error == -EFSBADCRC)
+				error = -EFSCORRUPTED;
+			goto out;
+		}
 		byte_cnt = XFS_SYMLINK_BUF_SPACE(mp, byte_cnt);
 		if (pathlen < byte_cnt)
 			byte_cnt = pathlen;
@@ -280,10 +289,12 @@ xfs_symlink(
 
 			d = XFS_FSB_TO_DADDR(mp, mval[n].br_startblock);
 			byte_cnt = XFS_FSB_TO_B(mp, mval[n].br_blockcount);
-			error = xfs_trans_get_buf(tp, mp->m_ddev_targp, d,
-					       BTOBB(byte_cnt), 0, &bp);
-			if (error)
+			bp = xfs_trans_get_buf(tp, mp->m_ddev_targp, d,
+					       BTOBB(byte_cnt), 0);
+			if (!bp) {
+				error = -ENOMEM;
 				goto out_trans_cancel;
+			}
 			bp->b_ops = &xfs_symlink_buf_ops;
 
 			byte_cnt = XFS_SYMLINK_BUF_SPACE(mp, byte_cnt);
@@ -421,12 +432,13 @@ xfs_inactive_symlink_rmt(
 	 * Invalidate the block(s). No validation is done.
 	 */
 	for (i = 0; i < nmaps; i++) {
-		error = xfs_trans_get_buf(tp, mp->m_ddev_targp,
-				XFS_FSB_TO_DADDR(mp, mval[i].br_startblock),
-				XFS_FSB_TO_BB(mp, mval[i].br_blockcount), 0,
-				&bp);
-		if (error)
+		bp = xfs_trans_get_buf(tp, mp->m_ddev_targp,
+			XFS_FSB_TO_DADDR(mp, mval[i].br_startblock),
+			XFS_FSB_TO_BB(mp, mval[i].br_blockcount), 0);
+		if (!bp) {
+			error = -ENOMEM;
 			goto error_trans_cancel;
+		}
 		xfs_trans_binval(tp, bp);
 	}
 	/*

@@ -778,7 +778,7 @@ nfqnl_enqueue_packet(struct nf_queue_entry *entry, unsigned int queuenum)
 {
 	unsigned int queued;
 	struct nfqnl_instance *queue;
-	struct sk_buff *skb, *segs, *nskb;
+	struct sk_buff *skb, *segs;
 	int err = -ENOBUFS;
 	struct net *net = entry->state.net;
 	struct nfnl_queue_net *q = nfnl_queue_pernet(net);
@@ -815,7 +815,8 @@ nfqnl_enqueue_packet(struct nf_queue_entry *entry, unsigned int queuenum)
 		goto out_err;
 	queued = 0;
 	err = 0;
-	skb_list_walk_safe(segs, segs, nskb) {
+	do {
+		struct sk_buff *nskb = segs->next;
 		if (err == 0)
 			err = __nfqnl_enqueue_packet_gso(net, queue,
 							segs, entry);
@@ -823,7 +824,8 @@ nfqnl_enqueue_packet(struct nf_queue_entry *entry, unsigned int queuenum)
 			queued++;
 		else
 			kfree_skb(segs);
-	}
+		segs = nskb;
+	} while (segs);
 
 	if (queued) {
 		if (err) /* some segments are already queued */

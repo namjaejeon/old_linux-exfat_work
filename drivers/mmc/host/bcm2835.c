@@ -1357,6 +1357,7 @@ static int bcm2835_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct clk *clk;
+	struct resource *iomem;
 	struct bcm2835_host *host;
 	struct mmc_host *mmc;
 	const __be32 *regaddr_p;
@@ -1372,7 +1373,8 @@ static int bcm2835_probe(struct platform_device *pdev)
 	host->pdev = pdev;
 	spin_lock_init(&host->lock);
 
-	host->ioaddr = devm_platform_ioremap_resource(pdev, 0);
+	iomem = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	host->ioaddr = devm_ioremap_resource(dev, iomem);
 	if (IS_ERR(host->ioaddr)) {
 		ret = PTR_ERR(host->ioaddr);
 		goto err;
@@ -1393,17 +1395,7 @@ static int bcm2835_probe(struct platform_device *pdev)
 	host->dma_chan = NULL;
 	host->dma_desc = NULL;
 
-	host->dma_chan_rxtx = dma_request_chan(dev, "rx-tx");
-	if (IS_ERR(host->dma_chan_rxtx)) {
-		ret = PTR_ERR(host->dma_chan_rxtx);
-		host->dma_chan_rxtx = NULL;
-
-		if (ret == -EPROBE_DEFER)
-			goto err;
-
-		/* Ignore errors to fall back to PIO mode */
-	}
-
+	host->dma_chan_rxtx = dma_request_slave_channel(dev, "rx-tx");
 
 	clk = devm_clk_get(dev, NULL);
 	if (IS_ERR(clk)) {

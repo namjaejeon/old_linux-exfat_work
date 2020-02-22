@@ -155,7 +155,8 @@ static void panfrost_job_hw_submit(struct panfrost_job *job, int js)
 	}
 
 	cfg = panfrost_mmu_as_get(pfdev, &job->file_priv->mmu);
-	panfrost_devfreq_record_busy(pfdev);
+
+	panfrost_devfreq_record_transition(pfdev, js);
 
 	job_write(pfdev, JS_HEAD_NEXT_LO(js), jc_head & 0xFFFFFFFF);
 	job_write(pfdev, JS_HEAD_NEXT_HI(js), jc_head >> 32);
@@ -268,20 +269,9 @@ static void panfrost_job_cleanup(struct kref *ref)
 	dma_fence_put(job->done_fence);
 	dma_fence_put(job->render_done_fence);
 
-	if (job->mappings) {
-		for (i = 0; i < job->bo_count; i++)
-			panfrost_gem_mapping_put(job->mappings[i]);
-		kvfree(job->mappings);
-	}
-
 	if (job->bos) {
-		struct panfrost_gem_object *bo;
-
-		for (i = 0; i < job->bo_count; i++) {
-			bo = to_panfrost_bo(job->bos[i]);
+		for (i = 0; i < job->bo_count; i++)
 			drm_gem_object_put_unlocked(job->bos[i]);
-		}
-
 		kvfree(job->bos);
 	}
 
@@ -414,7 +404,9 @@ static void panfrost_job_timedout(struct drm_sched_job *sched_job)
 	}
 	spin_unlock_irqrestore(&pfdev->js->job_lock, flags);
 
-	panfrost_devfreq_record_idle(pfdev);
+	/* panfrost_core_dump(pfdev); */
+
+	panfrost_devfreq_record_transition(pfdev, js);
 	panfrost_device_reset(pfdev);
 
 	for (i = 0; i < NUM_JOB_SLOTS; i++)
@@ -477,7 +469,7 @@ static irqreturn_t panfrost_job_irq_handler(int irq, void *data)
 				pfdev->jobs[j] = NULL;
 
 				panfrost_mmu_as_put(pfdev, &job->file_priv->mmu);
-				panfrost_devfreq_record_idle(pfdev);
+				panfrost_devfreq_record_transition(pfdev, j);
 
 				dma_fence_signal_locked(job->done_fence);
 				pm_runtime_put_autosuspend(pfdev->dev);
@@ -553,14 +545,12 @@ int panfrost_job_open(struct panfrost_file_priv *panfrost_priv)
 {
 	struct panfrost_device *pfdev = panfrost_priv->pfdev;
 	struct panfrost_job_slot *js = pfdev->js;
-	struct drm_gpu_scheduler *sched;
+	struct drm_sched_rq *rq;
 	int ret, i;
 
 	for (i = 0; i < NUM_JOB_SLOTS; i++) {
-		sched = &js->queue[i].sched;
-		ret = drm_sched_entity_init(&panfrost_priv->sched_entity[i],
-					    DRM_SCHED_PRIORITY_NORMAL, &sched,
-					    1, NULL);
+		rq = &js->queue[i].sched.sched_rq[DRM_SCHED_PRIORITY_NORMAL];
+		ret = drm_sched_entity_init(&panfrost_priv->sched_entity[i], &rq, 1, NULL);
 		if (WARN_ON(ret))
 			return ret;
 	}
@@ -580,13 +570,13 @@ int panfrost_job_is_idle(struct panfrost_device *pfdev)
 	struct panfrost_job_slot *js = pfdev->js;
 	int i;
 
-	/* Check whether the hardware is idle */
-	if (atomic_read(&pfdev->devfreq.busy_count))
-		return false;
-
 	for (i = 0; i < NUM_JOB_SLOTS; i++) {
 		/* If there are any jobs in the HW queue, we're not idle */
 		if (atomic_read(&js->queue[i].sched.hw_rq_count))
+			return false;
+
+		/* Check whether the hardware is idle */
+		if (pfdev->devfreq.slot[i].busy)
 			return false;
 	}
 

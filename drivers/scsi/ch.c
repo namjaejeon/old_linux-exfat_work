@@ -872,10 +872,6 @@ static long ch_ioctl_compat(struct file * file,
 			    unsigned int cmd, unsigned long arg)
 {
 	scsi_changer *ch = file->private_data;
-	int retval = scsi_ioctl_block_when_processing_errors(ch->device, cmd,
-							file->f_flags & O_NDELAY);
-	if (retval)
-		return retval;
 
 	switch (cmd) {
 	case CHIOGPARAMS:
@@ -887,7 +883,7 @@ static long ch_ioctl_compat(struct file * file,
 	case CHIOINITELEM:
 	case CHIOSVOLTAG:
 		/* compatible */
-		return ch_ioctl(file, cmd, (unsigned long)compat_ptr(arg));
+		return ch_ioctl(file, cmd, arg);
 	case CHIOGSTATUS32:
 	{
 		struct changer_element_status32 ces32;
@@ -902,7 +898,8 @@ static long ch_ioctl_compat(struct file * file,
 		return ch_gstatus(ch, ces32.ces_type, data);
 	}
 	default:
-		return scsi_compat_ioctl(ch->device, cmd, compat_ptr(arg));
+		// return scsi_ioctl_compat(ch->device, cmd, (void*)arg);
+		return -ENOIOCTLCMD;
 
 	}
 }

@@ -382,8 +382,13 @@ void __qdisc_run(struct Qdisc *q)
 	int packets;
 
 	while (qdisc_restart(q, &packets)) {
+		/*
+		 * Ordered by possible occurrence: Postpone processing if
+		 * 1. we've exceeded packet quota
+		 * 2. another process needs the CPU;
+		 */
 		quota -= packets;
-		if (quota <= 0) {
+		if (quota <= 0 || need_resched()) {
 			__netif_schedule(q);
 			break;
 		}
@@ -441,7 +446,7 @@ static void dev_watchdog(struct timer_list *t)
 				trace_net_dev_xmit_timeout(dev, i);
 				WARN_ONCE(1, KERN_INFO "NETDEV WATCHDOG: %s (%s): transmit queue %u timed out\n",
 				       dev->name, netdev_drivername(dev), i);
-				dev->netdev_ops->ndo_tx_timeout(dev, i);
+				dev->netdev_ops->ndo_tx_timeout(dev);
 			}
 			if (!mod_timer(&dev->watchdog_timer,
 				       round_jiffies(jiffies +
@@ -652,7 +657,7 @@ static struct sk_buff *pfifo_fast_dequeue(struct Qdisc *qdisc)
 	if (likely(skb)) {
 		qdisc_update_stats_at_dequeue(qdisc, skb);
 	} else {
-		WRITE_ONCE(qdisc->empty, true);
+		qdisc->empty = true;
 	}
 
 	return skb;
@@ -1209,13 +1214,8 @@ void dev_deactivate_many(struct list_head *head)
 
 	/* Wait for outstanding qdisc_run calls. */
 	list_for_each_entry(dev, head, close_list) {
-		while (some_qdisc_is_busy(dev)) {
-			/* wait_event() would avoid this sleep-loop but would
-			 * require expensive checks in the fast paths of packet
-			 * processing which isn't worth it.
-			 */
-			schedule_timeout_uninterruptible(1);
-		}
+		while (some_qdisc_is_busy(dev))
+			yield();
 		/* The new qdisc is assigned at this point so we can safely
 		 * unwind stale skb lists and qdisc statistics
 		 */

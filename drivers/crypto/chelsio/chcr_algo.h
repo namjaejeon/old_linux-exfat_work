@@ -287,7 +287,7 @@ struct hash_wr_param {
 };
 
 struct cipher_wr_param {
-	struct skcipher_request *req;
+	struct ablkcipher_request *req;
 	char *iv;
 	int bytes;
 	unsigned short qid;

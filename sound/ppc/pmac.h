@@ -104,7 +104,7 @@ struct snd_pmac {
 	struct resource rsrc[3];
 
 	int num_freqs;
-	const int *freq_table;
+	int *freq_table;
 	unsigned int freqs_ok;		/* bit flags */
 	unsigned int formats_ok;	/* pcm hwinfo */
 	int active;

@@ -182,37 +182,6 @@ static int tp_event_has_id(const char *dir_path, struct dirent *evt_dir)
 
 #define MAX_EVENT_LENGTH 512
 
-void parse_events__handle_error(struct parse_events_error *err, int idx,
-				char *str, char *help)
-{
-	if (WARN(!str, "WARNING: failed to provide error string\n")) {
-		free(help);
-		return;
-	}
-	switch (err->num_errors) {
-	case 0:
-		err->idx = idx;
-		err->str = str;
-		err->help = help;
-		break;
-	case 1:
-		err->first_idx = err->idx;
-		err->idx = idx;
-		err->first_str = err->str;
-		err->str = str;
-		err->first_help = err->help;
-		err->help = help;
-		break;
-	default:
-		WARN_ONCE(1, "WARNING: multiple event parsing errors\n");
-		free(err->str);
-		err->str = str;
-		free(err->help);
-		err->help = help;
-		break;
-	}
-	err->num_errors++;
-}
 
 struct tracepoint_path *tracepoint_id_to_path(u64 config)
 {
@@ -511,7 +480,6 @@ int parse_events_add_cache(struct list_head *list, int *idx,
 static void tracepoint_error(struct parse_events_error *e, int err,
 			     const char *sys, const char *name)
 {
-	const char *str;
 	char help[BUFSIZ];
 
 	if (!e)
@@ -525,18 +493,18 @@ static void tracepoint_error(struct parse_events_error *e, int err,
 
 	switch (err) {
 	case EACCES:
-		str = "can't access trace events";
+		e->str = strdup("can't access trace events");
 		break;
 	case ENOENT:
-		str = "unknown tracepoint";
+		e->str = strdup("unknown tracepoint");
 		break;
 	default:
-		str = "failed to add tracepoint";
+		e->str = strdup("failed to add tracepoint");
 		break;
 	}
 
 	tracing_path__strerror_open_tp(err, help, sizeof(help), sys, name);
-	parse_events__handle_error(e, 0, strdup(str), strdup(help));
+	e->help = strdup(help);
 }
 
 static int add_tracepoint(struct list_head *list, int *idx,
@@ -964,11 +932,11 @@ static int check_type_val(struct parse_events_term *term,
 		return 0;
 
 	if (err) {
-		parse_events__handle_error(err, term->err_val,
-					type == PARSE_EVENTS__TERM_TYPE_NUM
-					? strdup("expected numeric value")
-					: strdup("expected string value"),
-					NULL);
+		err->idx = term->err_val;
+		if (type == PARSE_EVENTS__TERM_TYPE_NUM)
+			err->str = strdup("expected numeric value");
+		else
+			err->str = strdup("expected string value");
 	}
 	return -EINVAL;
 }
@@ -997,7 +965,6 @@ static const char *config_term_names[__PARSE_EVENTS__TERM_TYPE_NR] = {
 	[PARSE_EVENTS__TERM_TYPE_DRV_CFG]		= "driver-config",
 	[PARSE_EVENTS__TERM_TYPE_PERCORE]		= "percore",
 	[PARSE_EVENTS__TERM_TYPE_AUX_OUTPUT]		= "aux-output",
-	[PARSE_EVENTS__TERM_TYPE_AUX_SAMPLE_SIZE]	= "aux-sample-size",
 };
 
 static bool config_term_shrinked;
@@ -1005,11 +972,8 @@ static bool config_term_shrinked;
 static bool
 config_term_avail(int term_type, struct parse_events_error *err)
 {
-	char *err_str;
-
 	if (term_type < 0 || term_type >= __PARSE_EVENTS__TERM_TYPE_NR) {
-		parse_events__handle_error(err, -1,
-					strdup("Invalid term_type"), NULL);
+		err->str = strdup("Invalid term_type");
 		return false;
 	}
 	if (!config_term_shrinked)
@@ -1028,9 +992,9 @@ config_term_avail(int term_type, struct parse_events_error *err)
 			return false;
 
 		/* term_type is validated so indexing is safe */
-		if (asprintf(&err_str, "'%s' is not usable in 'perf stat'",
-				config_term_names[term_type]) >= 0)
-			parse_events__handle_error(err, -1, err_str, NULL);
+		if (asprintf(&err->str, "'%s' is not usable in 'perf stat'",
+			     config_term_names[term_type]) < 0)
+			err->str = NULL;
 		return false;
 	}
 }
@@ -1072,20 +1036,17 @@ do {									   \
 	case PARSE_EVENTS__TERM_TYPE_BRANCH_SAMPLE_TYPE:
 		CHECK_TYPE_VAL(STR);
 		if (strcmp(term->val.str, "no") &&
-		    parse_branch_str(term->val.str,
-				    &attr->branch_sample_type)) {
-			parse_events__handle_error(err, term->err_val,
-					strdup("invalid branch sample type"),
-					NULL);
+		    parse_branch_str(term->val.str, &attr->branch_sample_type)) {
+			err->str = strdup("invalid branch sample type");
+			err->idx = term->err_val;
 			return -EINVAL;
 		}
 		break;
 	case PARSE_EVENTS__TERM_TYPE_TIME:
 		CHECK_TYPE_VAL(NUM);
 		if (term->val.num > 1) {
-			parse_events__handle_error(err, term->err_val,
-						strdup("expected 0 or 1"),
-						NULL);
+			err->str = strdup("expected 0 or 1");
+			err->idx = term->err_val;
 			return -EINVAL;
 		}
 		break;
@@ -1119,28 +1080,18 @@ do {									   \
 	case PARSE_EVENTS__TERM_TYPE_PERCORE:
 		CHECK_TYPE_VAL(NUM);
 		if ((unsigned int)term->val.num > 1) {
-			parse_events__handle_error(err, term->err_val,
-						strdup("expected 0 or 1"),
-						NULL);
+			err->str = strdup("expected 0 or 1");
+			err->idx = term->err_val;
 			return -EINVAL;
 		}
 		break;
 	case PARSE_EVENTS__TERM_TYPE_AUX_OUTPUT:
 		CHECK_TYPE_VAL(NUM);
 		break;
-	case PARSE_EVENTS__TERM_TYPE_AUX_SAMPLE_SIZE:
-		CHECK_TYPE_VAL(NUM);
-		if (term->val.num > UINT_MAX) {
-			parse_events__handle_error(err, term->err_val,
-						strdup("too big"),
-						NULL);
-			return -EINVAL;
-		}
-		break;
 	default:
-		parse_events__handle_error(err, term->err_term,
-				strdup("unknown term"),
-				parse_events_formats_error_string(NULL));
+		err->str = strdup("unknown term");
+		err->idx = term->err_term;
+		err->help = parse_events_formats_error_string(NULL);
 		return -EINVAL;
 	}
 
@@ -1188,13 +1139,12 @@ static int config_term_tracepoint(struct perf_event_attr *attr,
 	case PARSE_EVENTS__TERM_TYPE_OVERWRITE:
 	case PARSE_EVENTS__TERM_TYPE_NOOVERWRITE:
 	case PARSE_EVENTS__TERM_TYPE_AUX_OUTPUT:
-	case PARSE_EVENTS__TERM_TYPE_AUX_SAMPLE_SIZE:
 		return config_term_common(attr, term, err);
 	default:
 		if (err) {
-			parse_events__handle_error(err, term->err_term,
-				strdup("unknown term"),
-				strdup("valid terms: call-graph,stack-size\n"));
+			err->idx = term->err_term;
+			err->str = strdup("unknown term");
+			err->help = strdup("valid terms: call-graph,stack-size\n");
 		}
 		return -EINVAL;
 	}
@@ -1219,7 +1169,8 @@ static int config_attr(struct perf_event_attr *attr,
 static int get_config_terms(struct list_head *head_config,
 			    struct list_head *head_terms __maybe_unused)
 {
-#define ADD_CONFIG_TERM(__type)					\
+#define ADD_CONFIG_TERM(__type, __name, __val)			\
+do {								\
 	struct perf_evsel_config_term *__t;			\
 								\
 	__t = zalloc(sizeof(*__t));				\
@@ -1228,24 +1179,9 @@ static int get_config_terms(struct list_head *head_config,
 								\
 	INIT_LIST_HEAD(&__t->list);				\
 	__t->type       = PERF_EVSEL__CONFIG_TERM_ ## __type;	\
-	__t->weak	= term->weak;				\
-	list_add_tail(&__t->list, head_terms)
-
-#define ADD_CONFIG_TERM_VAL(__type, __name, __val)		\
-do {								\
-	ADD_CONFIG_TERM(__type);				\
 	__t->val.__name = __val;				\
-} while (0)
-
-#define ADD_CONFIG_TERM_STR(__type, __val)			\
-do {								\
-	ADD_CONFIG_TERM(__type);				\
-	__t->val.str = strdup(__val);				\
-	if (!__t->val.str) {					\
-		zfree(&__t);					\
-		return -ENOMEM;					\
-	}							\
-	__t->free_str = true;					\
+	__t->weak	= term->weak;				\
+	list_add_tail(&__t->list, head_terms);			\
 } while (0)
 
 	struct parse_events_term *term;
@@ -1253,101 +1189,56 @@ do {								\
 	list_for_each_entry(term, head_config, list) {
 		switch (term->type_term) {
 		case PARSE_EVENTS__TERM_TYPE_SAMPLE_PERIOD:
-			ADD_CONFIG_TERM_VAL(PERIOD, period, term->val.num);
+			ADD_CONFIG_TERM(PERIOD, period, term->val.num);
 			break;
 		case PARSE_EVENTS__TERM_TYPE_SAMPLE_FREQ:
-			ADD_CONFIG_TERM_VAL(FREQ, freq, term->val.num);
+			ADD_CONFIG_TERM(FREQ, freq, term->val.num);
 			break;
 		case PARSE_EVENTS__TERM_TYPE_TIME:
-			ADD_CONFIG_TERM_VAL(TIME, time, term->val.num);
+			ADD_CONFIG_TERM(TIME, time, term->val.num);
 			break;
 		case PARSE_EVENTS__TERM_TYPE_CALLGRAPH:
-			ADD_CONFIG_TERM_STR(CALLGRAPH, term->val.str);
+			ADD_CONFIG_TERM(CALLGRAPH, callgraph, term->val.str);
 			break;
 		case PARSE_EVENTS__TERM_TYPE_BRANCH_SAMPLE_TYPE:
-			ADD_CONFIG_TERM_STR(BRANCH, term->val.str);
+			ADD_CONFIG_TERM(BRANCH, branch, term->val.str);
 			break;
 		case PARSE_EVENTS__TERM_TYPE_STACKSIZE:
-			ADD_CONFIG_TERM_VAL(STACK_USER, stack_user,
-					    term->val.num);
+			ADD_CONFIG_TERM(STACK_USER, stack_user, term->val.num);
 			break;
 		case PARSE_EVENTS__TERM_TYPE_INHERIT:
-			ADD_CONFIG_TERM_VAL(INHERIT, inherit,
-					    term->val.num ? 1 : 0);
+			ADD_CONFIG_TERM(INHERIT, inherit, term->val.num ? 1 : 0);
 			break;
 		case PARSE_EVENTS__TERM_TYPE_NOINHERIT:
-			ADD_CONFIG_TERM_VAL(INHERIT, inherit,
-					    term->val.num ? 0 : 1);
+			ADD_CONFIG_TERM(INHERIT, inherit, term->val.num ? 0 : 1);
 			break;
 		case PARSE_EVENTS__TERM_TYPE_MAX_STACK:
-			ADD_CONFIG_TERM_VAL(MAX_STACK, max_stack,
-					    term->val.num);
+			ADD_CONFIG_TERM(MAX_STACK, max_stack, term->val.num);
 			break;
 		case PARSE_EVENTS__TERM_TYPE_MAX_EVENTS:
-			ADD_CONFIG_TERM_VAL(MAX_EVENTS, max_events,
-					    term->val.num);
+			ADD_CONFIG_TERM(MAX_EVENTS, max_events, term->val.num);
 			break;
 		case PARSE_EVENTS__TERM_TYPE_OVERWRITE:
-			ADD_CONFIG_TERM_VAL(OVERWRITE, overwrite,
-					    term->val.num ? 1 : 0);
+			ADD_CONFIG_TERM(OVERWRITE, overwrite, term->val.num ? 1 : 0);
 			break;
 		case PARSE_EVENTS__TERM_TYPE_NOOVERWRITE:
-			ADD_CONFIG_TERM_VAL(OVERWRITE, overwrite,
-					    term->val.num ? 0 : 1);
+			ADD_CONFIG_TERM(OVERWRITE, overwrite, term->val.num ? 0 : 1);
 			break;
 		case PARSE_EVENTS__TERM_TYPE_DRV_CFG:
-			ADD_CONFIG_TERM_STR(DRV_CFG, term->val.str);
+			ADD_CONFIG_TERM(DRV_CFG, drv_cfg, term->val.str);
 			break;
 		case PARSE_EVENTS__TERM_TYPE_PERCORE:
-			ADD_CONFIG_TERM_VAL(PERCORE, percore,
-					    term->val.num ? true : false);
+			ADD_CONFIG_TERM(PERCORE, percore,
+					term->val.num ? true : false);
 			break;
 		case PARSE_EVENTS__TERM_TYPE_AUX_OUTPUT:
-			ADD_CONFIG_TERM_VAL(AUX_OUTPUT, aux_output,
-					    term->val.num ? 1 : 0);
-			break;
-		case PARSE_EVENTS__TERM_TYPE_AUX_SAMPLE_SIZE:
-			ADD_CONFIG_TERM_VAL(AUX_SAMPLE_SIZE, aux_sample_size,
-					    term->val.num);
+			ADD_CONFIG_TERM(AUX_OUTPUT, aux_output, term->val.num ? 1 : 0);
 			break;
 		default:
 			break;
 		}
 	}
-	return 0;
-}
-
-/*
- * Add PERF_EVSEL__CONFIG_TERM_CFG_CHG where cfg_chg will have a bit set for
- * each bit of attr->config that the user has changed.
- */
-static int get_config_chgs(struct perf_pmu *pmu, struct list_head *head_config,
-			   struct list_head *head_terms)
-{
-	struct parse_events_term *term;
-	u64 bits = 0;
-	int type;
-
-	list_for_each_entry(term, head_config, list) {
-		switch (term->type_term) {
-		case PARSE_EVENTS__TERM_TYPE_USER:
-			type = perf_pmu__format_type(&pmu->format, term->config);
-			if (type != PERF_PMU_FORMAT_VALUE_CONFIG)
-				continue;
-			bits |= perf_pmu__format_bits(&pmu->format, term->config);
-			break;
-		case PARSE_EVENTS__TERM_TYPE_CONFIG:
-			bits = ~(u64)0;
-			break;
-		default:
-			break;
-		}
-	}
-
-	if (bits)
-		ADD_CONFIG_TERM_VAL(CFG_CHG, cfg_chg, bits);
-
-#undef ADD_CONFIG_TERM
+#undef ADD_EVSEL_CONFIG
 	return 0;
 }
 
@@ -1432,12 +1323,10 @@ int parse_events_add_pmu(struct parse_events_state *parse_state,
 
 	pmu = perf_pmu__find(name);
 	if (!pmu) {
-		char *err_str;
-
-		if (asprintf(&err_str,
+		if (asprintf(&err->str,
 				"Cannot find PMU `%s'. Missing kernel support?",
-				name) >= 0)
-			parse_events__handle_error(err, 0, err_str, NULL);
+				name) < 0)
+			err->str = NULL;
 		return -EINVAL;
 	}
 
@@ -1476,22 +1365,8 @@ int parse_events_add_pmu(struct parse_events_state *parse_state,
 	if (get_config_terms(head_config, &config_terms))
 		return -ENOMEM;
 
-	/*
-	 * When using default config, record which bits of attr->config were
-	 * changed by the user.
-	 */
-	if (pmu->default_config && get_config_chgs(pmu, head_config, &config_terms))
-		return -ENOMEM;
-
-	if (perf_pmu__config(pmu, &attr, head_config, parse_state->error)) {
-		struct perf_evsel_config_term *pos, *tmp;
-
-		list_for_each_entry_safe(pos, tmp, &config_terms, list) {
-			list_del_init(&pos->list);
-			free(pos);
-		}
+	if (perf_pmu__config(pmu, &attr, head_config, parse_state->error))
 		return -EINVAL;
-	}
 
 	evsel = __add_event(list, &parse_state->idx, &attr,
 			    get_config_name(head_config), pmu,
@@ -1514,6 +1389,7 @@ int parse_events_add_pmu(struct parse_events_state *parse_state,
 int parse_events_multi_pmu_add(struct parse_events_state *parse_state,
 			       char *str, struct list_head **listp)
 {
+	struct list_head *head;
 	struct parse_events_term *term;
 	struct list_head *list;
 	struct perf_pmu *pmu = NULL;
@@ -1530,30 +1406,19 @@ int parse_events_multi_pmu_add(struct parse_events_state *parse_state,
 
 		list_for_each_entry(alias, &pmu->aliases, list) {
 			if (!strcasecmp(alias->name, str)) {
-				struct list_head *head;
-				char *config;
-
 				head = malloc(sizeof(struct list_head));
 				if (!head)
 					return -1;
 				INIT_LIST_HEAD(head);
-				config = strdup(str);
-				if (!config)
+				if (parse_events_term__num(&term, PARSE_EVENTS__TERM_TYPE_USER,
+							   str, 1, false, &str, NULL) < 0)
 					return -1;
-				if (parse_events_term__num(&term,
-						   PARSE_EVENTS__TERM_TYPE_USER,
-						   config, 1, false, &config,
-						   NULL) < 0) {
-					free(list);
-					free(config);
-					return -1;
-				}
 				list_add_tail(&term->list, head);
 
 				if (!parse_events_add_pmu(parse_state, list,
 							  pmu->name, head,
 							  true, true)) {
-					pr_debug("%s -> %s/%s/\n", config,
+					pr_debug("%s -> %s/%s/\n", str,
 						 pmu->name, alias->str);
 					ok++;
 				}
@@ -1562,10 +1427,8 @@ int parse_events_multi_pmu_add(struct parse_events_state *parse_state,
 			}
 		}
 	}
-	if (!ok) {
-		free(list);
+	if (!ok)
 		return -1;
-	}
 	*listp = list;
 	return 0;
 }
@@ -2064,20 +1927,15 @@ int parse_events(struct evlist *evlist, const char *str,
 
 	ret = parse_events__scanner(str, &parse_state, PE_START_EVENTS);
 	perf_pmu__parse_cleanup();
-
-	if (!ret && list_empty(&parse_state.list)) {
-		WARN_ONCE(true, "WARNING: event parser found nothing\n");
-		return -1;
-	}
-
-	/*
-	 * Add list to the evlist even with errors to allow callers to clean up.
-	 */
-	perf_evlist__splice_list_tail(evlist, &parse_state.list);
-
 	if (!ret) {
 		struct evsel *last;
 
+		if (list_empty(&parse_state.list)) {
+			WARN_ONCE(true, "WARNING: event parser found nothing\n");
+			return -1;
+		}
+
+		perf_evlist__splice_list_tail(evlist, &parse_state.list);
 		evlist->nr_groups += parse_state.nr_groups;
 		last = evlist__last(evlist);
 		last->cmdline_group_boundary = true;
@@ -2102,14 +1960,15 @@ static int get_term_width(void)
 	return ws.ws_col > MAX_WIDTH ? MAX_WIDTH : ws.ws_col;
 }
 
-static void __parse_events_print_error(int err_idx, const char *err_str,
-				const char *err_help, const char *event)
+void parse_events_print_error(struct parse_events_error *err,
+			      const char *event)
 {
 	const char *str = "invalid or unsupported event: ";
 	char _buf[MAX_WIDTH];
 	char *buf = (char *) event;
 	int idx = 0;
-	if (err_str) {
+
+	if (err->str) {
 		/* -2 for extra '' in the final fprintf */
 		int width       = get_term_width() - 2;
 		int len_event   = strlen(event);
@@ -2132,8 +1991,8 @@ static void __parse_events_print_error(int err_idx, const char *err_str,
 		buf = _buf;
 
 		/* We're cutting from the beginning. */
-		if (err_idx > max_err_idx)
-			cut = err_idx - max_err_idx;
+		if (err->idx > max_err_idx)
+			cut = err->idx - max_err_idx;
 
 		strncpy(buf, event + cut, max_len);
 
@@ -2146,33 +2005,16 @@ static void __parse_events_print_error(int err_idx, const char *err_str,
 			buf[max_len] = 0;
 		}
 
-		idx = len_str + err_idx - cut;
+		idx = len_str + err->idx - cut;
 	}
 
 	fprintf(stderr, "%s'%s'\n", str, buf);
 	if (idx) {
-		fprintf(stderr, "%*s\\___ %s\n", idx + 1, "", err_str);
-		if (err_help)
-			fprintf(stderr, "\n%s\n", err_help);
-	}
-}
-
-void parse_events_print_error(struct parse_events_error *err,
-			      const char *event)
-{
-	if (!err->num_errors)
-		return;
-
-	__parse_events_print_error(err->idx, err->str, err->help, event);
-	zfree(&err->str);
-	zfree(&err->help);
-
-	if (err->num_errors > 1) {
-		fputs("\nInitial error:\n", stderr);
-		__parse_events_print_error(err->first_idx, err->first_str,
-					err->first_help, event);
-		zfree(&err->first_str);
-		zfree(&err->first_help);
+		fprintf(stderr, "%*s\\___ %s\n", idx + 1, "", err->str);
+		if (err->help)
+			fprintf(stderr, "\n%s\n", err->help);
+		zfree(&err->str);
+		zfree(&err->help);
 	}
 }
 
@@ -2182,11 +2024,8 @@ int parse_events_option(const struct option *opt, const char *str,
 			int unset __maybe_unused)
 {
 	struct evlist *evlist = *(struct evlist **)opt->value;
-	struct parse_events_error err;
-	int ret;
-
-	bzero(&err, sizeof(err));
-	ret = parse_events(evlist, str, &err);
+	struct parse_events_error err = { .idx = 0, };
+	int ret = parse_events(evlist, str, &err);
 
 	if (ret) {
 		parse_events_print_error(&err, str);
@@ -2761,7 +2600,7 @@ out_enomem:
  * Print the help text for the event symbols:
  */
 void print_events(const char *event_glob, bool name_only, bool quiet_flag,
-			bool long_desc, bool details_flag, bool deprecated)
+			bool long_desc, bool details_flag)
 {
 	print_symbol_events(event_glob, PERF_TYPE_HARDWARE,
 			    event_symbols_hw, PERF_COUNT_HW_MAX, name_only);
@@ -2773,7 +2612,7 @@ void print_events(const char *event_glob, bool name_only, bool quiet_flag,
 	print_hwcache_events(event_glob, name_only);
 
 	print_pmu_events(event_glob, name_only, quiet_flag, long_desc,
-			details_flag, deprecated);
+			details_flag);
 
 	if (event_glob != NULL)
 		return;
@@ -2879,63 +2718,30 @@ int parse_events_term__sym_hw(struct parse_events_term **term,
 			      char *config, unsigned idx)
 {
 	struct event_symbol *sym;
-	char *str;
 	struct parse_events_term temp = {
 		.type_val  = PARSE_EVENTS__TERM_TYPE_STR,
 		.type_term = PARSE_EVENTS__TERM_TYPE_USER,
-		.config    = config,
+		.config    = config ?: (char *) "event",
 	};
 
-	if (!temp.config) {
-		temp.config = strdup("event");
-		if (!temp.config)
-			return -ENOMEM;
-	}
 	BUG_ON(idx >= PERF_COUNT_HW_MAX);
 	sym = &event_symbols_hw[idx];
 
-	str = strdup(sym->symbol);
-	if (!str)
-		return -ENOMEM;
-	return new_term(term, &temp, str, 0);
+	return new_term(term, &temp, (char *) sym->symbol, 0);
 }
 
 int parse_events_term__clone(struct parse_events_term **new,
 			     struct parse_events_term *term)
 {
-	char *str;
 	struct parse_events_term temp = {
 		.type_val  = term->type_val,
 		.type_term = term->type_term,
-		.config    = NULL,
+		.config    = term->config,
 		.err_term  = term->err_term,
 		.err_val   = term->err_val,
 	};
 
-	if (term->config) {
-		temp.config = strdup(term->config);
-		if (!temp.config)
-			return -ENOMEM;
-	}
-	if (term->type_val == PARSE_EVENTS__TERM_TYPE_NUM)
-		return new_term(new, &temp, NULL, term->val.num);
-
-	str = strdup(term->val.str);
-	if (!str)
-		return -ENOMEM;
-	return new_term(new, &temp, str, 0);
-}
-
-void parse_events_term__delete(struct parse_events_term *term)
-{
-	if (term->array.nr_ranges)
-		zfree(&term->array.ranges);
-
-	if (term->type_val != PARSE_EVENTS__TERM_TYPE_NUM)
-		zfree(&term->val.str);
-
-	zfree(&term->config);
-	free(term);
+	return new_term(new, &temp, term->val.str, term->val.num);
 }
 
 int parse_events_copy_term_list(struct list_head *old,
@@ -2968,8 +2774,10 @@ void parse_events_terms__purge(struct list_head *terms)
 	struct parse_events_term *term, *h;
 
 	list_for_each_entry_safe(term, h, terms, list) {
+		if (term->array.nr_ranges)
+			zfree(&term->array.ranges);
 		list_del_init(&term->list);
-		parse_events_term__delete(term);
+		free(term);
 	}
 }
 
@@ -2989,10 +2797,13 @@ void parse_events__clear_array(struct parse_events_array *a)
 void parse_events_evlist_error(struct parse_events_state *parse_state,
 			       int idx, const char *str)
 {
-	if (!parse_state->error)
-		return;
+	struct parse_events_error *err = parse_state->error;
 
-	parse_events__handle_error(parse_state->error, idx, strdup(str), NULL);
+	if (!err)
+		return;
+	err->idx = idx;
+	err->str = strdup(str);
+	WARN_ONCE(!err->str, "WARNING: failed to allocate error string");
 }
 
 static void config_terms_list(char *buf, size_t buf_sz)

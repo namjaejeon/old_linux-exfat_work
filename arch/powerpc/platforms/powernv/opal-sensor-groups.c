@@ -13,7 +13,7 @@
 
 #include <asm/opal.h>
 
-static DEFINE_MUTEX(sg_mutex);
+DEFINE_MUTEX(sg_mutex);
 
 static struct kobject *sg_kobj;
 

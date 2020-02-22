@@ -58,7 +58,10 @@ err:
 	return ret;
 }
 
-DEFINE_DRM_GEM_FOPS(bochs_fops);
+static const struct file_operations bochs_fops = {
+	.owner		= THIS_MODULE,
+	DRM_VRAM_MM_FILE_OPERATIONS
+};
 
 static struct drm_driver bochs_driver = {
 	.driver_features	= DRIVER_GEM | DRIVER_MODESET | DRIVER_ATOMIC,
@@ -111,7 +114,7 @@ static int bochs_pci_probe(struct pci_dev *pdev,
 		return -ENOMEM;
 	}
 
-	ret = drm_fb_helper_remove_conflicting_pci_framebuffers(pdev, "bochsdrmfb");
+	ret = drm_fb_helper_remove_conflicting_pci_framebuffers(pdev, 0, "bochsdrmfb");
 	if (ret)
 		return ret;
 

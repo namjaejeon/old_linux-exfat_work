@@ -18,36 +18,6 @@
 #include <asm/tlbflush.h>
 #include "internal.h"
 
-static __always_inline
-struct vm_area_struct *find_dst_vma(struct mm_struct *dst_mm,
-				    unsigned long dst_start,
-				    unsigned long len)
-{
-	/*
-	 * Make sure that the dst range is both valid and fully within a
-	 * single existing vma.
-	 */
-	struct vm_area_struct *dst_vma;
-
-	dst_vma = find_vma(dst_mm, dst_start);
-	if (!dst_vma)
-		return NULL;
-
-	if (dst_start < dst_vma->vm_start ||
-	    dst_start + len > dst_vma->vm_end)
-		return NULL;
-
-	/*
-	 * Check the vma is registered in uffd, this is required to
-	 * enforce the VM_MAYWRITE check done at uffd registration
-	 * time.
-	 */
-	if (!dst_vma->vm_userfaultfd_ctx.ctx)
-		return NULL;
-
-	return dst_vma;
-}
-
 static int mcopy_atomic_pte(struct mm_struct *dst_mm,
 			    pmd_t *dst_pmd,
 			    struct vm_area_struct *dst_vma,
@@ -90,7 +60,7 @@ static int mcopy_atomic_pte(struct mm_struct *dst_mm,
 
 	/*
 	 * The memory barrier inside __SetPageUptodate makes sure that
-	 * preceding stores to the page contents become visible before
+	 * preceeding stores to the page contents become visible before
 	 * the set_pte_at() write.
 	 */
 	__SetPageUptodate(page);
@@ -214,6 +184,7 @@ static __always_inline ssize_t __mcopy_atomic_hugetlb(struct mm_struct *dst_mm,
 	unsigned long src_addr, dst_addr;
 	long copied;
 	struct page *page;
+	struct hstate *h;
 	unsigned long vma_hpagesize;
 	pgoff_t idx;
 	u32 hash;
@@ -250,8 +221,19 @@ retry:
 	 */
 	if (!dst_vma) {
 		err = -ENOENT;
-		dst_vma = find_dst_vma(dst_mm, dst_start, len);
+		dst_vma = find_vma(dst_mm, dst_start);
 		if (!dst_vma || !is_vm_hugetlb_page(dst_vma))
+			goto out_unlock;
+		/*
+		 * Check the vma is registered in uffd, this is
+		 * required to enforce the VM_MAYWRITE check done at
+		 * uffd registration time.
+		 */
+		if (!dst_vma->vm_userfaultfd_ctx.ctx)
+			goto out_unlock;
+
+		if (dst_start < dst_vma->vm_start ||
+		    dst_start + len > dst_vma->vm_end)
 			goto out_unlock;
 
 		err = -EINVAL;
@@ -260,6 +242,10 @@ retry:
 
 		vm_shared = dst_vma->vm_flags & VM_SHARED;
 	}
+
+	if (WARN_ON(dst_addr & (vma_hpagesize - 1) ||
+		    (len - copied) & (vma_hpagesize - 1)))
+		goto out_unlock;
 
 	/*
 	 * If not shared, ensure the dst_vma has a anon_vma.
@@ -270,21 +256,24 @@ retry:
 			goto out_unlock;
 	}
 
+	h = hstate_vma(dst_vma);
+
 	while (src_addr < src_start + len) {
 		pte_t dst_pteval;
 
 		BUG_ON(dst_addr >= dst_start + len);
+		VM_BUG_ON(dst_addr & ~huge_page_mask(h));
 
 		/*
 		 * Serialize via hugetlb_fault_mutex
 		 */
 		idx = linear_page_index(dst_vma, dst_addr);
 		mapping = dst_vma->vm_file->f_mapping;
-		hash = hugetlb_fault_mutex_hash(mapping, idx);
+		hash = hugetlb_fault_mutex_hash(h, mapping, idx, dst_addr);
 		mutex_lock(&hugetlb_fault_mutex_table[hash]);
 
 		err = -ENOMEM;
-		dst_pte = huge_pte_alloc(dst_mm, dst_addr, vma_hpagesize);
+		dst_pte = huge_pte_alloc(dst_mm, dst_addr, huge_page_size(h));
 		if (!dst_pte) {
 			mutex_unlock(&hugetlb_fault_mutex_table[hash]);
 			goto out_unlock;
@@ -311,8 +300,7 @@ retry:
 
 			err = copy_huge_page_from_user(page,
 						(const void __user *)src_addr,
-						vma_hpagesize / PAGE_SIZE,
-						true);
+						pages_per_huge_page(h), true);
 			if (unlikely(err)) {
 				err = -EFAULT;
 				goto out;
@@ -487,8 +475,19 @@ retry:
 	 * both valid and fully within a single existing vma.
 	 */
 	err = -ENOENT;
-	dst_vma = find_dst_vma(dst_mm, dst_start, len);
+	dst_vma = find_vma(dst_mm, dst_start);
 	if (!dst_vma)
+		goto out_unlock;
+	/*
+	 * Check the vma is registered in uffd, this is required to
+	 * enforce the VM_MAYWRITE check done at uffd registration
+	 * time.
+	 */
+	if (!dst_vma->vm_userfaultfd_ctx.ctx)
+		goto out_unlock;
+
+	if (dst_start < dst_vma->vm_start ||
+	    dst_start + len > dst_vma->vm_end)
 		goto out_unlock;
 
 	err = -EINVAL;

@@ -27,7 +27,6 @@ static unsigned sev_pos(const struct v4l2_subscribed_event *sev, unsigned idx)
 static int __v4l2_event_dequeue(struct v4l2_fh *fh, struct v4l2_event *event)
 {
 	struct v4l2_kevent *kev;
-	struct timespec64 ts;
 	unsigned long flags;
 
 	spin_lock_irqsave(&fh->vdev->fh_lock, flags);
@@ -45,9 +44,7 @@ static int __v4l2_event_dequeue(struct v4l2_fh *fh, struct v4l2_event *event)
 
 	kev->event.pending = fh->navailable;
 	*event = kev->event;
-	ts = ns_to_timespec64(kev->ts);
-	event->timestamp.tv_sec = ts.tv_sec;
-	event->timestamp.tv_nsec = ts.tv_nsec;
+	event->timestamp = ns_to_timespec(kev->ts);
 	kev->sev->first = sev_pos(kev->sev, 1);
 	kev->sev->in_use--;
 

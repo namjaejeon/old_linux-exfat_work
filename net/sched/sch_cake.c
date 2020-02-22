@@ -173,7 +173,8 @@ struct cake_tin_data {
 	u64	tin_rate_bps;
 	u16	tin_rate_shft;
 
-	u16	tin_quantum;
+	u16	tin_quantum_prio;
+	u16	tin_quantum_band;
 	s32	tin_deficit;
 	u32	tin_backlog;
 	u32	tin_dropped;
@@ -1682,7 +1683,8 @@ static s32 cake_enqueue(struct sk_buff *skb, struct Qdisc *sch,
 		if (IS_ERR_OR_NULL(segs))
 			return qdisc_drop(skb, sch, to_free);
 
-		skb_list_walk_safe(segs, segs, nskb) {
+		while (segs) {
+			nskb = segs->next;
 			skb_mark_not_on_list(segs);
 			qdisc_skb_cb(segs)->pkt_len = segs->len;
 			cobalt_set_enqueue_time(segs, now);
@@ -1695,6 +1697,7 @@ static s32 cake_enqueue(struct sk_buff *skb, struct Qdisc *sch,
 			slen += segs->len;
 			q->buffer_used += segs->truesize;
 			b->packets++;
+			segs = nskb;
 		}
 
 		/* stats */
@@ -1766,7 +1769,7 @@ static s32 cake_enqueue(struct sk_buff *skb, struct Qdisc *sch,
 						      q->avg_window_begin));
 			u64 b = q->avg_window_bytes * (u64)NSEC_PER_SEC;
 
-			b = div64_u64(b, window_interval);
+			do_div(b, window_interval);
 			q->avg_peak_bandwidth =
 				cake_ewma(q->avg_peak_bandwidth, b,
 					  b > q->avg_peak_bandwidth ? 2 : 8);
@@ -1916,7 +1919,7 @@ begin:
 		while (b->tin_deficit < 0 ||
 		       !(b->sparse_flow_count + b->bulk_flow_count)) {
 			if (b->tin_deficit <= 0)
-				b->tin_deficit += b->tin_quantum;
+				b->tin_deficit += b->tin_quantum_band;
 			if (b->sparse_flow_count + b->bulk_flow_count)
 				empty = false;
 
@@ -2181,7 +2184,6 @@ static const struct nla_policy cake_policy[TCA_CAKE_MAX + 1] = {
 	[TCA_CAKE_MPU]		 = { .type = NLA_U32 },
 	[TCA_CAKE_INGRESS]	 = { .type = NLA_U32 },
 	[TCA_CAKE_ACK_FILTER]	 = { .type = NLA_U32 },
-	[TCA_CAKE_SPLIT_GSO]	 = { .type = NLA_U32 },
 	[TCA_CAKE_FWMARK]	 = { .type = NLA_U32 },
 };
 
@@ -2238,7 +2240,8 @@ static int cake_config_besteffort(struct Qdisc *sch)
 
 	cake_set_rate(b, rate, mtu,
 		      us_to_ns(q->target), us_to_ns(q->interval));
-	b->tin_quantum = 65535;
+	b->tin_quantum_band = 65535;
+	b->tin_quantum_prio = 65535;
 
 	return 0;
 }
@@ -2249,7 +2252,8 @@ static int cake_config_precedence(struct Qdisc *sch)
 	struct cake_sched_data *q = qdisc_priv(sch);
 	u32 mtu = psched_mtu(qdisc_dev(sch));
 	u64 rate = q->rate_bps;
-	u32 quantum = 256;
+	u32 quantum1 = 256;
+	u32 quantum2 = 256;
 	u32 i;
 
 	q->tin_cnt = 8;
@@ -2262,14 +2266,18 @@ static int cake_config_precedence(struct Qdisc *sch)
 		cake_set_rate(b, rate, mtu, us_to_ns(q->target),
 			      us_to_ns(q->interval));
 
-		b->tin_quantum = max_t(u16, 1U, quantum);
+		b->tin_quantum_prio = max_t(u16, 1U, quantum1);
+		b->tin_quantum_band = max_t(u16, 1U, quantum2);
 
 		/* calculate next class's parameters */
 		rate  *= 7;
 		rate >>= 3;
 
-		quantum  *= 7;
-		quantum >>= 3;
+		quantum1  *= 3;
+		quantum1 >>= 1;
+
+		quantum2  *= 7;
+		quantum2 >>= 3;
 	}
 
 	return 0;
@@ -2338,7 +2346,8 @@ static int cake_config_diffserv8(struct Qdisc *sch)
 	struct cake_sched_data *q = qdisc_priv(sch);
 	u32 mtu = psched_mtu(qdisc_dev(sch));
 	u64 rate = q->rate_bps;
-	u32 quantum = 256;
+	u32 quantum1 = 256;
+	u32 quantum2 = 256;
 	u32 i;
 
 	q->tin_cnt = 8;
@@ -2354,14 +2363,18 @@ static int cake_config_diffserv8(struct Qdisc *sch)
 		cake_set_rate(b, rate, mtu, us_to_ns(q->target),
 			      us_to_ns(q->interval));
 
-		b->tin_quantum = max_t(u16, 1U, quantum);
+		b->tin_quantum_prio = max_t(u16, 1U, quantum1);
+		b->tin_quantum_band = max_t(u16, 1U, quantum2);
 
 		/* calculate next class's parameters */
 		rate  *= 7;
 		rate >>= 3;
 
-		quantum  *= 7;
-		quantum >>= 3;
+		quantum1  *= 3;
+		quantum1 >>= 1;
+
+		quantum2  *= 7;
+		quantum2 >>= 3;
 	}
 
 	return 0;
@@ -2400,11 +2413,17 @@ static int cake_config_diffserv4(struct Qdisc *sch)
 	cake_set_rate(&q->tins[3], rate >> 2, mtu,
 		      us_to_ns(q->target), us_to_ns(q->interval));
 
+	/* priority weights */
+	q->tins[0].tin_quantum_prio = quantum;
+	q->tins[1].tin_quantum_prio = quantum >> 4;
+	q->tins[2].tin_quantum_prio = quantum << 2;
+	q->tins[3].tin_quantum_prio = quantum << 4;
+
 	/* bandwidth-sharing weights */
-	q->tins[0].tin_quantum = quantum;
-	q->tins[1].tin_quantum = quantum >> 4;
-	q->tins[2].tin_quantum = quantum >> 1;
-	q->tins[3].tin_quantum = quantum >> 2;
+	q->tins[0].tin_quantum_band = quantum;
+	q->tins[1].tin_quantum_band = quantum >> 4;
+	q->tins[2].tin_quantum_band = quantum >> 1;
+	q->tins[3].tin_quantum_band = quantum >> 2;
 
 	return 0;
 }
@@ -2435,10 +2454,15 @@ static int cake_config_diffserv3(struct Qdisc *sch)
 	cake_set_rate(&q->tins[2], rate >> 2, mtu,
 		      us_to_ns(q->target), us_to_ns(q->interval));
 
+	/* priority weights */
+	q->tins[0].tin_quantum_prio = quantum;
+	q->tins[1].tin_quantum_prio = quantum >> 4;
+	q->tins[2].tin_quantum_prio = quantum << 4;
+
 	/* bandwidth-sharing weights */
-	q->tins[0].tin_quantum = quantum;
-	q->tins[1].tin_quantum = quantum >> 4;
-	q->tins[2].tin_quantum = quantum >> 2;
+	q->tins[0].tin_quantum_band = quantum;
+	q->tins[1].tin_quantum_band = quantum >> 4;
+	q->tins[2].tin_quantum_band = quantum >> 2;
 
 	return 0;
 }

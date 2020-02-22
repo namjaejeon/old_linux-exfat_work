@@ -75,15 +75,11 @@ xfs_iformat_fork(
 			error = xfs_iformat_btree(ip, dip, XFS_DATA_FORK);
 			break;
 		default:
-			xfs_inode_verifier_error(ip, -EFSCORRUPTED, __func__,
-					dip, sizeof(*dip), __this_address);
 			return -EFSCORRUPTED;
 		}
 		break;
 
 	default:
-		xfs_inode_verifier_error(ip, -EFSCORRUPTED, __func__, dip,
-				sizeof(*dip), __this_address);
 		return -EFSCORRUPTED;
 	}
 	if (error)
@@ -114,16 +110,14 @@ xfs_iformat_fork(
 		error = xfs_iformat_btree(ip, dip, XFS_ATTR_FORK);
 		break;
 	default:
-		xfs_inode_verifier_error(ip, error, __func__, dip,
-				sizeof(*dip), __this_address);
 		error = -EFSCORRUPTED;
 		break;
 	}
 	if (error) {
-		kmem_cache_free(xfs_ifork_zone, ip->i_afp);
+		kmem_zone_free(xfs_ifork_zone, ip->i_afp);
 		ip->i_afp = NULL;
 		if (ip->i_cowfp)
-			kmem_cache_free(xfs_ifork_zone, ip->i_cowfp);
+			kmem_zone_free(xfs_ifork_zone, ip->i_cowfp);
 		ip->i_cowfp = NULL;
 		xfs_idestroy_fork(ip, XFS_DATA_FORK);
 	}
@@ -135,7 +129,7 @@ xfs_init_local_fork(
 	struct xfs_inode	*ip,
 	int			whichfork,
 	const void		*data,
-	int64_t			size)
+	int			size)
 {
 	struct xfs_ifork	*ifp = XFS_IFORK_PTR(ip, whichfork);
 	int			mem_size = size, real_size = 0;
@@ -473,11 +467,11 @@ xfs_iroot_realloc(
 void
 xfs_idata_realloc(
 	struct xfs_inode	*ip,
-	int64_t			byte_diff,
+	int			byte_diff,
 	int			whichfork)
 {
 	struct xfs_ifork	*ifp = XFS_IFORK_PTR(ip, whichfork);
-	int64_t			new_size = ifp->if_bytes + byte_diff;
+	int			new_size = (int)ifp->if_bytes + byte_diff;
 
 	ASSERT(new_size >= 0);
 	ASSERT(new_size <= XFS_IFORK_SIZE(ip, whichfork));
@@ -531,10 +525,10 @@ xfs_idestroy_fork(
 	}
 
 	if (whichfork == XFS_ATTR_FORK) {
-		kmem_cache_free(xfs_ifork_zone, ip->i_afp);
+		kmem_zone_free(xfs_ifork_zone, ip->i_afp);
 		ip->i_afp = NULL;
 	} else if (whichfork == XFS_COW_FORK) {
-		kmem_cache_free(xfs_ifork_zone, ip->i_cowfp);
+		kmem_zone_free(xfs_ifork_zone, ip->i_cowfp);
 		ip->i_cowfp = NULL;
 	}
 }
@@ -558,7 +552,7 @@ xfs_iextents_copy(
 	struct xfs_ifork	*ifp = XFS_IFORK_PTR(ip, whichfork);
 	struct xfs_iext_cursor	icur;
 	struct xfs_bmbt_irec	rec;
-	int64_t			copied = 0;
+	int			copied = 0;
 
 	ASSERT(xfs_isilocked(ip, XFS_ILOCK_EXCL | XFS_ILOCK_SHARED));
 	ASSERT(ifp->if_bytes > 0);

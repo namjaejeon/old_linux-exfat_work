@@ -7,7 +7,6 @@
  */
 
 #include <linux/errno.h>
-#include <linux/io.h>
 #include <linux/kernel.h>
 #include <linux/mm.h>
 #include <linux/module.h>

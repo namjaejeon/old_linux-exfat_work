@@ -249,11 +249,10 @@ bool icmp_global_allow(void)
 	bool rc = false;
 
 	/* Check if token bucket is empty and cannot be refilled
-	 * without taking the spinlock. The READ_ONCE() are paired
-	 * with the following WRITE_ONCE() in this same function.
+	 * without taking the spinlock.
 	 */
-	if (!READ_ONCE(icmp_global.credit)) {
-		delta = min_t(u32, now - READ_ONCE(icmp_global.stamp), HZ);
+	if (!icmp_global.credit) {
+		delta = min_t(u32, now - icmp_global.stamp, HZ);
 		if (delta < HZ / 50)
 			return false;
 	}
@@ -263,14 +262,14 @@ bool icmp_global_allow(void)
 	if (delta >= HZ / 50) {
 		incr = sysctl_icmp_msgs_per_sec * delta / HZ ;
 		if (incr)
-			WRITE_ONCE(icmp_global.stamp, now);
+			icmp_global.stamp = now;
 	}
 	credit = min_t(u32, icmp_global.credit + incr, sysctl_icmp_msgs_burst);
 	if (credit) {
 		credit--;
 		rc = true;
 	}
-	WRITE_ONCE(icmp_global.credit, credit);
+	icmp_global.credit = credit;
 	spin_unlock(&icmp_global.lock);
 	return rc;
 }
@@ -683,8 +682,7 @@ void __icmp_send(struct sk_buff *skb_in, int type, int code, __be32 info,
 			dev = dev_get_by_index_rcu(net, inet_iif(skb_in));
 
 		if (dev)
-			saddr = inet_select_addr(dev, iph->saddr,
-						 RT_SCOPE_LINK);
+			saddr = inet_select_addr(dev, 0, RT_SCOPE_LINK);
 		else
 			saddr = 0;
 		rcu_read_unlock();

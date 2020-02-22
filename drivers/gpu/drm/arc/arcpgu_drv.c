@@ -14,7 +14,6 @@
 #include <drm/drm_fb_helper.h>
 #include <drm/drm_gem_cma_helper.h>
 #include <drm/drm_gem_framebuffer_helper.h>
-#include <drm/drm_of.h>
 #include <drm/drm_probe_helper.h>
 #include <linux/dma-mapping.h>
 #include <linux/module.h>
@@ -46,7 +45,7 @@ static int arcpgu_load(struct drm_device *drm)
 {
 	struct platform_device *pdev = to_platform_device(drm->dev);
 	struct arcpgu_drm_private *arcpgu;
-	struct device_node *encoder_node = NULL, *endpoint_node = NULL;
+	struct device_node *encoder_node;
 	struct resource *res;
 	int ret;
 
@@ -81,23 +80,14 @@ static int arcpgu_load(struct drm_device *drm)
 	if (arc_pgu_setup_crtc(drm) < 0)
 		return -ENODEV;
 
-	/*
-	 * There is only one output port inside each device. It is linked with
-	 * encoder endpoint.
-	 */
-	endpoint_node = of_graph_get_next_endpoint(pdev->dev.of_node, NULL);
-	if (endpoint_node) {
-		encoder_node = of_graph_get_remote_port_parent(endpoint_node);
-		of_node_put(endpoint_node);
-	}
-
+	/* find the encoder node and initialize it */
+	encoder_node = of_parse_phandle(drm->dev->of_node, "encoder-slave", 0);
 	if (encoder_node) {
 		ret = arcpgu_drm_hdmi_init(drm, encoder_node);
 		of_node_put(encoder_node);
 		if (ret < 0)
 			return ret;
 	} else {
-		dev_info(drm->dev, "no encoder found. Assumed virtual LCD on simulation platform\n");
 		ret = arcpgu_drm_sim_init(drm, NULL);
 		if (ret < 0)
 			return ret;

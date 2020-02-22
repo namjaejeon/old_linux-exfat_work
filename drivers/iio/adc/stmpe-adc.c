@@ -175,7 +175,7 @@ static int stmpe_read_raw(struct iio_dev *indio_dev,
 static irqreturn_t stmpe_adc_isr(int irq, void *dev_id)
 {
 	struct stmpe_adc *info = (struct stmpe_adc *)dev_id;
-	__be16 data;
+	u16 data;
 
 	if (info->channel <= STMPE_ADC_LAST_NR) {
 		int int_sta;

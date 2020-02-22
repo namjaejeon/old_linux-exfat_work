@@ -131,22 +131,9 @@ struct klp_object {
 };
 
 /**
- * struct klp_state - state of the system modified by the livepatch
- * @id:		system state identifier (non-zero)
- * @version:	version of the change
- * @data:	custom data
- */
-struct klp_state {
-	unsigned long id;
-	unsigned int version;
-	void *data;
-};
-
-/**
  * struct klp_patch - patch structure for live patching
  * @mod:	reference to the live patch module
  * @objs:	object entries for kernel objects to be patched
- * @states:	system states that can get modified
  * @replace:	replace all actively used patches
  * @list:	list node for global list of actively used patches
  * @kobj:	kobject for sysfs resources
@@ -160,7 +147,6 @@ struct klp_patch {
 	/* external */
 	struct module *mod;
 	struct klp_object *objs;
-	struct klp_state *states;
 	bool replace;
 
 	/* internal */
@@ -230,9 +216,6 @@ void *klp_shadow_get_or_alloc(void *obj, unsigned long id,
 			      klp_shadow_ctor_t ctor, void *ctor_data);
 void klp_shadow_free(void *obj, unsigned long id, klp_shadow_dtor_t dtor);
 void klp_shadow_free_all(unsigned long id, klp_shadow_dtor_t dtor);
-
-struct klp_state *klp_get_state(struct klp_patch *patch, unsigned long id);
-struct klp_state *klp_get_prev_state(unsigned long id);
 
 #else /* !CONFIG_LIVEPATCH */
 

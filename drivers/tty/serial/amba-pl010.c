@@ -15,6 +15,10 @@
  * and hooked into this driver.
  */
 
+#if defined(CONFIG_SERIAL_AMBA_PL010_CONSOLE) && defined(CONFIG_MAGIC_SYSRQ)
+#define SUPPORT_SYSRQ
+#endif
+
 #include <linux/module.h>
 #include <linux/ioport.h>
 #include <linux/init.h>
@@ -724,7 +728,6 @@ static int pl010_probe(struct amba_device *dev, const struct amba_id *id)
 	uap->port.iotype = UPIO_MEM;
 	uap->port.irq = dev->irq[0];
 	uap->port.fifosize = 16;
-	uap->port.has_sysrq = IS_ENABLED(CONFIG_SERIAL_AMBA_PL010_CONSOLE);
 	uap->port.ops = &amba_pl010_pops;
 	uap->port.flags = UPF_BOOT_AUTOCONF;
 	uap->port.line = i;

@@ -96,8 +96,7 @@ FEATURE_TESTS_EXTRA :=                  \
          cxx                            \
          llvm                           \
          llvm-version                   \
-         clang                          \
-         libbpf
+         clang
 
 FEATURE_TESTS ?= $(FEATURE_TESTS_BASIC)
 

@@ -185,8 +185,7 @@ static void group_init(struct psi_group *group)
 
 	for_each_possible_cpu(cpu)
 		seqcount_init(&per_cpu_ptr(group->pcpu, cpu)->seq);
-	group->avg_last_update = sched_clock();
-	group->avg_next_update = group->avg_last_update + psi_period;
+	group->avg_next_update = sched_clock() + psi_period;
 	INIT_DELAYED_WORK(&group->avgs_work, psi_avgs_work);
 	mutex_init(&group->avgs_lock);
 	/* Init trigger-related members */
@@ -482,7 +481,7 @@ static u64 window_update(struct psi_window *win, u64 now, u64 value)
 		u32 remaining;
 
 		remaining = win->size - elapsed;
-		growth += div64_u64(win->prev_growth * remaining, win->size);
+		growth += div_u64(win->prev_growth * remaining, win->size);
 	}
 
 	return growth;
@@ -1251,41 +1250,39 @@ static int psi_fop_release(struct inode *inode, struct file *file)
 	return single_release(inode, file);
 }
 
-static const struct proc_ops psi_io_proc_ops = {
-	.proc_open	= psi_io_open,
-	.proc_read	= seq_read,
-	.proc_lseek	= seq_lseek,
-	.proc_write	= psi_io_write,
-	.proc_poll	= psi_fop_poll,
-	.proc_release	= psi_fop_release,
+static const struct file_operations psi_io_fops = {
+	.open           = psi_io_open,
+	.read           = seq_read,
+	.llseek         = seq_lseek,
+	.write          = psi_io_write,
+	.poll           = psi_fop_poll,
+	.release        = psi_fop_release,
 };
 
-static const struct proc_ops psi_memory_proc_ops = {
-	.proc_open	= psi_memory_open,
-	.proc_read	= seq_read,
-	.proc_lseek	= seq_lseek,
-	.proc_write	= psi_memory_write,
-	.proc_poll	= psi_fop_poll,
-	.proc_release	= psi_fop_release,
+static const struct file_operations psi_memory_fops = {
+	.open           = psi_memory_open,
+	.read           = seq_read,
+	.llseek         = seq_lseek,
+	.write          = psi_memory_write,
+	.poll           = psi_fop_poll,
+	.release        = psi_fop_release,
 };
 
-static const struct proc_ops psi_cpu_proc_ops = {
-	.proc_open	= psi_cpu_open,
-	.proc_read	= seq_read,
-	.proc_lseek	= seq_lseek,
-	.proc_write	= psi_cpu_write,
-	.proc_poll	= psi_fop_poll,
-	.proc_release	= psi_fop_release,
+static const struct file_operations psi_cpu_fops = {
+	.open           = psi_cpu_open,
+	.read           = seq_read,
+	.llseek         = seq_lseek,
+	.write          = psi_cpu_write,
+	.poll           = psi_fop_poll,
+	.release        = psi_fop_release,
 };
 
 static int __init psi_proc_init(void)
 {
-	if (psi_enable) {
-		proc_mkdir("pressure", NULL);
-		proc_create("pressure/io", 0, NULL, &psi_io_proc_ops);
-		proc_create("pressure/memory", 0, NULL, &psi_memory_proc_ops);
-		proc_create("pressure/cpu", 0, NULL, &psi_cpu_proc_ops);
-	}
+	proc_mkdir("pressure", NULL);
+	proc_create("pressure/io", 0, NULL, &psi_io_fops);
+	proc_create("pressure/memory", 0, NULL, &psi_memory_fops);
+	proc_create("pressure/cpu", 0, NULL, &psi_cpu_fops);
 	return 0;
 }
 module_init(psi_proc_init);

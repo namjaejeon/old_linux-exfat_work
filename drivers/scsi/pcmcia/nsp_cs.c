@@ -56,7 +56,9 @@
 MODULE_AUTHOR("YOKOTA Hiroshi <yokota@netlab.is.tsukuba.ac.jp>");
 MODULE_DESCRIPTION("WorkBit NinjaSCSI-3 / NinjaSCSI-32Bi(16bit) PCMCIA SCSI host adapter module");
 MODULE_SUPPORTED_DEVICE("sd,sr,sg,st");
+#ifdef MODULE_LICENSE
 MODULE_LICENSE("GPL");
+#endif
 
 #include "nsp_io.h"
 
@@ -1560,7 +1562,7 @@ static int nsp_cs_config_check(struct pcmcia_device *p_dev, void *priv_data)
 			goto next_entry;
 
 		data->MmioAddress = (unsigned long)
-			ioremap(p_dev->resource[2]->start,
+			ioremap_nocache(p_dev->resource[2]->start,
 					resource_size(p_dev->resource[2]));
 		data->MmioLength  = resource_size(p_dev->resource[2]);
 	}

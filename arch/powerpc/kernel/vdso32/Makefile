@@ -2,7 +2,9 @@
 
 # List of files in the vdso, has to be asm only for now
 
-obj-vdso32 = sigtramp.o gettimeofday.o datapage.o cacheflush.o note.o getcpu.o
+obj-vdso32-$(CONFIG_PPC64) = getcpu.o
+obj-vdso32 = sigtramp.o gettimeofday.o datapage.o cacheflush.o note.o \
+		$(obj-vdso32-y)
 
 # Build rules
 

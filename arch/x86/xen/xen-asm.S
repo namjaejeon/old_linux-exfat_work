@@ -19,7 +19,7 @@
  * event status with one and operation.  If there are pending events,
  * then enter the hypervisor to get them handled.
  */
-SYM_FUNC_START(xen_irq_enable_direct)
+ENTRY(xen_irq_enable_direct)
 	FRAME_BEGIN
 	/* Unmask events */
 	movb $0, PER_CPU_VAR(xen_vcpu_info) + XEN_vcpu_info_mask
@@ -38,17 +38,17 @@ SYM_FUNC_START(xen_irq_enable_direct)
 1:
 	FRAME_END
 	ret
-SYM_FUNC_END(xen_irq_enable_direct)
+	ENDPROC(xen_irq_enable_direct)
 
 
 /*
  * Disabling events is simply a matter of making the event mask
  * non-zero.
  */
-SYM_FUNC_START(xen_irq_disable_direct)
+ENTRY(xen_irq_disable_direct)
 	movb $1, PER_CPU_VAR(xen_vcpu_info) + XEN_vcpu_info_mask
 	ret
-SYM_FUNC_END(xen_irq_disable_direct)
+ENDPROC(xen_irq_disable_direct)
 
 /*
  * (xen_)save_fl is used to get the current interrupt enable status.
@@ -59,12 +59,12 @@ SYM_FUNC_END(xen_irq_disable_direct)
  * undefined.  We need to toggle the state of the bit, because Xen and
  * x86 use opposite senses (mask vs enable).
  */
-SYM_FUNC_START(xen_save_fl_direct)
+ENTRY(xen_save_fl_direct)
 	testb $0xff, PER_CPU_VAR(xen_vcpu_info) + XEN_vcpu_info_mask
 	setz %ah
 	addb %ah, %ah
 	ret
-SYM_FUNC_END(xen_save_fl_direct)
+	ENDPROC(xen_save_fl_direct)
 
 
 /*
@@ -74,7 +74,7 @@ SYM_FUNC_END(xen_save_fl_direct)
  * interrupt mask state, it checks for unmasked pending events and
  * enters the hypervisor to get them delivered if so.
  */
-SYM_FUNC_START(xen_restore_fl_direct)
+ENTRY(xen_restore_fl_direct)
 	FRAME_BEGIN
 #ifdef CONFIG_X86_64
 	testw $X86_EFLAGS_IF, %di
@@ -95,14 +95,14 @@ SYM_FUNC_START(xen_restore_fl_direct)
 1:
 	FRAME_END
 	ret
-SYM_FUNC_END(xen_restore_fl_direct)
+	ENDPROC(xen_restore_fl_direct)
 
 
 /*
  * Force an event check by making a hypercall, but preserve regs
  * before making the call.
  */
-SYM_FUNC_START(check_events)
+ENTRY(check_events)
 	FRAME_BEGIN
 #ifdef CONFIG_X86_32
 	push %eax
@@ -135,19 +135,19 @@ SYM_FUNC_START(check_events)
 #endif
 	FRAME_END
 	ret
-SYM_FUNC_END(check_events)
+ENDPROC(check_events)
 
-SYM_FUNC_START(xen_read_cr2)
+ENTRY(xen_read_cr2)
 	FRAME_BEGIN
 	_ASM_MOV PER_CPU_VAR(xen_vcpu), %_ASM_AX
 	_ASM_MOV XEN_vcpu_info_arch_cr2(%_ASM_AX), %_ASM_AX
 	FRAME_END
 	ret
-SYM_FUNC_END(xen_read_cr2);
+	ENDPROC(xen_read_cr2);
 
-SYM_FUNC_START(xen_read_cr2_direct)
+ENTRY(xen_read_cr2_direct)
 	FRAME_BEGIN
 	_ASM_MOV PER_CPU_VAR(xen_vcpu_info) + XEN_vcpu_info_arch_cr2, %_ASM_AX
 	FRAME_END
 	ret
-SYM_FUNC_END(xen_read_cr2_direct);
+	ENDPROC(xen_read_cr2_direct);

@@ -27,25 +27,25 @@ __cmpxchg_u32(volatile int *p, int old, int new)
 	unsigned long tmp, result;
 
 	__asm__ __volatile__(
-			"1:     l32ex   %[result], %[addr]\n"
-			"       bne     %[result], %[cmp], 2f\n"
-			"       mov     %[tmp], %[new]\n"
-			"       s32ex   %[tmp], %[addr]\n"
-			"       getex   %[tmp]\n"
-			"       beqz    %[tmp], 1b\n"
+			"1:     l32ex   %0, %3\n"
+			"       bne     %0, %4, 2f\n"
+			"       mov     %1, %2\n"
+			"       s32ex   %1, %3\n"
+			"       getex   %1\n"
+			"       beqz    %1, 1b\n"
 			"2:\n"
-			: [result] "=&a" (result), [tmp] "=&a" (tmp)
-			: [new] "a" (new), [addr] "a" (p), [cmp] "a" (old)
+			: "=&a" (result), "=&a" (tmp)
+			: "a" (new), "a" (p), "a" (old)
 			: "memory"
 			);
 
 	return result;
 #elif XCHAL_HAVE_S32C1I
 	__asm__ __volatile__(
-			"       wsr     %[cmp], scompare1\n"
-			"       s32c1i  %[new], %[mem]\n"
-			: [new] "+a" (new), [mem] "+m" (*p)
-			: [cmp] "a" (old)
+			"       wsr     %2, scompare1\n"
+			"       s32c1i  %0, %1, 0\n"
+			: "+a" (new)
+			: "a" (p), "a" (old)
 			: "memory"
 			);
 
@@ -53,14 +53,14 @@ __cmpxchg_u32(volatile int *p, int old, int new)
 #else
 	__asm__ __volatile__(
 			"       rsil    a15, "__stringify(TOPLEVEL)"\n"
-			"       l32i    %[old], %[mem]\n"
-			"       bne     %[old], %[cmp], 1f\n"
-			"       s32i    %[new], %[mem]\n"
+			"       l32i    %0, %1, 0\n"
+			"       bne     %0, %2, 1f\n"
+			"       s32i    %3, %1, 0\n"
 			"1:\n"
 			"       wsr     a15, ps\n"
 			"       rsync\n"
-			: [old] "=&a" (old), [mem] "+m" (*p)
-			: [cmp] "a" (old), [new] "r" (new)
+			: "=&a" (old)
+			: "a" (p), "a" (old), "r" (new)
 			: "a15", "memory");
 	return old;
 #endif
@@ -129,13 +129,13 @@ static inline unsigned long xchg_u32(volatile int * m, unsigned long val)
 	unsigned long tmp, result;
 
 	__asm__ __volatile__(
-			"1:     l32ex   %[result], %[addr]\n"
-			"       mov     %[tmp], %[val]\n"
-			"       s32ex   %[tmp], %[addr]\n"
-			"       getex   %[tmp]\n"
-			"       beqz    %[tmp], 1b\n"
-			: [result] "=&a" (result), [tmp] "=&a" (tmp)
-			: [val] "a" (val), [addr] "a" (m)
+			"1:     l32ex   %0, %3\n"
+			"       mov     %1, %2\n"
+			"       s32ex   %1, %3\n"
+			"       getex   %1\n"
+			"       beqz    %1, 1b\n"
+			: "=&a" (result), "=&a" (tmp)
+			: "a" (val), "a" (m)
 			: "memory"
 			);
 
@@ -143,14 +143,13 @@ static inline unsigned long xchg_u32(volatile int * m, unsigned long val)
 #elif XCHAL_HAVE_S32C1I
 	unsigned long tmp, result;
 	__asm__ __volatile__(
-			"1:     l32i    %[tmp], %[mem]\n"
-			"       mov     %[result], %[val]\n"
-			"       wsr     %[tmp], scompare1\n"
-			"       s32c1i  %[result], %[mem]\n"
-			"       bne     %[result], %[tmp], 1b\n"
-			: [result] "=&a" (result), [tmp] "=&a" (tmp),
-			  [mem] "+m" (*m)
-			: [val] "a" (val)
+			"1:     l32i    %1, %2, 0\n"
+			"       mov     %0, %3\n"
+			"       wsr     %1, scompare1\n"
+			"       s32c1i  %0, %2, 0\n"
+			"       bne     %0, %1, 1b\n"
+			: "=&a" (result), "=&a" (tmp)
+			: "a" (m), "a" (val)
 			: "memory"
 			);
 	return result;
@@ -158,12 +157,12 @@ static inline unsigned long xchg_u32(volatile int * m, unsigned long val)
 	unsigned long tmp;
 	__asm__ __volatile__(
 			"       rsil    a15, "__stringify(TOPLEVEL)"\n"
-			"       l32i    %[tmp], %[mem]\n"
-			"       s32i    %[val], %[mem]\n"
+			"       l32i    %0, %1, 0\n"
+			"       s32i    %2, %1, 0\n"
 			"       wsr     a15, ps\n"
 			"       rsync\n"
-			: [tmp] "=&a" (tmp), [mem] "+m" (*m)
-			: [val] "a" (val)
+			: "=&a" (tmp)
+			: "a" (m), "a" (val)
 			: "a15", "memory");
 	return tmp;
 #endif

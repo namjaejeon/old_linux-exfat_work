@@ -11,6 +11,7 @@
 #include <linux/backlight.h>
 #include <linux/delay.h>
 #include <linux/fb.h>
+#include <linux/gpio.h>
 #include <linux/lcd.h>
 #include <linux/module.h>
 #include <linux/spi/spi.h>

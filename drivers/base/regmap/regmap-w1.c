@@ -215,6 +215,8 @@ struct regmap *__regmap_init_w1(struct device *w1_dev,
 
 	return __regmap_init(w1_dev, bus, w1_dev, config,
 			 lock_key, lock_name);
+
+	return NULL;
 }
 EXPORT_SYMBOL_GPL(__regmap_init_w1);
 
@@ -231,6 +233,8 @@ struct regmap *__devm_regmap_init_w1(struct device *w1_dev,
 
 	return __devm_regmap_init(w1_dev, bus, w1_dev, config,
 				 lock_key, lock_name);
+
+	return NULL;
 }
 EXPORT_SYMBOL_GPL(__devm_regmap_init_w1);
 

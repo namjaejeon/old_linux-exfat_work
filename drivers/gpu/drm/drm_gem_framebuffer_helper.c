@@ -74,7 +74,8 @@ drm_gem_fb_alloc(struct drm_device *dev,
 
 	ret = drm_framebuffer_init(dev, fb, funcs);
 	if (ret) {
-		drm_err(dev, "Failed to init framebuffer: %d\n", ret);
+		DRM_DEV_ERROR(dev->dev, "Failed to init framebuffer: %d\n",
+			      ret);
 		kfree(fb);
 		return ERR_PTR(ret);
 	}
@@ -159,7 +160,7 @@ drm_gem_fb_create_with_funcs(struct drm_device *dev, struct drm_file *file,
 
 		objs[i] = drm_gem_object_lookup(file, mode_cmd->handles[i]);
 		if (!objs[i]) {
-			drm_dbg_kms(dev, "Failed to lookup GEM object\n");
+			DRM_DEBUG_KMS("Failed to lookup GEM object\n");
 			ret = -ENOENT;
 			goto err_gem_object_put;
 		}

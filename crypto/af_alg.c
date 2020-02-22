@@ -134,13 +134,11 @@ void af_alg_release_parent(struct sock *sk)
 	sk = ask->parent;
 	ask = alg_sk(sk);
 
-	local_bh_disable();
-	bh_lock_sock(sk);
+	lock_sock(sk);
 	ask->nokey_refcnt -= nokey;
 	if (!last)
 		last = !--ask->refcnt;
-	bh_unlock_sock(sk);
-	local_bh_enable();
+	release_sock(sk);
 
 	if (last)
 		sock_put(sk);
@@ -171,7 +169,7 @@ static int alg_bind(struct socket *sock, struct sockaddr *uaddr, int addr_len)
 	sa->salg_name[sizeof(sa->salg_name) + addr_len - sizeof(*sa) - 1] = 0;
 
 	type = alg_get_type(sa->salg_type);
-	if (PTR_ERR(type) == -ENOENT) {
+	if (IS_ERR(type) && PTR_ERR(type) == -ENOENT) {
 		request_module("algif-%s", sa->salg_type);
 		type = alg_get_type(sa->salg_type);
 	}
@@ -1045,7 +1043,7 @@ void af_alg_async_cb(struct crypto_async_request *_req, int err)
 	af_alg_free_resources(areq);
 	sock_put(sk);
 
-	iocb->ki_complete(iocb, err ? err : (int)resultlen, 0);
+	iocb->ki_complete(iocb, err ? err : resultlen, 0);
 }
 EXPORT_SYMBOL_GPL(af_alg_async_cb);
 

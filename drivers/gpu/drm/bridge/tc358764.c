@@ -16,7 +16,6 @@
 #include <video/mipi_display.h>
 
 #include <drm/drm_atomic_helper.h>
-#include <drm/drm_bridge.h>
 #include <drm/drm_crtc.h>
 #include <drm/drm_fb_helper.h>
 #include <drm/drm_mipi_dsi.h>
@@ -282,7 +281,7 @@ static int tc358764_get_modes(struct drm_connector *connector)
 {
 	struct tc358764 *ctx = connector_to_tc358764(connector);
 
-	return drm_panel_get_modes(ctx->panel, connector);
+	return drm_panel_get_modes(ctx->panel);
 }
 
 static const

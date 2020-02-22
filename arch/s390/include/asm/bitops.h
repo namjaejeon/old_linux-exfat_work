@@ -241,9 +241,7 @@ static inline void arch___clear_bit_unlock(unsigned long nr,
 	arch___clear_bit(nr, ptr);
 }
 
-#include <asm-generic/bitops/instrumented-atomic.h>
-#include <asm-generic/bitops/instrumented-non-atomic.h>
-#include <asm-generic/bitops/instrumented-lock.h>
+#include <asm-generic/bitops-instrumented.h>
 
 /*
  * Functions which use MSB0 bit numbering.

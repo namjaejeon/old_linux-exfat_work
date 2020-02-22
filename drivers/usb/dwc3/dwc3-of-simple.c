@@ -110,9 +110,12 @@ err_resetc_put:
 	return ret;
 }
 
-static void __dwc3_of_simple_teardown(struct dwc3_of_simple *simple)
+static int dwc3_of_simple_remove(struct platform_device *pdev)
 {
-	of_platform_depopulate(simple->dev);
+	struct dwc3_of_simple	*simple = platform_get_drvdata(pdev);
+	struct device		*dev = &pdev->dev;
+
+	of_platform_depopulate(dev);
 
 	clk_bulk_disable_unprepare(simple->num_clocks, simple->clks);
 	clk_bulk_put_all(simple->num_clocks, simple->clks);
@@ -123,25 +126,11 @@ static void __dwc3_of_simple_teardown(struct dwc3_of_simple *simple)
 
 	reset_control_put(simple->resets);
 
-	pm_runtime_disable(simple->dev);
-	pm_runtime_put_noidle(simple->dev);
-	pm_runtime_set_suspended(simple->dev);
-}
-
-static int dwc3_of_simple_remove(struct platform_device *pdev)
-{
-	struct dwc3_of_simple	*simple = platform_get_drvdata(pdev);
-
-	__dwc3_of_simple_teardown(simple);
+	pm_runtime_disable(dev);
+	pm_runtime_put_noidle(dev);
+	pm_runtime_set_suspended(dev);
 
 	return 0;
-}
-
-static void dwc3_of_simple_shutdown(struct platform_device *pdev)
-{
-	struct dwc3_of_simple	*simple = platform_get_drvdata(pdev);
-
-	__dwc3_of_simple_teardown(simple);
 }
 
 static int __maybe_unused dwc3_of_simple_runtime_suspend(struct device *dev)
@@ -201,7 +190,6 @@ MODULE_DEVICE_TABLE(of, of_dwc3_simple_match);
 static struct platform_driver dwc3_of_simple_driver = {
 	.probe		= dwc3_of_simple_probe,
 	.remove		= dwc3_of_simple_remove,
-	.shutdown	= dwc3_of_simple_shutdown,
 	.driver		= {
 		.name	= "dwc3-of-simple",
 		.of_match_table = of_dwc3_simple_match,

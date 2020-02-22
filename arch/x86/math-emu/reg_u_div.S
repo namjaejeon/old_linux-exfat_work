@@ -75,7 +75,7 @@ FPU_ovfl_flag:
 #define DEST	PARAM3
 
 .text
-SYM_FUNC_START(FPU_u_div)
+ENTRY(FPU_u_div)
 	pushl	%ebp
 	movl	%esp,%ebp
 #ifndef NON_REENTRANT_FPU
@@ -471,4 +471,4 @@ L_exit:
 	ret
 #endif /* PARANOID */ 
 
-SYM_FUNC_END(FPU_u_div)
+ENDPROC(FPU_u_div)

@@ -414,11 +414,8 @@ static unsigned long vgic_mmio_read_pendbase(struct kvm_vcpu *vcpu,
 					     gpa_t addr, unsigned int len)
 {
 	struct vgic_cpu *vgic_cpu = &vcpu->arch.vgic_cpu;
-	u64 value = vgic_cpu->pendbaser;
 
-	value &= ~GICR_PENDBASER_PTZ;
-
-	return extract_bytes(value, addr & 7, len);
+	return extract_bytes(vgic_cpu->pendbaser, addr & 7, len);
 }
 
 static void vgic_mmio_write_pendbase(struct kvm_vcpu *vcpu,

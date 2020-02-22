@@ -38,7 +38,6 @@ int __init i915_global_buddy_init(void)
 	if (!global.slab_blocks)
 		return -ENOMEM;
 
-	i915_global_register(&global.base);
 	return 0;
 }
 
@@ -262,10 +261,8 @@ void i915_buddy_free_list(struct i915_buddy_mm *mm, struct list_head *objects)
 {
 	struct i915_buddy_block *block, *on;
 
-	list_for_each_entry_safe(block, on, objects, link) {
+	list_for_each_entry_safe(block, on, objects, link)
 		i915_buddy_free(mm, block);
-		cond_resched();
-	}
 	INIT_LIST_HEAD(objects);
 }
 

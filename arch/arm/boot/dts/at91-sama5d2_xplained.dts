@@ -334,9 +334,6 @@
 					pinctrl-names = "default";
 					pinctrl-0 = <&pinctrl_flx4_default>;
 					atmel,fifo-size = <16>;
-					i2c-analog-filter;
-					i2c-digital-filter;
-					i2c-digital-filter-width-ns = <35>;
 					status = "okay";
 				};
 			};
@@ -345,9 +342,6 @@
 				dmas = <0>, <0>;
 				pinctrl-names = "default";
 				pinctrl-0 = <&pinctrl_i2c1_default>;
-				i2c-analog-filter;
-				i2c-digital-filter;
-				i2c-digital-filter-width-ns = <35>;
 				status = "okay";
 
 				at24@54 {

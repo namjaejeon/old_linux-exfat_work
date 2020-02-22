@@ -13,12 +13,13 @@
 #include <linux/sched/signal.h>
 
 #include <net/sock.h>
-#include <net/tcp.h>
 
 #include "smc.h"
 #include "smc_tx.h"
 #include "smc_cdc.h"
 #include "smc_close.h"
+
+#define SMC_CLOSE_WAIT_LISTEN_CLCSOCK_TIME	(5 * HZ)
 
 /* release the clcsock that is assigned to the smc_sock */
 void smc_clcsock_release(struct smc_sock *smc)
@@ -64,9 +65,8 @@ static void smc_close_stream_wait(struct smc_sock *smc, long timeout)
 
 		rc = sk_wait_event(sk, &timeout,
 				   !smc_tx_prepared_sends(&smc->conn) ||
-				   sk->sk_err == ECONNABORTED ||
-				   sk->sk_err == ECONNRESET ||
-				   smc->conn.killed,
+				   (sk->sk_err == ECONNABORTED) ||
+				   (sk->sk_err == ECONNRESET),
 				   &wait);
 		if (rc)
 			break;
@@ -95,73 +95,68 @@ static int smc_close_final(struct smc_connection *conn)
 		conn->local_tx_ctrl.conn_state_flags.peer_conn_abort = 1;
 	else
 		conn->local_tx_ctrl.conn_state_flags.peer_conn_closed = 1;
-	if (conn->killed)
-		return -EPIPE;
 
 	return smc_cdc_get_slot_and_msg_send(conn);
 }
 
-int smc_close_abort(struct smc_connection *conn)
+static int smc_close_abort(struct smc_connection *conn)
 {
 	conn->local_tx_ctrl.conn_state_flags.peer_conn_abort = 1;
 
 	return smc_cdc_get_slot_and_msg_send(conn);
 }
 
-static void smc_close_cancel_work(struct smc_sock *smc)
-{
-	struct sock *sk = &smc->sk;
-
-	release_sock(sk);
-	cancel_work_sync(&smc->conn.close_work);
-	cancel_delayed_work_sync(&smc->conn.tx_work);
-	lock_sock(sk);
-	sk->sk_state = SMC_CLOSED;
-}
-
 /* terminate smc socket abnormally - active abort
  * link group is terminated, i.e. RDMA communication no longer possible
  */
-void smc_close_active_abort(struct smc_sock *smc)
+static void smc_close_active_abort(struct smc_sock *smc)
 {
 	struct sock *sk = &smc->sk;
-	bool release_clcsock = false;
+
+	struct smc_cdc_conn_state_flags *txflags =
+		&smc->conn.local_tx_ctrl.conn_state_flags;
 
 	if (sk->sk_state != SMC_INIT && smc->clcsock && smc->clcsock->sk) {
 		sk->sk_err = ECONNABORTED;
-		if (smc->clcsock && smc->clcsock->sk)
-			tcp_abort(smc->clcsock->sk, ECONNABORTED);
+		if (smc->clcsock && smc->clcsock->sk) {
+			smc->clcsock->sk->sk_err = ECONNABORTED;
+			smc->clcsock->sk->sk_state_change(smc->clcsock->sk);
+		}
 	}
 	switch (sk->sk_state) {
 	case SMC_ACTIVE:
 		sk->sk_state = SMC_PEERABORTWAIT;
-		smc_close_cancel_work(smc);
-		sk->sk_state = SMC_CLOSED;
+		release_sock(sk);
+		cancel_delayed_work_sync(&smc->conn.tx_work);
+		lock_sock(sk);
 		sock_put(sk); /* passive closing */
 		break;
 	case SMC_APPCLOSEWAIT1:
 	case SMC_APPCLOSEWAIT2:
-		smc_close_cancel_work(smc);
-		sk->sk_state = SMC_CLOSED;
-		sock_put(sk); /* postponed passive closing */
+		if (!smc_cdc_rxed_any_close(&smc->conn))
+			sk->sk_state = SMC_PEERABORTWAIT;
+		else
+			sk->sk_state = SMC_CLOSED;
+		release_sock(sk);
+		cancel_delayed_work_sync(&smc->conn.tx_work);
+		lock_sock(sk);
 		break;
 	case SMC_PEERCLOSEWAIT1:
 	case SMC_PEERCLOSEWAIT2:
-	case SMC_PEERFINCLOSEWAIT:
-		sk->sk_state = SMC_PEERABORTWAIT;
-		smc_close_cancel_work(smc);
-		sk->sk_state = SMC_CLOSED;
-		smc_conn_free(&smc->conn);
-		release_clcsock = true;
+		if (!txflags->peer_conn_closed) {
+			/* just SHUTDOWN_SEND done */
+			sk->sk_state = SMC_PEERABORTWAIT;
+		} else {
+			sk->sk_state = SMC_CLOSED;
+		}
 		sock_put(sk); /* passive closing */
 		break;
 	case SMC_PROCESSABORT:
 	case SMC_APPFINCLOSEWAIT:
-		sk->sk_state = SMC_PEERABORTWAIT;
-		smc_close_cancel_work(smc);
 		sk->sk_state = SMC_CLOSED;
-		smc_conn_free(&smc->conn);
-		release_clcsock = true;
+		break;
+	case SMC_PEERFINCLOSEWAIT:
+		sock_put(sk); /* passive closing */
 		break;
 	case SMC_INIT:
 	case SMC_PEERABORTWAIT:
@@ -171,12 +166,6 @@ void smc_close_active_abort(struct smc_sock *smc)
 
 	sock_set_flag(sk, SOCK_DEAD);
 	sk->sk_state_change(sk);
-
-	if (release_clcsock) {
-		release_sock(sk);
-		smc_clcsock_release(smc);
-		lock_sock(sk);
-	}
 }
 
 static inline bool smc_close_sent_any_close(struct smc_connection *conn)
@@ -226,6 +215,8 @@ again:
 		if (sk->sk_state == SMC_ACTIVE) {
 			/* send close request */
 			rc = smc_close_final(conn);
+			if (rc)
+				break;
 			sk->sk_state = SMC_PEERCLOSEWAIT1;
 		} else {
 			/* peer event has changed the state */
@@ -238,6 +229,8 @@ again:
 		    !smc_close_sent_any_close(conn)) {
 			/* just shutdown wr done, send close request */
 			rc = smc_close_final(conn);
+			if (rc)
+				break;
 		}
 		sk->sk_state = SMC_CLOSED;
 		break;
@@ -253,6 +246,8 @@ again:
 			goto again;
 		/* confirm close from peer */
 		rc = smc_close_final(conn);
+		if (rc)
+			break;
 		if (smc_cdc_rxed_any_close(conn)) {
 			/* peer has closed the socket already */
 			sk->sk_state = SMC_CLOSED;
@@ -268,6 +263,8 @@ again:
 		    !smc_close_sent_any_close(conn)) {
 			/* just shutdown wr done, send close request */
 			rc = smc_close_final(conn);
+			if (rc)
+				break;
 		}
 		/* peer sending PeerConnectionClosed will cause transition */
 		break;
@@ -275,12 +272,10 @@ again:
 		/* peer sending PeerConnectionClosed will cause transition */
 		break;
 	case SMC_PROCESSABORT:
-		rc = smc_close_abort(conn);
+		smc_close_abort(conn);
 		sk->sk_state = SMC_CLOSED;
 		break;
 	case SMC_PEERABORTWAIT:
-		sk->sk_state = SMC_CLOSED;
-		break;
 	case SMC_CLOSED:
 		/* nothing to do, add tracing in future patch */
 		break;
@@ -348,6 +343,12 @@ static void smc_close_passive_work(struct work_struct *work)
 
 	lock_sock(sk);
 	old_state = sk->sk_state;
+
+	if (!conn->alert_token_local) {
+		/* abnormal termination */
+		smc_close_active_abort(smc);
+		goto wakeup;
+	}
 
 	rxflags = &conn->local_rx_ctrl.conn_state_flags;
 	if (rxflags->peer_conn_abort) {
@@ -450,6 +451,8 @@ again:
 			goto again;
 		/* send close wr request */
 		rc = smc_close_wr(conn);
+		if (rc)
+			break;
 		sk->sk_state = SMC_PEERCLOSEWAIT1;
 		break;
 	case SMC_APPCLOSEWAIT1:
@@ -463,6 +466,8 @@ again:
 			goto again;
 		/* confirm close from peer */
 		rc = smc_close_wr(conn);
+		if (rc)
+			break;
 		sk->sk_state = SMC_APPCLOSEWAIT2;
 		break;
 	case SMC_APPCLOSEWAIT2:

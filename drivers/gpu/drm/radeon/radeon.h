@@ -68,10 +68,6 @@
 #include <linux/hashtable.h>
 #include <linux/dma-fence.h>
 
-#ifdef CONFIG_MMU_NOTIFIER
-#include <linux/mmu_notifier.h>
-#endif
-
 #include <drm/ttm/ttm_bo_api.h>
 #include <drm/ttm/ttm_bo_driver.h>
 #include <drm/ttm/ttm_placement.h>
@@ -513,9 +509,8 @@ struct radeon_bo {
 	struct ttm_bo_kmap_obj		dma_buf_vmap;
 	pid_t				pid;
 
-#ifdef CONFIG_MMU_NOTIFIER
-	struct mmu_interval_notifier	notifier;
-#endif
+	struct radeon_mn		*mn;
+	struct list_head		mn_list;
 };
 #define gem_to_radeon_bo(gobj) container_of((gobj), struct radeon_bo, tbo.base)
 

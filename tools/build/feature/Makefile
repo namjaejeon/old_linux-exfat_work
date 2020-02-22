@@ -53,7 +53,6 @@ FILES=                                          \
          test-zlib.bin                          \
          test-lzma.bin                          \
          test-bpf.bin                           \
-         test-libbpf.bin                        \
          test-get_cpuid.bin                     \
          test-sdt.bin                           \
          test-cxx.bin                           \
@@ -197,7 +196,7 @@ $(OUTPUT)test-libcrypto.bin:
 	$(BUILD) -lcrypto
 
 $(OUTPUT)test-gtk2.bin:
-	$(BUILD) $(shell $(PKG_CONFIG) --libs --cflags gtk+-2.0 2>/dev/null) -Wno-deprecated-declarations
+	$(BUILD) $(shell $(PKG_CONFIG) --libs --cflags gtk+-2.0 2>/dev/null)
 
 $(OUTPUT)test-gtk2-infobar.bin:
 	$(BUILD) $(shell $(PKG_CONFIG) --libs --cflags gtk+-2.0 2>/dev/null)
@@ -270,9 +269,6 @@ $(OUTPUT)test-get_cpuid.bin:
 
 $(OUTPUT)test-bpf.bin:
 	$(BUILD)
-
-$(OUTPUT)test-libbpf.bin:
-	$(BUILD) -lbpf
 
 $(OUTPUT)test-sdt.bin:
 	$(BUILD)

@@ -21,7 +21,6 @@ place where this information is gathered.
    unshare
    spec_ctrl
    accelerators/ocxl
-   ioctl/index
 
 .. only::  subproject and html
 

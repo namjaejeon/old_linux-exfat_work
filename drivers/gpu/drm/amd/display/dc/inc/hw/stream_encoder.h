@@ -65,11 +65,13 @@ struct audio_clock_info {
 	uint32_t cts_48khz;
 };
 
+#if defined(CONFIG_DRM_AMD_DC_DCN2_0)
 enum dynamic_metadata_mode {
 	dmdata_dp,
 	dmdata_hdmi,
 	dmdata_dolby_vision
 };
+#endif
 
 struct encoder_info_frame {
 	/* auxiliary video information */
@@ -88,7 +90,9 @@ struct encoder_info_frame {
 struct encoder_unblank_param {
 	struct dc_link_settings link_settings;
 	struct dc_crtc_timing timing;
+#ifdef CONFIG_DRM_AMD_DC_DCN2_0
 	int opp_cnt;
+#endif
 };
 
 struct encoder_set_dp_phy_pattern_param {
@@ -105,6 +109,7 @@ struct stream_encoder {
 	enum engine_id id;
 };
 
+#ifdef CONFIG_DRM_AMD_DC_DSC_SUPPORT
 struct enc_state {
 	uint32_t dsc_mode;  // DISABLED  0; 1 or 2 indicate enabled state.
 	uint32_t dsc_slice_width;
@@ -114,13 +119,13 @@ struct enc_state {
 	uint32_t sec_gsp_pps_enable;
 	uint32_t sec_stream_enable;
 };
+#endif
 
 struct stream_encoder_funcs {
 	void (*dp_set_stream_attribute)(
 		struct stream_encoder *enc,
 		struct dc_crtc_timing *crtc_timing,
 		enum dc_color_space output_color_space,
-		bool use_vsc_sdp_for_colorimetry,
 		uint32_t enable_sdp_splitting);
 
 	void (*hdmi_set_stream_attribute)(
@@ -209,11 +214,8 @@ struct stream_encoder_funcs {
 	unsigned int (*dig_source_otg)(
 		struct stream_encoder *enc);
 
-	bool (*dp_get_pixel_format)(
-		struct stream_encoder *enc,
-		enum dc_pixel_encoding *encoding,
-		enum dc_color_depth *depth);
-
+#if defined(CONFIG_DRM_AMD_DC_DCN2_0)
+#ifdef CONFIG_DRM_AMD_DC_DSC_SUPPORT
 	void (*enc_read_state)(struct stream_encoder *enc, struct enc_state *s);
 
 	void (*dp_set_dsc_config)(
@@ -225,6 +227,7 @@ struct stream_encoder_funcs {
 	void (*dp_set_dsc_pps_info_packet)(struct stream_encoder *enc,
 				bool enable,
 				uint8_t *dsc_packed_pps);
+#endif
 
 	void (*set_dynamic_metadata)(struct stream_encoder *enc,
 			bool enable,
@@ -234,6 +237,7 @@ struct stream_encoder_funcs {
 	void (*dp_set_odm_combine)(
 		struct stream_encoder *enc,
 		bool odm_combine);
+#endif
 };
 
 #endif /* STREAM_ENCODER_H_ */

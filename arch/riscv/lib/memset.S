@@ -8,8 +8,7 @@
 #include <asm/asm.h>
 
 /* void *memset(void *, int, size_t) */
-ENTRY(__memset)
-WEAK(memset)
+ENTRY(memset)
 	move t0, a0  /* Preserve return value */
 
 	/* Defer to byte-oriented fill for small sizes */
@@ -110,4 +109,4 @@ WEAK(memset)
 	bltu t0, a3, 5b
 6:
 	ret
-END(__memset)
+END(memset)

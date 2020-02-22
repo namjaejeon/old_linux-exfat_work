@@ -930,4 +930,3 @@ MODULE_AUTHOR("Johannes Thumshirn <johannes.thumshirn@men.de>");
 MODULE_LICENSE("GPL v2");
 MODULE_DESCRIPTION("MEN 16z135 High Speed UART");
 MODULE_ALIAS("mcb:16z135");
-MODULE_IMPORT_NS(MCB);

@@ -444,7 +444,7 @@ static int stu300_wait_while_busy(struct stu300_dev *dev)
 		       "Attempt: %d\n", i+1);
 
 		dev_err(&dev->pdev->dev, "base address = "
-			"0x%p, reinit hardware\n", dev->virtbase);
+			"0x%08x, reinit hardware\n", (u32) dev->virtbase);
 
 		(void) stu300_init_hw(dev);
 	}

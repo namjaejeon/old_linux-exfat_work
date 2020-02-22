@@ -25,7 +25,7 @@
 #include <core/memory.h>
 #include <subdev/timer.h>
 
-void
+static void
 nvkm_falcon_v1_load_imem(struct nvkm_falcon *falcon, void *data, u32 start,
 			 u32 size, u16 tag, u8 port, bool secure)
 {
@@ -89,17 +89,18 @@ nvkm_falcon_v1_load_emem(struct nvkm_falcon *falcon, void *data, u32 start,
 	}
 }
 
-void
+static const u32 EMEM_START_ADDR = 0x1000000;
+
+static void
 nvkm_falcon_v1_load_dmem(struct nvkm_falcon *falcon, void *data, u32 start,
-			 u32 size, u8 port)
+		      u32 size, u8 port)
 {
-	const struct nvkm_falcon_func *func = falcon->func;
 	u8 rem = size % 4;
 	int i;
 
-	if (func->emem_addr && start >= func->emem_addr)
+	if (start >= EMEM_START_ADDR && falcon->has_emem)
 		return nvkm_falcon_v1_load_emem(falcon, data,
-						start - func->emem_addr, size,
+						start - EMEM_START_ADDR, size,
 						port);
 
 	size -= rem;
@@ -147,16 +148,15 @@ nvkm_falcon_v1_read_emem(struct nvkm_falcon *falcon, u32 start, u32 size,
 	}
 }
 
-void
+static void
 nvkm_falcon_v1_read_dmem(struct nvkm_falcon *falcon, u32 start, u32 size,
 			 u8 port, void *data)
 {
-	const struct nvkm_falcon_func *func = falcon->func;
 	u8 rem = size % 4;
 	int i;
 
-	if (func->emem_addr && start >= func->emem_addr)
-		return nvkm_falcon_v1_read_emem(falcon, start - func->emem_addr,
+	if (start >= EMEM_START_ADDR && falcon->has_emem)
+		return nvkm_falcon_v1_read_emem(falcon, start - EMEM_START_ADDR,
 						size, port, data);
 
 	size -= rem;
@@ -179,16 +179,31 @@ nvkm_falcon_v1_read_dmem(struct nvkm_falcon *falcon, u32 start, u32 size,
 	}
 }
 
-void
+static void
 nvkm_falcon_v1_bind_context(struct nvkm_falcon *falcon, struct nvkm_memory *ctx)
 {
-	const u32 fbif = falcon->func->fbif;
+	struct nvkm_device *device = falcon->owner->device;
 	u32 inst_loc;
+	u32 fbif;
 
 	/* disable instance block binding */
 	if (ctx == NULL) {
 		nvkm_falcon_wr32(falcon, 0x10c, 0x0);
 		return;
+	}
+
+	switch (falcon->owner->index) {
+	case NVKM_ENGINE_NVENC0:
+	case NVKM_ENGINE_NVENC1:
+	case NVKM_ENGINE_NVENC2:
+		fbif = 0x800;
+		break;
+	case NVKM_SUBDEV_PMU:
+		fbif = 0xe00;
+		break;
+	default:
+		fbif = 0x600;
+		break;
 	}
 
 	nvkm_falcon_wr32(falcon, 0x10c, 0x1);
@@ -219,15 +234,50 @@ nvkm_falcon_v1_bind_context(struct nvkm_falcon *falcon, struct nvkm_memory *ctx)
 
 	nvkm_falcon_mask(falcon, 0x090, 0x10000, 0x10000);
 	nvkm_falcon_mask(falcon, 0x0a4, 0x8, 0x8);
+
+	/* Not sure if this is a WAR for a HW issue, or some additional
+	 * programming sequence that's needed to properly complete the
+	 * context switch we trigger above.
+	 *
+	 * Fixes unreliability of booting the SEC2 RTOS on Quadro P620,
+	 * particularly when resuming from suspend.
+	 *
+	 * Also removes the need for an odd workaround where we needed
+	 * to program SEC2's FALCON_CPUCTL_ALIAS_STARTCPU twice before
+	 * the SEC2 RTOS would begin executing.
+	 */
+	switch (falcon->owner->index) {
+	case NVKM_SUBDEV_GSP:
+	case NVKM_ENGINE_SEC2:
+		nvkm_msec(device, 10,
+			u32 irqstat = nvkm_falcon_rd32(falcon, 0x008);
+			u32 flcn0dc = nvkm_falcon_rd32(falcon, 0x0dc);
+			if ((irqstat & 0x00000008) &&
+			    (flcn0dc & 0x00007000) == 0x00005000)
+				break;
+		);
+
+		nvkm_falcon_mask(falcon, 0x004, 0x00000008, 0x00000008);
+		nvkm_falcon_mask(falcon, 0x058, 0x00000002, 0x00000002);
+
+		nvkm_msec(device, 10,
+			u32 flcn0dc = nvkm_falcon_rd32(falcon, 0x0dc);
+			if ((flcn0dc & 0x00007000) == 0x00000000)
+				break;
+		);
+		break;
+	default:
+		break;
+	}
 }
 
-void
+static void
 nvkm_falcon_v1_set_start_addr(struct nvkm_falcon *falcon, u32 start_addr)
 {
 	nvkm_falcon_wr32(falcon, 0x104, start_addr);
 }
 
-void
+static void
 nvkm_falcon_v1_start(struct nvkm_falcon *falcon)
 {
 	u32 reg = nvkm_falcon_rd32(falcon, 0x100);
@@ -238,7 +288,7 @@ nvkm_falcon_v1_start(struct nvkm_falcon *falcon)
 		nvkm_falcon_wr32(falcon, 0x100, 0x2);
 }
 
-int
+static int
 nvkm_falcon_v1_wait_for_halt(struct nvkm_falcon *falcon, u32 ms)
 {
 	struct nvkm_device *device = falcon->owner->device;
@@ -251,7 +301,7 @@ nvkm_falcon_v1_wait_for_halt(struct nvkm_falcon *falcon, u32 ms)
 	return 0;
 }
 
-int
+static int
 nvkm_falcon_v1_clear_interrupt(struct nvkm_falcon *falcon, u32 mask)
 {
 	struct nvkm_device *device = falcon->owner->device;
@@ -280,7 +330,7 @@ falcon_v1_wait_idle(struct nvkm_falcon *falcon)
 	return 0;
 }
 
-int
+static int
 nvkm_falcon_v1_enable(struct nvkm_falcon *falcon)
 {
 	struct nvkm_device *device = falcon->owner->device;
@@ -302,7 +352,7 @@ nvkm_falcon_v1_enable(struct nvkm_falcon *falcon)
 	return 0;
 }
 
-void
+static void
 nvkm_falcon_v1_disable(struct nvkm_falcon *falcon)
 {
 	/* disable IRQs and wait for any previous code to complete */

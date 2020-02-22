@@ -79,11 +79,11 @@ static inline bool should_resched(int preempt_offset)
 	return pc == preempt_offset;
 }
 
-#ifdef CONFIG_PREEMPTION
+#ifdef CONFIG_PREEMPT
 void preempt_schedule(void);
 #define __preempt_schedule() preempt_schedule()
 void preempt_schedule_notrace(void);
 #define __preempt_schedule_notrace() preempt_schedule_notrace()
-#endif /* CONFIG_PREEMPTION */
+#endif /* CONFIG_PREEMPT */
 
 #endif /* __ASM_PREEMPT_H */

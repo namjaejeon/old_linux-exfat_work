@@ -13,7 +13,7 @@
 
 #include <asm/opal.h>
 
-static DEFINE_MUTEX(powercap_mutex);
+DEFINE_MUTEX(powercap_mutex);
 
 static struct kobject *powercap_kobj;
 

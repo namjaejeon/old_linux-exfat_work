@@ -12,9 +12,6 @@ static void nvmet_execute_prop_set(struct nvmet_req *req)
 	u64 val = le64_to_cpu(req->cmd->prop_set.value);
 	u16 status = 0;
 
-	if (!nvmet_check_data_len(req, 0))
-		return;
-
 	if (req->cmd->prop_set.attrib & 1) {
 		req->error_loc =
 			offsetof(struct nvmf_property_set_command, attrib);
@@ -40,9 +37,6 @@ static void nvmet_execute_prop_get(struct nvmet_req *req)
 	struct nvmet_ctrl *ctrl = req->sq->ctrl;
 	u16 status = 0;
 	u64 val = 0;
-
-	if (!nvmet_check_data_len(req, 0))
-		return;
 
 	if (req->cmd->prop_get.attrib & 1) {
 		switch (le32_to_cpu(req->cmd->prop_get.offset)) {
@@ -88,9 +82,11 @@ u16 nvmet_parse_fabrics_cmd(struct nvmet_req *req)
 
 	switch (cmd->fabrics.fctype) {
 	case nvme_fabrics_type_property_set:
+		req->data_len = 0;
 		req->execute = nvmet_execute_prop_set;
 		break;
 	case nvme_fabrics_type_property_get:
+		req->data_len = 0;
 		req->execute = nvmet_execute_prop_get;
 		break;
 	default:
@@ -109,7 +105,6 @@ static u16 nvmet_install_queue(struct nvmet_ctrl *ctrl, struct nvmet_req *req)
 	u16 qid = le16_to_cpu(c->qid);
 	u16 sqsize = le16_to_cpu(c->sqsize);
 	struct nvmet_ctrl *old;
-	u16 ret;
 
 	old = cmpxchg(&req->sq->ctrl, NULL, ctrl);
 	if (old) {
@@ -120,8 +115,7 @@ static u16 nvmet_install_queue(struct nvmet_ctrl *ctrl, struct nvmet_req *req)
 	if (!sqsize) {
 		pr_warn("queue size zero!\n");
 		req->error_loc = offsetof(struct nvmf_connect_command, sqsize);
-		ret = NVME_SC_CONNECT_INVALID_PARAM | NVME_SC_DNR;
-		goto err;
+		return NVME_SC_CONNECT_INVALID_PARAM | NVME_SC_DNR;
 	}
 
 	/* note: convert queue size from 0's-based value to 1's-based value */
@@ -134,19 +128,16 @@ static u16 nvmet_install_queue(struct nvmet_ctrl *ctrl, struct nvmet_req *req)
 	}
 
 	if (ctrl->ops->install_queue) {
-		ret = ctrl->ops->install_queue(req->sq);
+		u16 ret = ctrl->ops->install_queue(req->sq);
+
 		if (ret) {
 			pr_err("failed to install queue %d cntlid %d ret %x\n",
-				qid, ctrl->cntlid, ret);
-			goto err;
+				qid, ret, ctrl->cntlid);
+			return ret;
 		}
 	}
 
 	return 0;
-
-err:
-	req->sq->ctrl = NULL;
-	return ret;
 }
 
 static void nvmet_execute_admin_connect(struct nvmet_req *req)
@@ -155,9 +146,6 @@ static void nvmet_execute_admin_connect(struct nvmet_req *req)
 	struct nvmf_connect_data *d;
 	struct nvmet_ctrl *ctrl = NULL;
 	u16 status = 0;
-
-	if (!nvmet_check_data_len(req, sizeof(struct nvmf_connect_data)))
-		return;
 
 	d = kmalloc(sizeof(*d), GFP_KERNEL);
 	if (!d) {
@@ -222,9 +210,6 @@ static void nvmet_execute_io_connect(struct nvmet_req *req)
 	struct nvmet_ctrl *ctrl = NULL;
 	u16 qid = le16_to_cpu(c->qid);
 	u16 status = 0;
-
-	if (!nvmet_check_data_len(req, sizeof(struct nvmf_connect_data)))
-		return;
 
 	d = kmalloc(sizeof(*d), GFP_KERNEL);
 	if (!d) {
@@ -296,6 +281,7 @@ u16 nvmet_parse_connect_cmd(struct nvmet_req *req)
 		return NVME_SC_INVALID_OPCODE | NVME_SC_DNR;
 	}
 
+	req->data_len = sizeof(struct nvmf_connect_data);
 	if (cmd->connect.qid == 0)
 		req->execute = nvmet_execute_admin_connect;
 	else

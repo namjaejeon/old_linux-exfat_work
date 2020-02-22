@@ -8,7 +8,7 @@ title: Allwinner A64 DMA Controller Device Tree Bindings
 
 maintainers:
   - Chen-Yu Tsai <wens@csie.org>
-  - Maxime Ripard <mripard@kernel.org>
+  - Maxime Ripard <maxime.ripard@bootlin.com>
 
 allOf:
   - $ref: "dma-controller.yaml#"
@@ -68,7 +68,9 @@ else:
     clocks:
       maxItems: 1
 
-unevaluatedProperties: false
+# FIXME: We should set it, but it would report all the generic
+# properties as additional properties.
+# additionalProperties: false
 
 examples:
   - |

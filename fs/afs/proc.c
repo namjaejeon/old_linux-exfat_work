@@ -213,14 +213,13 @@ static int afs_proc_cell_volumes_show(struct seq_file *m, void *v)
 
 	/* Display header on line 1 */
 	if (v == &cell->proc_volumes) {
-		seq_puts(m, "USE VID      TY NAME\n");
+		seq_puts(m, "USE VID      TY\n");
 		return 0;
 	}
 
-	seq_printf(m, "%3d %08llx %s %s\n",
+	seq_printf(m, "%3d %08llx %s\n",
 		   atomic_read(&vol->usage), vol->vid,
-		   afs_vol_types[vol->type],
-		   vol->name);
+		   afs_vol_types[vol->type]);
 
 	return 0;
 }

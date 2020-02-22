@@ -147,8 +147,7 @@ static struct miscdevice anslcd_dev = {
 	&anslcd_fops
 };
 
-static const char anslcd_logo[] __initconst =
-				"********************"  /* Line #1 */
+const char anslcd_logo[] =	"********************"  /* Line #1 */
 				"*      LINUX!      *"  /* Line #3 */
 				"*    Welcome to    *"  /* Line #2 */
 				"********************"; /* Line #4 */

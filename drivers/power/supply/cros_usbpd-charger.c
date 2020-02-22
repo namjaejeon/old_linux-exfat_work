@@ -5,6 +5,7 @@
  * Copyright (c) 2014 - 2018 Google, Inc
  */
 
+#include <linux/mfd/cros_ec.h>
 #include <linux/module.h>
 #include <linux/platform_data/cros_ec_commands.h>
 #include <linux/platform_data/cros_ec_proto.h>
@@ -131,8 +132,11 @@ static int cros_usbpd_charger_get_num_ports(struct charger_data *charger)
 	ret = cros_usbpd_charger_ec_command(charger, 0,
 					    EC_CMD_CHARGE_PORT_COUNT,
 					    NULL, 0, &resp, sizeof(resp));
-	if (ret < 0)
+	if (ret < 0) {
+		dev_err(charger->dev,
+			"Unable to get the number of ports (err:0x%x)\n", ret);
 		return ret;
+	}
 
 	return resp.port_count;
 }
@@ -144,8 +148,11 @@ static int cros_usbpd_charger_get_usbpd_num_ports(struct charger_data *charger)
 
 	ret = cros_usbpd_charger_ec_command(charger, 0, EC_CMD_USB_PD_PORTS,
 					    NULL, 0, &resp, sizeof(resp));
-	if (ret < 0)
+	if (ret < 0) {
+		dev_err(charger->dev,
+			"Unable to get the number or ports (err:0x%x)\n", ret);
 		return ret;
+	}
 
 	return resp.num_ports;
 }

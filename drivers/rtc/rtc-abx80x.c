@@ -523,9 +523,12 @@ static int abx80x_ioctl(struct device *dev, unsigned int cmd, unsigned long arg)
 		if (status < 0)
 			return status;
 
-		tmp = status & ABX8XX_STATUS_BLF ? RTC_VL_BACKUP_LOW : 0;
+		tmp = !!(status & ABX8XX_STATUS_BLF);
 
-		return put_user(tmp, (unsigned int __user *)arg);
+		if (copy_to_user((void __user *)arg, &tmp, sizeof(int)))
+			return -EFAULT;
+
+		return 0;
 
 	case RTC_VL_CLR:
 		status = i2c_smbus_read_byte_data(client, ABX8XX_REG_STATUS);

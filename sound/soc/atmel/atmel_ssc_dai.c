@@ -760,12 +760,12 @@ static int atmel_ssc_trigger(struct snd_pcm_substream *substream,
 }
 
 #ifdef CONFIG_PM
-static int atmel_ssc_suspend(struct snd_soc_component *component)
+static int atmel_ssc_suspend(struct snd_soc_dai *cpu_dai)
 {
 	struct atmel_ssc_info *ssc_p;
-	struct platform_device *pdev = to_platform_device(component->dev);
+	struct platform_device *pdev = to_platform_device(cpu_dai->dev);
 
-	if (!component->active)
+	if (!cpu_dai->active)
 		return 0;
 
 	ssc_p = &ssc_info[pdev->id];
@@ -787,13 +787,15 @@ static int atmel_ssc_suspend(struct snd_soc_component *component)
 	return 0;
 }
 
-static int atmel_ssc_resume(struct snd_soc_component *component)
+
+
+static int atmel_ssc_resume(struct snd_soc_dai *cpu_dai)
 {
 	struct atmel_ssc_info *ssc_p;
-	struct platform_device *pdev = to_platform_device(component->dev);
+	struct platform_device *pdev = to_platform_device(cpu_dai->dev);
 	u32 cr;
 
-	if (!component->active)
+	if (!cpu_dai->active)
 		return 0;
 
 	ssc_p = &ssc_info[pdev->id];
@@ -837,6 +839,8 @@ static const struct snd_soc_dai_ops atmel_ssc_dai_ops = {
 };
 
 static struct snd_soc_dai_driver atmel_ssc_dai = {
+		.suspend = atmel_ssc_suspend,
+		.resume = atmel_ssc_resume,
 		.playback = {
 			.channels_min = 1,
 			.channels_max = 2,
@@ -856,8 +860,6 @@ static struct snd_soc_dai_driver atmel_ssc_dai = {
 
 static const struct snd_soc_component_driver atmel_ssc_component = {
 	.name		= "atmel-ssc",
-	.suspend	= atmel_ssc_suspend,
-	.resume		= atmel_ssc_resume,
 };
 
 static int asoc_ssc_init(struct device *dev)

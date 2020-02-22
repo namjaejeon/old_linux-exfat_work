@@ -117,7 +117,6 @@ static void oaktrail_lvds_mode_set(struct drm_encoder *encoder,
 
 	if (!connector) {
 		DRM_ERROR("Couldn't find connector when setting mode");
-		gma_power_end(dev);
 		return;
 	}
 

@@ -73,6 +73,7 @@ static int hisi_rng_read(struct hwrng *rng, void *buf, size_t max, bool wait)
 static int hisi_rng_probe(struct platform_device *pdev)
 {
 	struct hisi_rng *rng;
+	struct resource *res;
 	int ret;
 
 	rng = devm_kzalloc(&pdev->dev, sizeof(*rng), GFP_KERNEL);
@@ -81,7 +82,8 @@ static int hisi_rng_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, rng);
 
-	rng->base = devm_platform_ioremap_resource(pdev, 0);
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	rng->base = devm_ioremap_resource(&pdev->dev, res);
 	if (IS_ERR(rng->base))
 		return PTR_ERR(rng->base);
 

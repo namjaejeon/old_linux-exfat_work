@@ -21,13 +21,6 @@ static inline u64 paravirt_steal_clock(int cpu)
 {
 	return pv_ops.time.steal_clock(cpu);
 }
-
-int __init pv_time_init(void);
-
-#else
-
-#define pv_time_init() do {} while (0)
-
-#endif // CONFIG_PARAVIRT
+#endif
 
 #endif

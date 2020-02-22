@@ -16,6 +16,7 @@
 #include <linux/kthread.h>
 #include <linux/sched/rt.h>
 #include <linux/spinlock.h>
+#include <linux/rwlock.h>
 #include <linux/mutex.h>
 #include <linux/rwsem.h>
 #include <linux/smp.h>
@@ -888,16 +889,16 @@ static int __init lock_torture_init(void)
 		cxt.nrealwriters_stress = 2 * num_online_cpus();
 
 #ifdef CONFIG_DEBUG_MUTEXES
-	if (str_has_prefix(torture_type, "mutex"))
+	if (strncmp(torture_type, "mutex", 5) == 0)
 		cxt.debug_lock = true;
 #endif
 #ifdef CONFIG_DEBUG_RT_MUTEXES
-	if (str_has_prefix(torture_type, "rtmutex"))
+	if (strncmp(torture_type, "rtmutex", 7) == 0)
 		cxt.debug_lock = true;
 #endif
 #ifdef CONFIG_DEBUG_SPINLOCK
-	if ((str_has_prefix(torture_type, "spin")) ||
-	    (str_has_prefix(torture_type, "rw_lock")))
+	if ((strncmp(torture_type, "spin", 4) == 0) ||
+	    (strncmp(torture_type, "rw_lock", 7) == 0))
 		cxt.debug_lock = true;
 #endif
 

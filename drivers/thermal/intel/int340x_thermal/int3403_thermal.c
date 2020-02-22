@@ -282,7 +282,6 @@ static int int3403_remove(struct platform_device *pdev)
 }
 
 static const struct acpi_device_id int3403_device_ids[] = {
-	{"INT1043", 0},
 	{"INT3403", 0},
 	{"", 0},
 };

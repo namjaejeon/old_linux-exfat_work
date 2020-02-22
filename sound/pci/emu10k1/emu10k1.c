@@ -124,9 +124,8 @@ static int snd_card_emu10k1_probe(struct pci_dev *pci,
 		goto error;
 	/* This stores the periods table. */
 	if (emu->card_capabilities->ca0151_chip) { /* P16V */	
-		err = snd_dma_alloc_pages(SNDRV_DMA_TYPE_DEV, &pci->dev,
-					  1024, &emu->p16v_buffer);
-		if (err < 0)
+		if ((err = snd_dma_alloc_pages(SNDRV_DMA_TYPE_DEV, snd_dma_pci_data(pci),
+					       1024, &emu->p16v_buffer)) < 0)
 			goto error;
 	}
 

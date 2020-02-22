@@ -209,7 +209,7 @@ static void dr_rule_rehash_copy_ste_ctrl(struct mlx5dr_matcher *matcher,
 	/* We need to copy the refcount since this ste
 	 * may have been traversed several times
 	 */
-	new_ste->refcount = cur_ste->refcount;
+	refcount_set(&new_ste->refcount, refcount_read(&cur_ste->refcount));
 
 	/* Link old STEs rule_mem list to the new ste */
 	mlx5dr_rule_update_rule_member(cur_ste, new_ste);
@@ -595,18 +595,6 @@ static void dr_rule_clean_rule_members(struct mlx5dr_rule *rule,
 	}
 }
 
-static u16 dr_get_bits_per_mask(u16 byte_mask)
-{
-	u16 bits = 0;
-
-	while (byte_mask) {
-		byte_mask = byte_mask & (byte_mask - 1);
-		bits++;
-	}
-
-	return bits;
-}
-
 static bool dr_rule_need_enlarge_hash(struct mlx5dr_ste_htbl *htbl,
 				      struct mlx5dr_domain *dmn,
 				      struct mlx5dr_domain_rx_tx *nic_dmn)
@@ -617,9 +605,6 @@ static bool dr_rule_need_enlarge_hash(struct mlx5dr_ste_htbl *htbl,
 		return false;
 
 	if (!ctrl->may_grow)
-		return false;
-
-	if (dr_get_bits_per_mask(htbl->byte_mask) * BITS_PER_BYTE <= htbl->chunk_size)
 		return false;
 
 	if (ctrl->num_of_collisions >= ctrl->increase_threshold &&
@@ -637,9 +622,6 @@ static int dr_rule_add_member(struct mlx5dr_rule_rx_tx *nic_rule,
 	rule_mem = kvzalloc(sizeof(*rule_mem), GFP_KERNEL);
 	if (!rule_mem)
 		return -ENOMEM;
-
-	INIT_LIST_HEAD(&rule_mem->list);
-	INIT_LIST_HEAD(&rule_mem->use_ste_list);
 
 	rule_mem->ste = ste;
 	list_add_tail(&rule_mem->list, &nic_rule->rule_members_list);
@@ -972,12 +954,12 @@ static int dr_rule_destroy_rule(struct mlx5dr_rule *rule)
 	return 0;
 }
 
-static enum mlx5dr_ipv dr_rule_get_ipv(struct mlx5dr_match_spec *spec)
+static bool dr_rule_is_ipv6(struct mlx5dr_match_param *param)
 {
-	if (spec->ip_version == 6 || spec->ethertype == ETH_P_IPV6)
-		return DR_RULE_IPV6;
-
-	return DR_RULE_IPV4;
+	return (param->outer.ip_version == 6 ||
+		param->inner.ip_version == 6 ||
+		param->outer.ethertype == ETH_P_IPV6 ||
+		param->inner.ethertype == ETH_P_IPV6);
 }
 
 static bool dr_rule_skip(enum mlx5dr_domain_type domain,
@@ -1041,8 +1023,7 @@ dr_rule_create_rule_nic(struct mlx5dr_rule *rule,
 
 	ret = mlx5dr_matcher_select_builders(matcher,
 					     nic_matcher,
-					     dr_rule_get_ipv(&param->outer),
-					     dr_rule_get_ipv(&param->inner));
+					     dr_rule_is_ipv6(param));
 	if (ret)
 		goto out_err;
 
@@ -1114,8 +1095,6 @@ dr_rule_create_rule_nic(struct mlx5dr_rule *rule,
 
 	if (htbl)
 		mlx5dr_htbl_put(htbl);
-
-	kfree(hw_ste_arr);
 
 	return 0;
 

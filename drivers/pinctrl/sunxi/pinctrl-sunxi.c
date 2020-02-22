@@ -1385,6 +1385,7 @@ int sunxi_pinctrl_init_with_variant(struct platform_device *pdev,
 	struct pinctrl_pin_desc *pins;
 	struct sunxi_pinctrl *pctl;
 	struct pinmux_ops *pmxops;
+	struct resource *res;
 	int i, ret, last_pin, pin_idx;
 	struct clk *clk;
 
@@ -1395,7 +1396,8 @@ int sunxi_pinctrl_init_with_variant(struct platform_device *pdev,
 
 	raw_spin_lock_init(&pctl->lock);
 
-	pctl->membase = devm_platform_ioremap_resource(pdev, 0);
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	pctl->membase = devm_ioremap_resource(&pdev->dev, res);
 	if (IS_ERR(pctl->membase))
 		return PTR_ERR(pctl->membase);
 

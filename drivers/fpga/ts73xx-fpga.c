@@ -119,8 +119,10 @@ static int ts73xx_fpga_probe(struct platform_device *pdev)
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	priv->io_base = devm_ioremap_resource(kdev, res);
-	if (IS_ERR(priv->io_base))
+	if (IS_ERR(priv->io_base)) {
+		dev_err(kdev, "unable to remap registers\n");
 		return PTR_ERR(priv->io_base);
+	}
 
 	mgr = devm_fpga_mgr_create(kdev, "TS-73xx FPGA Manager",
 				   &ts73xx_fpga_ops, priv);

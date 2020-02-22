@@ -48,16 +48,6 @@ struct partial_cluster;
 	{ EXT4_GET_BLOCKS_KEEP_SIZE,		"KEEP_SIZE" },		\
 	{ EXT4_GET_BLOCKS_ZERO,			"ZERO" })
 
-/*
- * __print_flags() requires that all enum values be wrapped in the
- * TRACE_DEFINE_ENUM macro so that the enum value can be encoded in the ftrace
- * ring buffer.
- */
-TRACE_DEFINE_ENUM(BH_New);
-TRACE_DEFINE_ENUM(BH_Mapped);
-TRACE_DEFINE_ENUM(BH_Unwritten);
-TRACE_DEFINE_ENUM(BH_Boundary);
-
 #define show_mflags(flags) __print_flags(flags, "",	\
 	{ EXT4_MAP_NEW,		"N" },			\
 	{ EXT4_MAP_MAPPED,	"M" },			\
@@ -72,18 +62,11 @@ TRACE_DEFINE_ENUM(BH_Boundary);
 	{ EXT4_FREE_BLOCKS_NOFREE_FIRST_CLUSTER,"1ST_CLUSTER" },\
 	{ EXT4_FREE_BLOCKS_NOFREE_LAST_CLUSTER,	"LAST_CLUSTER" })
 
-TRACE_DEFINE_ENUM(ES_WRITTEN_B);
-TRACE_DEFINE_ENUM(ES_UNWRITTEN_B);
-TRACE_DEFINE_ENUM(ES_DELAYED_B);
-TRACE_DEFINE_ENUM(ES_HOLE_B);
-TRACE_DEFINE_ENUM(ES_REFERENCED_B);
-
 #define show_extent_status(status) __print_flags(status, "",	\
 	{ EXTENT_STATUS_WRITTEN,	"W" },			\
 	{ EXTENT_STATUS_UNWRITTEN,	"U" },			\
 	{ EXTENT_STATUS_DELAYED,	"D" },			\
-	{ EXTENT_STATUS_HOLE,		"H" },			\
-	{ EXTENT_STATUS_REFERENCED,	"R" })
+	{ EXTENT_STATUS_HOLE,		"H" })
 
 #define show_falloc_mode(mode) __print_flags(mode, "|",		\
 	{ FALLOC_FL_KEEP_SIZE,		"KEEP_SIZE"},		\
@@ -1763,16 +1746,15 @@ TRACE_EVENT(ext4_load_inode,
 
 TRACE_EVENT(ext4_journal_start,
 	TP_PROTO(struct super_block *sb, int blocks, int rsv_blocks,
-		 int revoke_creds, unsigned long IP),
+		 unsigned long IP),
 
-	TP_ARGS(sb, blocks, rsv_blocks, revoke_creds, IP),
+	TP_ARGS(sb, blocks, rsv_blocks, IP),
 
 	TP_STRUCT__entry(
 		__field(	dev_t,	dev			)
 		__field(unsigned long,	ip			)
 		__field(	  int,	blocks			)
 		__field(	  int,	rsv_blocks		)
-		__field(	  int,	revoke_creds		)
 	),
 
 	TP_fast_assign(
@@ -1780,13 +1762,11 @@ TRACE_EVENT(ext4_journal_start,
 		__entry->ip		 = IP;
 		__entry->blocks		 = blocks;
 		__entry->rsv_blocks	 = rsv_blocks;
-		__entry->revoke_creds	 = revoke_creds;
 	),
 
-	TP_printk("dev %d,%d blocks %d, rsv_blocks %d, revoke_creds %d, "
-		  "caller %pS", MAJOR(__entry->dev), MINOR(__entry->dev),
-		  __entry->blocks, __entry->rsv_blocks, __entry->revoke_creds,
-		  (void *)__entry->ip)
+	TP_printk("dev %d,%d blocks, %d rsv_blocks, %d caller %pS",
+		  MAJOR(__entry->dev), MINOR(__entry->dev),
+		  __entry->blocks, __entry->rsv_blocks, (void *)__entry->ip)
 );
 
 TRACE_EVENT(ext4_journal_start_reserved,
@@ -2282,7 +2262,7 @@ DECLARE_EVENT_CLASS(ext4__es_extent,
 		__entry->ino	= inode->i_ino;
 		__entry->lblk	= es->es_lblk;
 		__entry->len	= es->es_len;
-		__entry->pblk	= ext4_es_show_pblock(es);
+		__entry->pblk	= ext4_es_pblock(es);
 		__entry->status	= ext4_es_status(es);
 	),
 
@@ -2371,7 +2351,7 @@ TRACE_EVENT(ext4_es_find_extent_range_exit,
 		__entry->ino	= inode->i_ino;
 		__entry->lblk	= es->es_lblk;
 		__entry->len	= es->es_len;
-		__entry->pblk	= ext4_es_show_pblock(es);
+		__entry->pblk	= ext4_es_pblock(es);
 		__entry->status	= ext4_es_status(es);
 	),
 
@@ -2425,7 +2405,7 @@ TRACE_EVENT(ext4_es_lookup_extent_exit,
 		__entry->ino	= inode->i_ino;
 		__entry->lblk	= es->es_lblk;
 		__entry->len	= es->es_len;
-		__entry->pblk	= ext4_es_show_pblock(es);
+		__entry->pblk	= ext4_es_pblock(es);
 		__entry->status	= ext4_es_status(es);
 		__entry->found	= found;
 	),
@@ -2593,7 +2573,7 @@ TRACE_EVENT(ext4_es_insert_delayed_block,
 		__entry->ino		= inode->i_ino;
 		__entry->lblk		= es->es_lblk;
 		__entry->len		= es->es_len;
-		__entry->pblk		= ext4_es_show_pblock(es);
+		__entry->pblk		= ext4_es_pblock(es);
 		__entry->status		= ext4_es_status(es);
 		__entry->allocated	= allocated;
 	),

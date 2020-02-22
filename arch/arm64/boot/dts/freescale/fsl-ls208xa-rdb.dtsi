@@ -108,15 +108,7 @@
 };
 
 &qspi {
-	status = "okay";
-
-	s25fs512s0: flash@0 {
-		#address-cells = <1>;
-		#size-cells = <1>;
-		compatible = "jedec,spi-nor";
-		spi-max-frequency = <50000000>;
-		reg = <0>;
-	};
+	status = "disabled";
 };
 
 &sata0 {

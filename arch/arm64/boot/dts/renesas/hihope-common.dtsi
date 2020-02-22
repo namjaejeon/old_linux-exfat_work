@@ -86,7 +86,7 @@
 
 		label = "rcar-sound";
 
-		dais = <&rsnd_port>;
+		dais = <&rsnd_port0>;
 	};
 
 	vbus0_usb2: regulator-vbus0-usb2 {
@@ -109,7 +109,8 @@
 
 		gpios = <&gpio6 30 GPIO_ACTIVE_HIGH>;
 		gpios-states = <1>;
-		states = <3300000 1>, <1800000 0>;
+		states = <3300000 1
+			  1800000 0>;
 	};
 
 	wlan_en_reg: regulator-wlan_en {
@@ -141,6 +142,14 @@
 };
 
 &du {
+	clocks = <&cpg CPG_MOD 724>,
+		 <&cpg CPG_MOD 723>,
+		 <&cpg CPG_MOD 722>,
+		 <&versaclock5 1>,
+		 <&x302_clk>,
+		 <&versaclock5 2>;
+	clock-names = "du.0", "du.1", "du.2",
+		      "dclkin.0", "dclkin.1", "dclkin.2";
 	status = "okay";
 };
 
@@ -182,7 +191,7 @@
 		port@2 {
 			reg = <2>;
 			dw_hdmi0_snd_in: endpoint {
-				remote-endpoint = <&rsnd_endpoint>;
+				remote-endpoint = <&rsnd_endpoint0>;
 			};
 		};
 	};
@@ -318,15 +327,17 @@
 	/* Single DAI */
 	#sound-dai-cells = <0>;
 
-	rsnd_port: port {
-		rsnd_endpoint: endpoint {
-			remote-endpoint = <&dw_hdmi0_snd_in>;
+	ports {
+		rsnd_port0: port@0 {
+			rsnd_endpoint0: endpoint {
+				remote-endpoint = <&dw_hdmi0_snd_in>;
 
-			dai-format = "i2s";
-			bitclock-master = <&rsnd_endpoint>;
-			frame-master = <&rsnd_endpoint>;
+				dai-format = "i2s";
+				bitclock-master = <&rsnd_endpoint0>;
+				frame-master = <&rsnd_endpoint0>;
 
-			playback = <&ssi2>;
+				playback = <&ssi2>;
+			};
 		};
 	};
 };

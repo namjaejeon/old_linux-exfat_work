@@ -39,13 +39,11 @@
    Copyright (C) 2018 Red Hat, Inc., Arnaldo Carvalho de Melo <acme@redhat.com>
 */
 
-#include <bpf/bpf.h>
+#include <bpf.h>
 
-#define NSEC_PER_SEC	1000000000L
-
-int probe(hrtimer_nanosleep, rqtp)(void *ctx, int err, long long sec)
+int probe(hrtimer_nanosleep, rqtp->tv_sec)(void *ctx, int err, long sec)
 {
-	return sec / NSEC_PER_SEC == 5ULL;
+	return sec == 5;
 }
 
 license(GPL);

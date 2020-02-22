@@ -83,7 +83,6 @@ enum {
 
 enum {
 	SILERGY_SYR82X = 8,
-	SILERGY_SYR83X = 9,
 };
 
 struct fan53555_device_info {
@@ -303,7 +302,6 @@ static int fan53555_voltages_setup_silergy(struct fan53555_device_info *di)
 	/* Init voltage range and step */
 	switch (di->chip_id) {
 	case SILERGY_SYR82X:
-	case SILERGY_SYR83X:
 		di->vsel_min = 712500;
 		di->vsel_step = 12500;
 		break;

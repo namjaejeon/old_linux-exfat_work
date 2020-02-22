@@ -103,11 +103,8 @@ static struct evsel *find_evsel_group(struct evlist *perf_evlist,
 		if (!strcmp(ev->name, ids[i])) {
 			if (!metric_events[i])
 				metric_events[i] = ev;
-			i++;
-			if (i == idnum)
-				break;
 		} else {
-			if (i + 1 == idnum) {
+			if (++i == idnum) {
 				/* Discard the whole match and start again */
 				i = 0;
 				memset(metric_events, 0,
@@ -127,7 +124,7 @@ static struct evsel *find_evsel_group(struct evlist *perf_evlist,
 		}
 	}
 
-	if (i != idnum) {
+	if (i != idnum - 1) {
 		/* Not whole match */
 		return NULL;
 	}
@@ -526,7 +523,7 @@ int metricgroup__parse_groups(const struct option *opt,
 	if (ret)
 		return ret;
 	pr_debug("adding %s\n", extra_events.buf);
-	bzero(&parse_error, sizeof(parse_error));
+	memset(&parse_error, 0, sizeof(struct parse_events_error));
 	ret = parse_events(perf_evlist, extra_events.buf, &parse_error);
 	if (ret) {
 		parse_events_print_error(&parse_error, extra_events.buf);

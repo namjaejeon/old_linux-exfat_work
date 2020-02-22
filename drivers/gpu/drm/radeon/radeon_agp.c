@@ -25,10 +25,9 @@
  *    Jerome Glisse <glisse@freedesktop.org>
  */
 
-#include <linux/pci.h>
-
 #include <drm/drm_agpsupport.h>
 #include <drm/drm_device.h>
+#include <drm/drm_pci.h>
 #include <drm/radeon_drm.h>
 
 #include "radeon.h"

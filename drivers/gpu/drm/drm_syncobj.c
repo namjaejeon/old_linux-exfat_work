@@ -135,7 +135,6 @@
 #include <drm/drm_gem.h>
 #include <drm/drm_print.h>
 #include <drm/drm_syncobj.h>
-#include <drm/drm_utils.h>
 
 #include "drm_internal.h"
 
@@ -1280,7 +1279,7 @@ drm_syncobj_timeline_signal_ioctl(struct drm_device *dev, void *data,
 	if (!drm_core_check_feature(dev, DRIVER_SYNCOBJ_TIMELINE))
 		return -EOPNOTSUPP;
 
-	if (args->flags != 0)
+	if (args->pad != 0)
 		return -EINVAL;
 
 	if (args->count_handles == 0)
@@ -1351,7 +1350,7 @@ int drm_syncobj_query_ioctl(struct drm_device *dev, void *data,
 	if (!drm_core_check_feature(dev, DRIVER_SYNCOBJ_TIMELINE))
 		return -EOPNOTSUPP;
 
-	if (args->flags & ~DRM_SYNCOBJ_QUERY_FLAGS_LAST_SUBMITTED)
+	if (args->pad != 0)
 		return -EINVAL;
 
 	if (args->count_handles == 0)
@@ -1372,32 +1371,25 @@ int drm_syncobj_query_ioctl(struct drm_device *dev, void *data,
 		fence = drm_syncobj_fence_get(syncobjs[i]);
 		chain = to_dma_fence_chain(fence);
 		if (chain) {
-			struct dma_fence *iter, *last_signaled =
-				dma_fence_get(fence);
+			struct dma_fence *iter, *last_signaled = NULL;
 
-			if (args->flags &
-			    DRM_SYNCOBJ_QUERY_FLAGS_LAST_SUBMITTED) {
-				point = fence->seqno;
-			} else {
-				dma_fence_chain_for_each(iter, fence) {
-					if (iter->context != fence->context) {
-						dma_fence_put(iter);
-						/* It is most likely that timeline has
-						* unorder points. */
-						break;
-					}
-					dma_fence_put(last_signaled);
-					last_signaled = dma_fence_get(iter);
+			dma_fence_chain_for_each(iter, fence) {
+				if (iter->context != fence->context) {
+					dma_fence_put(iter);
+					/* It is most likely that timeline has
+					 * unorder points. */
+					break;
 				}
-				point = dma_fence_is_signaled(last_signaled) ?
-					last_signaled->seqno :
-					to_dma_fence_chain(last_signaled)->prev_seqno;
+				dma_fence_put(last_signaled);
+				last_signaled = dma_fence_get(iter);
 			}
+			point = dma_fence_is_signaled(last_signaled) ?
+				last_signaled->seqno :
+				to_dma_fence_chain(last_signaled)->prev_seqno;
 			dma_fence_put(last_signaled);
 		} else {
 			point = 0;
 		}
-		dma_fence_put(fence);
 		ret = copy_to_user(&points[i], &point, sizeof(uint64_t));
 		ret = ret ? -EFAULT : 0;
 		if (ret)

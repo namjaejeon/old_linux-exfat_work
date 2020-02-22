@@ -7,20 +7,20 @@
 /*
  * unsigned long native_save_fl(void)
  */
-SYM_FUNC_START(native_save_fl)
+ENTRY(native_save_fl)
 	pushf
 	pop %_ASM_AX
 	ret
-SYM_FUNC_END(native_save_fl)
+ENDPROC(native_save_fl)
 EXPORT_SYMBOL(native_save_fl)
 
 /*
  * void native_restore_fl(unsigned long flags)
  * %eax/%rdi: flags
  */
-SYM_FUNC_START(native_restore_fl)
+ENTRY(native_restore_fl)
 	push %_ASM_ARG1
 	popf
 	ret
-SYM_FUNC_END(native_restore_fl)
+ENDPROC(native_restore_fl)
 EXPORT_SYMBOL(native_restore_fl)

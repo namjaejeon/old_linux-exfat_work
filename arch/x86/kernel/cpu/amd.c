@@ -319,6 +319,13 @@ static void legacy_fixup_core_id(struct cpuinfo_x86 *c)
 	c->cpu_core_id %= cus_per_node;
 }
 
+
+static void amd_get_topology_early(struct cpuinfo_x86 *c)
+{
+	if (cpu_has(c, X86_FEATURE_TOPOEXT))
+		smp_num_siblings = ((cpuid_ebx(0x8000001e) >> 8) & 0xff) + 1;
+}
+
 /*
  * Fixup core topology information for
  * (1) AMD multi-node processors
@@ -608,9 +615,9 @@ static void early_detect_mem_encrypt(struct cpuinfo_x86 *c)
 		return;
 
 clear_all:
-		setup_clear_cpu_cap(X86_FEATURE_SME);
+		clear_cpu_cap(c, X86_FEATURE_SME);
 clear_sev:
-		setup_clear_cpu_cap(X86_FEATURE_SEV);
+		clear_cpu_cap(c, X86_FEATURE_SEV);
 	}
 }
 
@@ -710,8 +717,7 @@ static void early_init_amd(struct cpuinfo_x86 *c)
 		}
 	}
 
-	if (cpu_has(c, X86_FEATURE_TOPOEXT))
-		smp_num_siblings = ((cpuid_ebx(0x8000001e) >> 8) & 0xff) + 1;
+	amd_get_topology_early(c);
 }
 
 static void init_amd_k8(struct cpuinfo_x86 *c)

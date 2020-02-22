@@ -1,69 +1,33 @@
-.. SPDX-License-Identifier: GPL-2.0
+. SPDX-License-Identifier: GPL-2.0
 
 ===================
 I2C/SMBus Subsystem
 ===================
 
-Introduction
-============
-
 .. toctree::
    :maxdepth: 1
 
-   summary
-   i2c-protocol
-   smbus-protocol
-   instantiating-devices
-   busses/index
-   i2c-topology
-   muxes/i2c-mux-gpio
-
-Writing device drivers
-======================
-
-.. toctree::
-   :maxdepth: 1
-
-   writing-clients
    dev-interface
    dma-considerations
    fault-codes
    functionality
-
-Debugging
-=========
-
-.. toctree::
-   :maxdepth: 1
-
    gpio-fault-injection
+   i2c-protocol
    i2c-stub
-
-Slave I2C
-=========
-
-.. toctree::
-   :maxdepth: 1
-
-   slave-interface
-   slave-eeprom-backend
-
-Advanced topics
-===============
-
-.. toctree::
-   :maxdepth: 1
-
-   ten-bit-addresses
-
-Legacy documentation
-====================
-
-.. toctree::
-   :maxdepth: 1
-
-   upgrading-clients
+   i2c-topology
+   instantiating-devices
    old-module-parameters
+   slave-eeprom-backend
+   slave-interface
+   smbus-protocol
+   summary
+   ten-bit-addresses
+   upgrading-clients
+   writing-clients
+
+   muxes/i2c-mux-gpio
+
+   busses/index
 
 .. only::  subproject and html
 

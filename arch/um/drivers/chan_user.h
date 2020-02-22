@@ -11,7 +11,7 @@
 struct chan_opts {
 	void (*const announce)(char *dev_name, int dev);
 	char *xterm_title;
-	int raw;
+	const int raw;
 };
 
 struct chan_ops {

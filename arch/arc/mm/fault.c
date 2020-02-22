@@ -30,7 +30,6 @@ noinline static int handle_kernel_vaddr_fault(unsigned long address)
 	 * with the 'reference' page table.
 	 */
 	pgd_t *pgd, *pgd_k;
-	p4d_t *p4d, *p4d_k;
 	pud_t *pud, *pud_k;
 	pmd_t *pmd, *pmd_k;
 
@@ -40,13 +39,8 @@ noinline static int handle_kernel_vaddr_fault(unsigned long address)
 	if (!pgd_present(*pgd_k))
 		goto bad_area;
 
-	p4d = p4d_offset(pgd, address);
-	p4d_k = p4d_offset(pgd_k, address);
-	if (!p4d_present(*p4d_k))
-		goto bad_area;
-
-	pud = pud_offset(p4d, address);
-	pud_k = pud_offset(p4d_k, address);
+	pud = pud_offset(pgd, address);
+	pud_k = pud_offset(pgd_k, address);
 	if (!pud_present(*pud_k))
 		goto bad_area;
 

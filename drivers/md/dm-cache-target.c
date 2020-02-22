@@ -74,19 +74,22 @@ static bool __iot_idle_for(struct io_tracker *iot, unsigned long jifs)
 static bool iot_idle_for(struct io_tracker *iot, unsigned long jifs)
 {
 	bool r;
+	unsigned long flags;
 
-	spin_lock_irq(&iot->lock);
+	spin_lock_irqsave(&iot->lock, flags);
 	r = __iot_idle_for(iot, jifs);
-	spin_unlock_irq(&iot->lock);
+	spin_unlock_irqrestore(&iot->lock, flags);
 
 	return r;
 }
 
 static void iot_io_begin(struct io_tracker *iot, sector_t len)
 {
-	spin_lock_irq(&iot->lock);
+	unsigned long flags;
+
+	spin_lock_irqsave(&iot->lock, flags);
 	iot->in_flight += len;
-	spin_unlock_irq(&iot->lock);
+	spin_unlock_irqrestore(&iot->lock, flags);
 }
 
 static void __iot_io_end(struct io_tracker *iot, sector_t len)
@@ -169,6 +172,7 @@ static void __commit(struct work_struct *_ws)
 {
 	struct batcher *b = container_of(_ws, struct batcher, commit_work);
 	blk_status_t r;
+	unsigned long flags;
 	struct list_head work_items;
 	struct work_struct *ws, *tmp;
 	struct continuation *k;
@@ -182,12 +186,12 @@ static void __commit(struct work_struct *_ws)
 	 * We have to grab these before the commit_op to avoid a race
 	 * condition.
 	 */
-	spin_lock_irq(&b->lock);
+	spin_lock_irqsave(&b->lock, flags);
 	list_splice_init(&b->work_items, &work_items);
 	bio_list_merge(&bios, &b->bios);
 	bio_list_init(&b->bios);
 	b->commit_scheduled = false;
-	spin_unlock_irq(&b->lock);
+	spin_unlock_irqrestore(&b->lock, flags);
 
 	r = b->commit_op(b->commit_context);
 
@@ -234,12 +238,13 @@ static void async_commit(struct batcher *b)
 
 static void continue_after_commit(struct batcher *b, struct continuation *k)
 {
+	unsigned long flags;
 	bool commit_scheduled;
 
-	spin_lock_irq(&b->lock);
+	spin_lock_irqsave(&b->lock, flags);
 	commit_scheduled = b->commit_scheduled;
 	list_add_tail(&k->ws.entry, &b->work_items);
-	spin_unlock_irq(&b->lock);
+	spin_unlock_irqrestore(&b->lock, flags);
 
 	if (commit_scheduled)
 		async_commit(b);
@@ -250,12 +255,13 @@ static void continue_after_commit(struct batcher *b, struct continuation *k)
  */
 static void issue_after_commit(struct batcher *b, struct bio *bio)
 {
+       unsigned long flags;
        bool commit_scheduled;
 
-       spin_lock_irq(&b->lock);
+       spin_lock_irqsave(&b->lock, flags);
        commit_scheduled = b->commit_scheduled;
        bio_list_add(&b->bios, bio);
-       spin_unlock_irq(&b->lock);
+       spin_unlock_irqrestore(&b->lock, flags);
 
        if (commit_scheduled)
 	       async_commit(b);
@@ -267,11 +273,12 @@ static void issue_after_commit(struct batcher *b, struct bio *bio)
 static void schedule_commit(struct batcher *b)
 {
 	bool immediate;
+	unsigned long flags;
 
-	spin_lock_irq(&b->lock);
+	spin_lock_irqsave(&b->lock, flags);
 	immediate = !list_empty(&b->work_items) || !bio_list_empty(&b->bios);
 	b->commit_scheduled = true;
-	spin_unlock_irq(&b->lock);
+	spin_unlock_irqrestore(&b->lock, flags);
 
 	if (immediate)
 		async_commit(b);
@@ -623,19 +630,23 @@ static struct per_bio_data *init_per_bio_data(struct bio *bio)
 
 static void defer_bio(struct cache *cache, struct bio *bio)
 {
-	spin_lock_irq(&cache->lock);
+	unsigned long flags;
+
+	spin_lock_irqsave(&cache->lock, flags);
 	bio_list_add(&cache->deferred_bios, bio);
-	spin_unlock_irq(&cache->lock);
+	spin_unlock_irqrestore(&cache->lock, flags);
 
 	wake_deferred_bio_worker(cache);
 }
 
 static void defer_bios(struct cache *cache, struct bio_list *bios)
 {
-	spin_lock_irq(&cache->lock);
+	unsigned long flags;
+
+	spin_lock_irqsave(&cache->lock, flags);
 	bio_list_merge(&cache->deferred_bios, bios);
 	bio_list_init(bios);
-	spin_unlock_irq(&cache->lock);
+	spin_unlock_irqrestore(&cache->lock, flags);
 
 	wake_deferred_bio_worker(cache);
 }
@@ -745,27 +756,33 @@ static dm_dblock_t oblock_to_dblock(struct cache *cache, dm_oblock_t oblock)
 
 static void set_discard(struct cache *cache, dm_dblock_t b)
 {
+	unsigned long flags;
+
 	BUG_ON(from_dblock(b) >= from_dblock(cache->discard_nr_blocks));
 	atomic_inc(&cache->stats.discard_count);
 
-	spin_lock_irq(&cache->lock);
+	spin_lock_irqsave(&cache->lock, flags);
 	set_bit(from_dblock(b), cache->discard_bitset);
-	spin_unlock_irq(&cache->lock);
+	spin_unlock_irqrestore(&cache->lock, flags);
 }
 
 static void clear_discard(struct cache *cache, dm_dblock_t b)
 {
-	spin_lock_irq(&cache->lock);
+	unsigned long flags;
+
+	spin_lock_irqsave(&cache->lock, flags);
 	clear_bit(from_dblock(b), cache->discard_bitset);
-	spin_unlock_irq(&cache->lock);
+	spin_unlock_irqrestore(&cache->lock, flags);
 }
 
 static bool is_discarded(struct cache *cache, dm_dblock_t b)
 {
 	int r;
-	spin_lock_irq(&cache->lock);
+	unsigned long flags;
+
+	spin_lock_irqsave(&cache->lock, flags);
 	r = test_bit(from_dblock(b), cache->discard_bitset);
-	spin_unlock_irq(&cache->lock);
+	spin_unlock_irqrestore(&cache->lock, flags);
 
 	return r;
 }
@@ -773,10 +790,12 @@ static bool is_discarded(struct cache *cache, dm_dblock_t b)
 static bool is_discarded_oblock(struct cache *cache, dm_oblock_t b)
 {
 	int r;
-	spin_lock_irq(&cache->lock);
+	unsigned long flags;
+
+	spin_lock_irqsave(&cache->lock, flags);
 	r = test_bit(from_dblock(oblock_to_dblock(cache, b)),
 		     cache->discard_bitset);
-	spin_unlock_irq(&cache->lock);
+	spin_unlock_irqrestore(&cache->lock, flags);
 
 	return r;
 }
@@ -808,16 +827,17 @@ static void remap_to_cache(struct cache *cache, struct bio *bio,
 
 static void check_if_tick_bio_needed(struct cache *cache, struct bio *bio)
 {
+	unsigned long flags;
 	struct per_bio_data *pb;
 
-	spin_lock_irq(&cache->lock);
+	spin_lock_irqsave(&cache->lock, flags);
 	if (cache->need_tick_bio && !op_is_flush(bio->bi_opf) &&
 	    bio_op(bio) != REQ_OP_DISCARD) {
 		pb = get_per_bio_data(bio);
 		pb->tick = true;
 		cache->need_tick_bio = false;
 	}
-	spin_unlock_irq(&cache->lock);
+	spin_unlock_irqrestore(&cache->lock, flags);
 }
 
 static void __remap_to_origin_clear_discard(struct cache *cache, struct bio *bio,
@@ -1869,16 +1889,17 @@ static void process_deferred_bios(struct work_struct *ws)
 {
 	struct cache *cache = container_of(ws, struct cache, deferred_bio_worker);
 
+	unsigned long flags;
 	bool commit_needed = false;
 	struct bio_list bios;
 	struct bio *bio;
 
 	bio_list_init(&bios);
 
-	spin_lock_irq(&cache->lock);
+	spin_lock_irqsave(&cache->lock, flags);
 	bio_list_merge(&bios, &cache->deferred_bios);
 	bio_list_init(&cache->deferred_bios);
-	spin_unlock_irq(&cache->lock);
+	spin_unlock_irqrestore(&cache->lock, flags);
 
 	while ((bio = bio_list_pop(&bios))) {
 		if (bio->bi_opf & REQ_PREFLUSH)

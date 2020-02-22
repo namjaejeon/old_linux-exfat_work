@@ -8,7 +8,7 @@
  * unsigned int __sw_hweight32(unsigned int w)
  * %rdi: w
  */
-SYM_FUNC_START(__sw_hweight32)
+ENTRY(__sw_hweight32)
 
 #ifdef CONFIG_X86_64
 	movl %edi, %eax				# w
@@ -33,10 +33,10 @@ SYM_FUNC_START(__sw_hweight32)
 	shrl $24, %eax				# w = w_tmp >> 24
 	__ASM_SIZE(pop,) %__ASM_REG(dx)
 	ret
-SYM_FUNC_END(__sw_hweight32)
+ENDPROC(__sw_hweight32)
 EXPORT_SYMBOL(__sw_hweight32)
 
-SYM_FUNC_START(__sw_hweight64)
+ENTRY(__sw_hweight64)
 #ifdef CONFIG_X86_64
 	pushq   %rdi
 	pushq   %rdx
@@ -79,5 +79,5 @@ SYM_FUNC_START(__sw_hweight64)
 	popl    %ecx
 	ret
 #endif
-SYM_FUNC_END(__sw_hweight64)
+ENDPROC(__sw_hweight64)
 EXPORT_SYMBOL(__sw_hweight64)

@@ -59,7 +59,7 @@ static bool livepatch_fix2_dummy_check(struct dummy *d, unsigned long jiffies)
 static void livepatch_fix2_dummy_leak_dtor(void *obj, void *shadow_data)
 {
 	void *d = obj;
-	int **shadow_leak = shadow_data;
+	void **shadow_leak = shadow_data;
 
 	kfree(*shadow_leak);
 	pr_info("%s: dummy @ %p, prevented leak @ %p\n",
@@ -68,7 +68,7 @@ static void livepatch_fix2_dummy_leak_dtor(void *obj, void *shadow_data)
 
 static void livepatch_fix2_dummy_free(struct dummy *d)
 {
-	int **shadow_leak;
+	void **shadow_leak;
 	int *shadow_count;
 
 	/* Patch: copy the memory leak patch from the fix1 module. */

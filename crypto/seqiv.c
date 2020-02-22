@@ -18,6 +18,8 @@
 #include <linux/slab.h>
 #include <linux/string.h>
 
+static void seqiv_free(struct crypto_instance *inst);
+
 static void seqiv_aead_encrypt_complete2(struct aead_request *req, int err)
 {
 	struct aead_request *subreq = aead_request_ctx(req);
@@ -157,11 +159,15 @@ static int seqiv_aead_create(struct crypto_template *tmpl, struct rtattr **tb)
 	inst->alg.base.cra_ctxsize += inst->alg.ivsize;
 
 	err = aead_register_instance(tmpl, inst);
-	if (err) {
-free_inst:
-		inst->free(inst);
-	}
+	if (err)
+		goto free_inst;
+
+out:
 	return err;
+
+free_inst:
+	aead_geniv_free(inst);
+	goto out;
 }
 
 static int seqiv_create(struct crypto_template *tmpl, struct rtattr **tb)
@@ -178,9 +184,15 @@ static int seqiv_create(struct crypto_template *tmpl, struct rtattr **tb)
 	return seqiv_aead_create(tmpl, tb);
 }
 
+static void seqiv_free(struct crypto_instance *inst)
+{
+	aead_geniv_free(aead_instance(inst));
+}
+
 static struct crypto_template seqiv_tmpl = {
 	.name = "seqiv",
 	.create = seqiv_create,
+	.free = seqiv_free,
 	.module = THIS_MODULE,
 };
 

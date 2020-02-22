@@ -33,7 +33,7 @@ PROG COMMANDS
 |	**bpftool** **prog help**
 |
 |	*MAP* := { **id** *MAP_ID* | **pinned** *FILE* }
-|	*PROG* := { **id** *PROG_ID* | **pinned** *FILE* | **tag** *PROG_TAG* | **name** *PROG_NAME* }
+|	*PROG* := { **id** *PROG_ID* | **pinned** *FILE* | **tag** *PROG_TAG* }
 |	*TYPE* := {
 |		**socket** | **kprobe** | **kretprobe** | **classifier** | **action** |
 |		**tracepoint** | **raw_tracepoint** | **xdp** | **perf_event** | **cgroup/skb** |
@@ -53,10 +53,8 @@ DESCRIPTION
 ===========
 	**bpftool prog { show | list }** [*PROG*]
 		  Show information about loaded programs.  If *PROG* is
-		  specified show information only about given programs,
-		  otherwise list all programs currently loaded on the system.
-		  In case of **tag** or **name**, *PROG* may match several
-		  programs which will all be shown.
+		  specified show information only about given program, otherwise
+		  list all programs currently loaded on the system.
 
 		  Output will start with program ID followed by program type and
 		  zero or more named attributes (depending on kernel version).
@@ -70,14 +68,10 @@ DESCRIPTION
 		  performed via the **kernel.bpf_stats_enabled** sysctl knob.
 
 	**bpftool prog dump xlated** *PROG* [{ **file** *FILE* | **opcodes** | **visual** | **linum** }]
-		  Dump eBPF instructions of the programs from the kernel. By
+		  Dump eBPF instructions of the program from the kernel. By
 		  default, eBPF will be disassembled and printed to standard
 		  output in human-readable format. In this case, **opcodes**
 		  controls if raw opcodes should be printed as well.
-
-		  In case of **tag** or **name**, *PROG* may match several
-		  programs which will all be dumped.  However, if **file** or
-		  **visual** is specified, *PROG* must match a single program.
 
 		  If **file** is specified, the binary image will instead be
 		  written to *FILE*.
@@ -86,17 +80,15 @@ DESCRIPTION
 		  built instead, and eBPF instructions will be presented with
 		  CFG in DOT format, on standard output.
 
-		  If the programs have line_info available, the source line will
+		  If the prog has line_info available, the source line will
 		  be displayed by default.  If **linum** is specified,
 		  the filename, line number and line column will also be
 		  displayed on top of the source line.
 
 	**bpftool prog dump jited**  *PROG* [{ **file** *FILE* | **opcodes** | **linum** }]
 		  Dump jited image (host machine code) of the program.
-
 		  If *FILE* is specified image will be written to a file,
 		  otherwise it will be disassembled and printed to stdout.
-		  *PROG* must match a single program when **file** is specified.
 
 		  **opcodes** controls if raw opcodes will be printed.
 

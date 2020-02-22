@@ -216,9 +216,8 @@ void expire_timeout_chk(struct adapter *padapter)
 	/* check auth_queue */
 	#ifdef DBG_EXPIRATION_CHK
 	if (phead != plist) {
-		DBG_871X(FUNC_NDEV_FMT " auth_list, cnt:%u\n",
-			 FUNC_NDEV_ARG(padapter->pnetdev),
-			 pstapriv->auth_list_cnt);
+		DBG_871X(FUNC_NDEV_FMT" auth_list, cnt:%u\n"
+			, FUNC_NDEV_ARG(padapter->pnetdev), pstapriv->auth_list_cnt);
 	}
 	#endif
 	while (phead != plist) {
@@ -1447,14 +1446,14 @@ u8 rtw_ap_set_pairwise_key(struct adapter *padapter, struct sta_info *psta)
 	u8 res = _SUCCESS;
 
 	ph2c = rtw_zmalloc(sizeof(struct cmd_obj));
-	if (!ph2c) {
+	if (ph2c == NULL) {
 		res = _FAIL;
 		goto exit;
 	}
 
 	psetstakey_para = rtw_zmalloc(sizeof(struct set_stakey_parm));
 	if (psetstakey_para == NULL) {
-		kfree(ph2c);
+		kfree((u8 *)ph2c);
 		res = _FAIL;
 		goto exit;
 	}
@@ -1497,7 +1496,7 @@ static int rtw_ap_set_key(
 	}
 	psetkeyparm = rtw_zmalloc(sizeof(struct setkey_parm));
 	if (psetkeyparm == NULL) {
-		kfree(pcmd);
+		kfree((unsigned char *)pcmd);
 		res = _FAIL;
 		goto exit;
 	}

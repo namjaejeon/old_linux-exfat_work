@@ -361,7 +361,7 @@ static int s3c24xx_i2s_probe(struct snd_soc_dai *dai)
 }
 
 #ifdef CONFIG_PM
-static int s3c24xx_i2s_suspend(struct snd_soc_component *component)
+static int s3c24xx_i2s_suspend(struct snd_soc_dai *cpu_dai)
 {
 	s3c24xx_i2s.iiscon = readl(s3c24xx_i2s.regs + S3C2410_IISCON);
 	s3c24xx_i2s.iismod = readl(s3c24xx_i2s.regs + S3C2410_IISMOD);
@@ -373,7 +373,7 @@ static int s3c24xx_i2s_suspend(struct snd_soc_component *component)
 	return 0;
 }
 
-static int s3c24xx_i2s_resume(struct snd_soc_component *component)
+static int s3c24xx_i2s_resume(struct snd_soc_dai *cpu_dai)
 {
 	int ret;
 
@@ -408,6 +408,8 @@ static const struct snd_soc_dai_ops s3c24xx_i2s_dai_ops = {
 
 static struct snd_soc_dai_driver s3c24xx_i2s_dai = {
 	.probe = s3c24xx_i2s_probe,
+	.suspend = s3c24xx_i2s_suspend,
+	.resume = s3c24xx_i2s_resume,
 	.playback = {
 		.channels_min = 2,
 		.channels_max = 2,
@@ -423,8 +425,6 @@ static struct snd_soc_dai_driver s3c24xx_i2s_dai = {
 
 static const struct snd_soc_component_driver s3c24xx_i2s_component = {
 	.name		= "s3c24xx-i2s",
-	.suspend	= s3c24xx_i2s_suspend,
-	.resume		= s3c24xx_i2s_resume,
 };
 
 static int s3c24xx_iis_dev_probe(struct platform_device *pdev)

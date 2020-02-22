@@ -131,11 +131,5 @@ int __init ima_init(void)
 
 	ima_init_policy();
 
-	rc = ima_fs_init();
-	if (rc != 0)
-		return rc;
-
-	ima_init_key_queue();
-
-	return rc;
+	return ima_fs_init();
 }

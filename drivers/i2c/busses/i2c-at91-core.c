@@ -66,26 +66,40 @@ static struct at91_twi_pdata at91rm9200_config = {
 	.clk_max_div = 5,
 	.clk_offset = 3,
 	.has_unre_flag = true,
+	.has_alt_cmd = false,
+	.has_hold_field = false,
 };
 
 static struct at91_twi_pdata at91sam9261_config = {
 	.clk_max_div = 5,
 	.clk_offset = 4,
+	.has_unre_flag = false,
+	.has_alt_cmd = false,
+	.has_hold_field = false,
 };
 
 static struct at91_twi_pdata at91sam9260_config = {
 	.clk_max_div = 7,
 	.clk_offset = 4,
+	.has_unre_flag = false,
+	.has_alt_cmd = false,
+	.has_hold_field = false,
 };
 
 static struct at91_twi_pdata at91sam9g20_config = {
 	.clk_max_div = 7,
 	.clk_offset = 4,
+	.has_unre_flag = false,
+	.has_alt_cmd = false,
+	.has_hold_field = false,
 };
 
 static struct at91_twi_pdata at91sam9g10_config = {
 	.clk_max_div = 7,
 	.clk_offset = 4,
+	.has_unre_flag = false,
+	.has_alt_cmd = false,
+	.has_hold_field = false,
 };
 
 static const struct platform_device_id at91_twi_devtypes[] = {
@@ -113,13 +127,17 @@ static const struct platform_device_id at91_twi_devtypes[] = {
 static struct at91_twi_pdata at91sam9x5_config = {
 	.clk_max_div = 7,
 	.clk_offset = 4,
+	.has_unre_flag = false,
+	.has_alt_cmd = false,
+	.has_hold_field = false,
 };
 
 static struct at91_twi_pdata sama5d4_config = {
 	.clk_max_div = 7,
 	.clk_offset = 4,
+	.has_unre_flag = false,
+	.has_alt_cmd = false,
 	.has_hold_field = true,
-	.has_dig_filtr = true,
 };
 
 static struct at91_twi_pdata sama5d2_config = {
@@ -128,20 +146,6 @@ static struct at91_twi_pdata sama5d2_config = {
 	.has_unre_flag = true,
 	.has_alt_cmd = true,
 	.has_hold_field = true,
-	.has_dig_filtr = true,
-	.has_adv_dig_filtr = true,
-	.has_ana_filtr = true,
-};
-
-static struct at91_twi_pdata sam9x60_config = {
-	.clk_max_div = 7,
-	.clk_offset = 3,
-	.has_unre_flag = true,
-	.has_alt_cmd = true,
-	.has_hold_field = true,
-	.has_dig_filtr = true,
-	.has_adv_dig_filtr = true,
-	.has_ana_filtr = true,
 };
 
 static const struct of_device_id atmel_twi_dt_ids[] = {
@@ -169,9 +173,6 @@ static const struct of_device_id atmel_twi_dt_ids[] = {
 	}, {
 		.compatible = "atmel,sama5d2-i2c",
 		.data = &sama5d2_config,
-	}, {
-		.compatible = "microchip,sam9x60-i2c",
-		.data = &sam9x60_config,
 	}, {
 		/* sentinel */
 	}

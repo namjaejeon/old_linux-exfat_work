@@ -803,12 +803,7 @@ success:
 			continue;
 
 		if (cookie->inodes[i]) {
-			struct afs_vnode *iv = AFS_FS_I(cookie->inodes[i]);
-
-			if (test_bit(AFS_VNODE_UNSET, &iv->flags))
-				continue;
-
-			afs_vnode_commit_status(&fc, iv,
+			afs_vnode_commit_status(&fc, AFS_FS_I(cookie->inodes[i]),
 						scb->cb_break, NULL, scb);
 			continue;
 		}
@@ -908,7 +903,6 @@ static struct dentry *afs_lookup(struct inode *dir, struct dentry *dentry,
 				 unsigned int flags)
 {
 	struct afs_vnode *dvnode = AFS_FS_I(dir);
-	struct afs_fid fid = {};
 	struct inode *inode;
 	struct dentry *d;
 	struct key *key;
@@ -952,18 +946,21 @@ static struct dentry *afs_lookup(struct inode *dir, struct dentry *dentry,
 	afs_stat_v(dvnode, n_lookup);
 	inode = afs_do_lookup(dir, dentry, key);
 	key_put(key);
-	if (inode == ERR_PTR(-ENOENT))
+	if (inode == ERR_PTR(-ENOENT)) {
 		inode = afs_try_auto_mntpt(dentry, dir);
-
-	if (!IS_ERR_OR_NULL(inode))
-		fid = AFS_FS_I(inode)->fid;
-
+	} else {
+		dentry->d_fsdata =
+			(void *)(unsigned long)dvnode->status.data_version;
+	}
 	d = d_splice_alias(inode, dentry);
 	if (!IS_ERR_OR_NULL(d)) {
 		d->d_fsdata = dentry->d_fsdata;
-		trace_afs_lookup(dvnode, &d->d_name, &fid);
+		trace_afs_lookup(dvnode, &d->d_name,
+				 inode ? AFS_FS_I(inode) : NULL);
 	} else {
-		trace_afs_lookup(dvnode, &dentry->d_name, &fid);
+		trace_afs_lookup(dvnode, &dentry->d_name,
+				 IS_ERR_OR_NULL(inode) ? NULL
+				 : AFS_FS_I(inode));
 	}
 	return d;
 }

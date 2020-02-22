@@ -967,6 +967,8 @@ static struct input_handler sysrq_handler = {
 	.id_table	= sysrq_ids,
 };
 
+static bool sysrq_handler_registered;
+
 static inline void sysrq_register_handler(void)
 {
 	int error;
@@ -976,11 +978,16 @@ static inline void sysrq_register_handler(void)
 	error = input_register_handler(&sysrq_handler);
 	if (error)
 		pr_err("Failed to register input handler, error %d", error);
+	else
+		sysrq_handler_registered = true;
 }
 
 static inline void sysrq_unregister_handler(void)
 {
-	input_unregister_handler(&sysrq_handler);
+	if (sysrq_handler_registered) {
+		input_unregister_handler(&sysrq_handler);
+		sysrq_handler_registered = false;
+	}
 }
 
 static int sysrq_reset_seq_param_set(const char *buffer,
@@ -1101,15 +1108,15 @@ static ssize_t write_sysrq_trigger(struct file *file, const char __user *buf,
 	return count;
 }
 
-static const struct proc_ops sysrq_trigger_proc_ops = {
-	.proc_write	= write_sysrq_trigger,
-	.proc_lseek	= noop_llseek,
+static const struct file_operations proc_sysrq_trigger_operations = {
+	.write		= write_sysrq_trigger,
+	.llseek		= noop_llseek,
 };
 
 static void sysrq_init_procfs(void)
 {
 	if (!proc_create("sysrq-trigger", S_IWUSR, NULL,
-			 &sysrq_trigger_proc_ops))
+			 &proc_sysrq_trigger_operations))
 		pr_err("Failed to register proc interface\n");
 }
 

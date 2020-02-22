@@ -608,7 +608,7 @@ static int lance_rx(struct net_device *dev)
 			len = (*rds_ptr(rd, mblength, lp->type) & 0xfff) - 4;
 			skb = netdev_alloc_skb(dev, len + 2);
 
-			if (!skb) {
+			if (skb == 0) {
 				dev->stats.rx_dropped++;
 				*rds_ptr(rd, mblength, lp->type) = 0;
 				*rds_ptr(rd, rmd1, lp->type) =
@@ -884,7 +884,7 @@ static inline int lance_reset(struct net_device *dev)
 	return status;
 }
 
-static void lance_tx_timeout(struct net_device *dev, unsigned int txqueue)
+static void lance_tx_timeout(struct net_device *dev)
 {
 	struct lance_private *lp = netdev_priv(dev);
 	volatile struct lance_regs *ll = lp->ll;

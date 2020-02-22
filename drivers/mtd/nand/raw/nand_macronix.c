@@ -59,7 +59,7 @@ static void macronix_nand_onfi_init(struct nand_chip *chip)
  */
 static void macronix_nand_fix_broken_get_timings(struct nand_chip *chip)
 {
-	int i;
+	unsigned int i;
 	static const char * const broken_get_timings[] = {
 		"MX30LF1G18AC",
 		"MX30LF1G28AC",
@@ -80,9 +80,12 @@ static void macronix_nand_fix_broken_get_timings(struct nand_chip *chip)
 	if (!chip->parameters.supports_set_get_features)
 		return;
 
-	i = match_string(broken_get_timings, ARRAY_SIZE(broken_get_timings),
-			 chip->parameters.model);
-	if (i < 0)
+	for (i = 0; i < ARRAY_SIZE(broken_get_timings); i++) {
+		if (!strcmp(broken_get_timings[i], chip->parameters.model))
+			break;
+	}
+
+	if (i == ARRAY_SIZE(broken_get_timings))
 		return;
 
 	bitmap_clear(chip->parameters.get_feature_list,

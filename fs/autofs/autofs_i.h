@@ -63,7 +63,7 @@ struct autofs_info {
 
 	struct autofs_sb_info *sbi;
 	unsigned long last_used;
-	int count;
+	atomic_t count;
 
 	kuid_t uid;
 	kgid_t gid;

@@ -36,7 +36,6 @@
 #include "zcrypt_msgtype6.h"
 #include "zcrypt_msgtype50.h"
 #include "zcrypt_ccamisc.h"
-#include "zcrypt_ep11misc.h"
 
 /*
  * Module description.
@@ -850,7 +849,7 @@ static long _zcrypt_send_cprb(struct ap_perms *perms,
 			/* check if device is online and eligible */
 			if (!zq->online ||
 			    !zq->ops->send_cprb ||
-			    (tdom != AUTOSEL_DOM &&
+			    (tdom != (unsigned short) AUTOSELECT &&
 			     tdom != AP_QID_QUEUE(zq->queue->qid)))
 				continue;
 			/* check if device node has admission for this queue */
@@ -875,7 +874,7 @@ static long _zcrypt_send_cprb(struct ap_perms *perms,
 
 	/* in case of auto select, provide the correct domain */
 	qid = pref_zq->queue->qid;
-	if (*domain == AUTOSEL_DOM)
+	if (*domain == (unsigned short) AUTOSELECT)
 		*domain = AP_QID_QUEUE(qid);
 
 	rc = pref_zq->ops->send_cprb(pref_zq, xcRB, &ap_msg);
@@ -902,7 +901,7 @@ static bool is_desired_ep11_card(unsigned int dev_id,
 				 struct ep11_target_dev *targets)
 {
 	while (target_num-- > 0) {
-		if (targets->ap_id == dev_id || targets->ap_id == AUTOSEL_AP)
+		if (dev_id == targets->ap_id)
 			return true;
 		targets++;
 	}
@@ -913,19 +912,16 @@ static bool is_desired_ep11_queue(unsigned int dev_qid,
 				  unsigned short target_num,
 				  struct ep11_target_dev *targets)
 {
-	int card = AP_QID_CARD(dev_qid), dom = AP_QID_QUEUE(dev_qid);
-
 	while (target_num-- > 0) {
-		if ((targets->ap_id == card || targets->ap_id == AUTOSEL_AP) &&
-		    (targets->dom_id == dom || targets->dom_id == AUTOSEL_DOM))
+		if (AP_MKQID(targets->ap_id, targets->dom_id) == dev_qid)
 			return true;
 		targets++;
 	}
 	return false;
 }
 
-static long _zcrypt_send_ep11_cprb(struct ap_perms *perms,
-				   struct ep11_urb *xcrb)
+static long zcrypt_send_ep11_cprb(struct ap_perms *perms,
+				  struct ep11_urb *xcrb)
 {
 	struct zcrypt_card *zc, *pref_zc;
 	struct zcrypt_queue *zq, *pref_zq;
@@ -1029,12 +1025,6 @@ out:
 			      AP_QID_CARD(qid), AP_QID_QUEUE(qid));
 	return rc;
 }
-
-long zcrypt_send_ep11_cprb(struct ep11_urb *xcrb)
-{
-	return _zcrypt_send_ep11_cprb(&ap_perms, xcrb);
-}
-EXPORT_SYMBOL(zcrypt_send_ep11_cprb);
 
 static long zcrypt_rng(char *buffer)
 {
@@ -1376,12 +1366,12 @@ static long zcrypt_unlocked_ioctl(struct file *filp, unsigned int cmd,
 		if (copy_from_user(&xcrb, uxcrb, sizeof(xcrb)))
 			return -EFAULT;
 		do {
-			rc = _zcrypt_send_ep11_cprb(perms, &xcrb);
+			rc = zcrypt_send_ep11_cprb(perms, &xcrb);
 		} while (rc == -EAGAIN);
 		/* on failure: retry once again after a requested rescan */
 		if ((rc == -ENODEV) && (zcrypt_process_rescan()))
 			do {
-				rc = _zcrypt_send_ep11_cprb(perms, &xcrb);
+				rc = zcrypt_send_ep11_cprb(perms, &xcrb);
 			} while (rc == -EAGAIN);
 		if (rc)
 			ZCRYPT_DBF(DBF_DEBUG, "ioctl ZSENDEP11CPRB rc=%d\n", rc);
@@ -1895,7 +1885,6 @@ void __exit zcrypt_api_exit(void)
 	zcrypt_msgtype6_exit();
 	zcrypt_msgtype50_exit();
 	zcrypt_ccamisc_exit();
-	zcrypt_ep11misc_exit();
 	zcrypt_debug_exit();
 }
 

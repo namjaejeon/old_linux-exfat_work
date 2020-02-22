@@ -5,7 +5,7 @@
  * Copyright (C) 2016-2017 Glider bvba
  */
 
-#include <linux/bits.h>
+#include <linux/bug.h>
 #include <linux/kernel.h>
 #include <linux/sys_soc.h>
 
@@ -51,46 +51,25 @@ static struct rcar_sysc_area r8a7795_areas[] __initdata = {
 
 
 	/*
-	 * Fixups for R-Car H3 revisions
+	 * Fixups for R-Car H3 revisions after ES1.x
 	 */
 
-#define HAS_A2VC0	BIT(0)		/* Power domain A2VC0 is present */
-#define NO_EXTMASK	BIT(1)		/* Missing SYSCEXTMASK register */
-
-static const struct soc_device_attribute r8a7795_quirks_match[] __initconst = {
-	{
-		.soc_id = "r8a7795", .revision = "ES1.*",
-		.data = (void *)(HAS_A2VC0 | NO_EXTMASK),
-	}, {
-		.soc_id = "r8a7795", .revision = "ES2.*",
-		.data = (void *)(NO_EXTMASK),
-	},
+static const struct soc_device_attribute r8a7795es1[] __initconst = {
+	{ .soc_id = "r8a7795", .revision = "ES1.*" },
 	{ /* sentinel */ }
 };
 
 static int __init r8a7795_sysc_init(void)
 {
-	const struct soc_device_attribute *attr;
-	u32 quirks = 0;
-
-	attr = soc_device_match(r8a7795_quirks_match);
-	if (attr)
-		quirks = (uintptr_t)attr->data;
-
-	if (!(quirks & HAS_A2VC0))
+	if (!soc_device_match(r8a7795es1))
 		rcar_sysc_nullify(r8a7795_areas, ARRAY_SIZE(r8a7795_areas),
 				  R8A7795_PD_A2VC0);
-
-	if (quirks & NO_EXTMASK)
-		r8a7795_sysc_info.extmask_val = 0;
 
 	return 0;
 }
 
-struct rcar_sysc_info r8a7795_sysc_info __initdata = {
+const struct rcar_sysc_info r8a7795_sysc_info __initconst = {
 	.init = r8a7795_sysc_init,
 	.areas = r8a7795_areas,
 	.num_areas = ARRAY_SIZE(r8a7795_areas),
-	.extmask_offs = 0x2f8,
-	.extmask_val = BIT(0),
 };

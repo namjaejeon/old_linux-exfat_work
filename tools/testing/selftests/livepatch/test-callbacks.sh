@@ -9,7 +9,7 @@ MOD_LIVEPATCH2=test_klp_callbacks_demo2
 MOD_TARGET=test_klp_callbacks_mod
 MOD_TARGET_BUSY=test_klp_callbacks_busy
 
-setup_config
+set_dynamic_debug
 
 
 # TEST: target module before livepatch

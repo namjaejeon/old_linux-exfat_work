@@ -83,9 +83,9 @@ enum rdma_lookup_mode {
  */
 struct uverbs_obj_type_class {
 	struct ib_uobject *(*alloc_begin)(const struct uverbs_api_object *obj,
-					  struct uverbs_attr_bundle *attrs);
+					  struct ib_uverbs_file *ufile);
 	/* This consumes the kref on uobj */
-	void (*alloc_commit)(struct ib_uobject *uobj);
+	int (*alloc_commit)(struct ib_uobject *uobj);
 	/* This does not consume the kref on uobj */
 	void (*alloc_abort)(struct ib_uobject *uobj);
 
@@ -98,6 +98,7 @@ struct uverbs_obj_type_class {
 				       enum rdma_remove_reason why,
 				       struct uverbs_attr_bundle *attrs);
 	void (*remove_handle)(struct ib_uobject *uobj);
+	u8    needs_kfree_rcu;
 };
 
 struct uverbs_obj_type {
@@ -137,34 +138,23 @@ struct ib_uobject *rdma_lookup_get_uobject(const struct uverbs_api_object *obj,
 void rdma_lookup_put_uobject(struct ib_uobject *uobj,
 			     enum rdma_lookup_mode mode);
 struct ib_uobject *rdma_alloc_begin_uobject(const struct uverbs_api_object *obj,
+					    struct ib_uverbs_file *ufile,
 					    struct uverbs_attr_bundle *attrs);
 void rdma_alloc_abort_uobject(struct ib_uobject *uobj,
 			      struct uverbs_attr_bundle *attrs);
-void rdma_alloc_commit_uobject(struct ib_uobject *uobj,
-			       struct uverbs_attr_bundle *attrs);
-
-/*
- * uverbs_uobject_get is called in order to increase the reference count on
- * an uobject. This is useful when a handler wants to keep the uobject's memory
- * alive, regardless if this uobject is still alive in the context's objects
- * repository. Objects are put via uverbs_uobject_put.
- */
-static inline void uverbs_uobject_get(struct ib_uobject *uobject)
-{
-	kref_get(&uobject->ref);
-}
-void uverbs_uobject_put(struct ib_uobject *uobject);
+int __must_check rdma_alloc_commit_uobject(struct ib_uobject *uobj,
+					   struct uverbs_attr_bundle *attrs);
 
 struct uverbs_obj_fd_type {
 	/*
 	 * In fd based objects, uverbs_obj_type_ops points to generic
 	 * fd operations. In order to specialize the underlying types (e.g.
 	 * completion_channel), we use fops, name and flags for fd creation.
-	 * destroy_object is called when the uobject is to be destroyed,
-	 * because the driver is removed or the FD is closed.
+	 * context_closed is called when the context is closed either when
+	 * the driver is removed or the process terminated.
 	 */
 	struct uverbs_obj_type  type;
-	int (*destroy_object)(struct ib_uobject *uobj,
+	int (*context_closed)(struct ib_uobject *uobj,
 			      enum rdma_remove_reason why);
 	const struct file_operations	*fops;
 	const char			*name;
@@ -173,11 +163,11 @@ struct uverbs_obj_fd_type {
 
 extern const struct uverbs_obj_type_class uverbs_idr_class;
 extern const struct uverbs_obj_type_class uverbs_fd_class;
-int uverbs_uobject_fd_release(struct inode *inode, struct file *filp);
+void uverbs_close_fd(struct file *f);
 
 #define UVERBS_BUILD_BUG_ON(cond) (sizeof(char[1 - 2 * !!(cond)]) -	\
 				   sizeof(char))
-#define UVERBS_TYPE_ALLOC_FD(_obj_size, _destroy_object, _fops, _name, _flags) \
+#define UVERBS_TYPE_ALLOC_FD(_obj_size, _context_closed, _fops, _name, _flags)\
 	((&((const struct uverbs_obj_fd_type)				\
 	 {.type = {							\
 		.type_class = &uverbs_fd_class,				\
@@ -185,7 +175,7 @@ int uverbs_uobject_fd_release(struct inode *inode, struct file *filp);
 			UVERBS_BUILD_BUG_ON((_obj_size) <               \
 					    sizeof(struct ib_uobject)), \
 	 },								\
-	 .destroy_object = _destroy_object,				\
+	 .context_closed = _context_closed,				\
 	 .fops = _fops,							\
 	 .name = _name,							\
 	 .flags = _flags}))->type)

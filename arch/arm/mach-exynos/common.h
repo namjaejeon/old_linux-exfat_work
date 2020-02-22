@@ -3,7 +3,7 @@
  * Copyright (c) 2011 Samsung Electronics Co., Ltd.
  *		http://www.samsung.com
  *
- * Common Header for Exynos machines
+ * Common Header for EXYNOS machines
  */
 
 #ifndef __ARCH_ARM_MACH_EXYNOS_COMMON_H

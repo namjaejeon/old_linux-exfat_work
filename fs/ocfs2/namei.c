@@ -586,7 +586,8 @@ static int __ocfs2_mknod_locked(struct inode *dir,
 			mlog_errno(status);
 	}
 
-	ocfs2_update_inode_fsync_trans(handle, inode, 1);
+	oi->i_sync_tid = handle->h_transaction->t_tid;
+	oi->i_datasync_tid = handle->h_transaction->t_tid;
 
 leave:
 	if (status < 0) {

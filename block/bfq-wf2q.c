@@ -277,7 +277,10 @@ struct bfq_queue *bfq_entity_to_bfqq(struct bfq_entity *entity)
  */
 static u64 bfq_delta(unsigned long service, unsigned long weight)
 {
-	return div64_ul((u64)service << WFQ_SERVICE_SHIFT, weight);
+	u64 d = (u64)service << WFQ_SERVICE_SHIFT;
+
+	do_div(d, weight);
+	return d;
 }
 
 /**
@@ -533,9 +536,7 @@ static void bfq_get_entity(struct bfq_entity *entity)
 		bfqq->ref++;
 		bfq_log_bfqq(bfqq->bfqd, bfqq, "get_entity: %p %d",
 			     bfqq, bfqq->ref);
-	} else
-		bfqg_and_blkg_get(container_of(entity, struct bfq_group,
-					       entity));
+	}
 }
 
 /**
@@ -647,16 +648,10 @@ static void bfq_forget_entity(struct bfq_service_tree *st,
 {
 	struct bfq_queue *bfqq = bfq_entity_to_bfqq(entity);
 
-	entity->on_st_or_in_serv = false;
+	entity->on_st = false;
 	st->wsum -= entity->weight;
-	if (is_in_service)
-		return;
-
-	if (bfqq)
+	if (bfqq && !is_in_service)
 		bfq_put_queue(bfqq);
-	else
-		bfqg_and_blkg_put(container_of(entity, struct bfq_group,
-					       entity));
 }
 
 /**
@@ -1007,7 +1002,7 @@ static void __bfq_activate_entity(struct bfq_entity *entity,
 		 */
 		bfq_get_entity(entity);
 
-		entity->on_st_or_in_serv = true;
+		entity->on_st = true;
 	}
 
 #ifdef CONFIG_BFQ_GROUP_IOSCHED
@@ -1173,10 +1168,7 @@ bool __bfq_deactivate_entity(struct bfq_entity *entity, bool ins_into_idle_tree)
 	struct bfq_service_tree *st;
 	bool is_in_service;
 
-	if (!entity->on_st_or_in_serv) /*
-					* entity never activated, or
-					* already inactive
-					*/
+	if (!entity->on_st) /* entity never activated, or already inactive */
 		return false;
 
 	/*
@@ -1631,7 +1623,7 @@ bool __bfq_bfqd_reset_in_service(struct bfq_data *bfqd)
 	 * service tree either, then release the service reference to
 	 * the queue it represents (taken with bfq_get_entity).
 	 */
-	if (!in_serv_entity->on_st_or_in_serv) {
+	if (!in_serv_entity->on_st) {
 		/*
 		 * If no process is referencing in_serv_bfqq any
 		 * longer, then the service reference may be the only

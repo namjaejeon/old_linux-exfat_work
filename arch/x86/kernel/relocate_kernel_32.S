@@ -35,7 +35,8 @@
 #define CP_PA_BACKUP_PAGES_MAP	DATA(0x1c)
 
 	.text
-SYM_CODE_START_NOALIGN(relocate_kernel)
+	.globl relocate_kernel
+relocate_kernel:
 	/* Save the CPU context, used for jumping back */
 
 	pushl	%ebx
@@ -92,9 +93,8 @@ SYM_CODE_START_NOALIGN(relocate_kernel)
 	addl    $(identity_mapped - relocate_kernel), %eax
 	pushl   %eax
 	ret
-SYM_CODE_END(relocate_kernel)
 
-SYM_CODE_START_LOCAL_NOALIGN(identity_mapped)
+identity_mapped:
 	/* set return address to 0 if not preserving context */
 	pushl	$0
 	/* store the start address on the stack */
@@ -191,9 +191,8 @@ SYM_CODE_START_LOCAL_NOALIGN(identity_mapped)
 	addl	$(virtual_mapped - relocate_kernel), %eax
 	pushl	%eax
 	ret
-SYM_CODE_END(identity_mapped)
 
-SYM_CODE_START_LOCAL_NOALIGN(virtual_mapped)
+virtual_mapped:
 	movl	CR4(%edi), %eax
 	movl	%eax, %cr4
 	movl	CR3(%edi), %eax
@@ -209,10 +208,9 @@ SYM_CODE_START_LOCAL_NOALIGN(virtual_mapped)
 	popl	%esi
 	popl	%ebx
 	ret
-SYM_CODE_END(virtual_mapped)
 
 	/* Do the copies */
-SYM_CODE_START_LOCAL_NOALIGN(swap_pages)
+swap_pages:
 	movl	8(%esp), %edx
 	movl	4(%esp), %ecx
 	pushl	%ebp
@@ -272,7 +270,6 @@ SYM_CODE_START_LOCAL_NOALIGN(swap_pages)
 	popl	%ebx
 	popl	%ebp
 	ret
-SYM_CODE_END(swap_pages)
 
 	.globl kexec_control_code_size
 .set kexec_control_code_size, . - relocate_kernel

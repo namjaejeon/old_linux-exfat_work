@@ -12,4 +12,3 @@ the Linux ACPI support.
    dsdt-override
    ssdt-overlays
    cppc_sysfs
-   fan_performance_states

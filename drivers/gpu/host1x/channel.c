@@ -115,14 +115,14 @@ static struct host1x_channel *acquire_unused_channel(struct host1x *host)
 
 /**
  * host1x_channel_request() - Allocate a channel
- * @client: Host1x client this channel will be used to send commands to
+ * @device: Host1x unit this channel will be used to send commands to
  *
- * Allocates a new host1x channel for @client. May return NULL if CDMA
+ * Allocates a new host1x channel for @device. May return NULL if CDMA
  * initialization fails.
  */
-struct host1x_channel *host1x_channel_request(struct host1x_client *client)
+struct host1x_channel *host1x_channel_request(struct device *dev)
 {
-	struct host1x *host = dev_get_drvdata(client->dev->parent);
+	struct host1x *host = dev_get_drvdata(dev->parent);
 	struct host1x_channel_list *chlist = &host->channel_list;
 	struct host1x_channel *channel;
 	int err;
@@ -133,8 +133,7 @@ struct host1x_channel *host1x_channel_request(struct host1x_client *client)
 
 	kref_init(&channel->refcount);
 	mutex_init(&channel->submitlock);
-	channel->client = client;
-	channel->dev = client->dev;
+	channel->dev = dev;
 
 	err = host1x_hw_channel_init(host, channel, channel->id);
 	if (err < 0)
@@ -149,7 +148,7 @@ struct host1x_channel *host1x_channel_request(struct host1x_client *client)
 fail:
 	clear_bit(channel->id, chlist->allocated_channels);
 
-	dev_err(client->dev, "failed to initialize channel\n");
+	dev_err(dev, "failed to initialize channel\n");
 
 	return NULL;
 }

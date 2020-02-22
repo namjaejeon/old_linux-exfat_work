@@ -68,11 +68,10 @@ OPTIONS
 -------
 -i::
 --input=<path>::
-        Input file name, for the 'report', 'diff' and 'buildid-list' subcommands.
+        Input file name.
 -o::
 --output=<path>::
-        Output file name, for the 'record' subcommand. Doesn't work with 'report',
-        just redirect the output to a file when using 'report'.
+        Output file name.
 --host::
         Collect host side performance profile.
 --guest::

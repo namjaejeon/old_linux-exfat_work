@@ -140,6 +140,8 @@ struct pv_cpu_ops {
 
 	void (*load_sp0)(unsigned long sp0);
 
+	void (*set_iopl_mask)(unsigned mask);
+
 	void (*wbinvd)(void);
 
 	/* cpuid emulation, mostly so that caps bits can be disabled */

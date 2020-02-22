@@ -105,8 +105,7 @@ static int lima_clk_init(struct lima_device *dev)
 	if (err)
 		goto error_out0;
 
-	dev->reset = devm_reset_control_array_get_optional_shared(dev->dev);
-
+	dev->reset = devm_reset_control_get_optional(dev->dev, NULL);
 	if (IS_ERR(dev->reset)) {
 		err = PTR_ERR(dev->reset);
 		if (err != -EPROBE_DEFER)
@@ -314,7 +313,7 @@ int lima_device_init(struct lima_device *ldev)
 		ldev->va_end = LIMA_VA_RESERVE_START;
 		ldev->dlbu_cpu = dma_alloc_wc(
 			ldev->dev, LIMA_PAGE_SIZE,
-			&ldev->dlbu_dma, GFP_KERNEL | __GFP_NOWARN);
+			&ldev->dlbu_dma, GFP_KERNEL);
 		if (!ldev->dlbu_cpu) {
 			err = -ENOMEM;
 			goto err_out2;

@@ -779,6 +779,9 @@ struct il_sensitivity_ranges {
 	u16 nrg_th_cca;
 };
 
+#define KELVIN_TO_CELSIUS(x) ((x)-273)
+#define CELSIUS_TO_KELVIN(x) ((x)+273)
+
 /**
  * struct il_hw_params
  * @bcast_id: f/w broadcast station ID

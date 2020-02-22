@@ -137,6 +137,7 @@ static const struct rtc_class_ops ds1216_rtc_ops = {
 
 static int __init ds1216_rtc_probe(struct platform_device *pdev)
 {
+	struct resource *res;
 	struct ds1216_priv *priv;
 	u8 dummy[8];
 
@@ -146,7 +147,8 @@ static int __init ds1216_rtc_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, priv);
 
-	priv->ioaddr = devm_platform_ioremap_resource(pdev, 0);
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	priv->ioaddr = devm_ioremap_resource(&pdev->dev, res);
 	if (IS_ERR(priv->ioaddr))
 		return PTR_ERR(priv->ioaddr);
 

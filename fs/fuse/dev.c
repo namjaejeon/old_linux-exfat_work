@@ -705,7 +705,7 @@ static int fuse_copy_fill(struct fuse_copy_state *cs)
 			cs->pipebufs++;
 			cs->nr_segs--;
 		} else {
-			if (cs->nr_segs >= cs->pipe->max_usage)
+			if (cs->nr_segs == cs->pipe->buffers)
 				return -EIO;
 
 			page = alloc_page(GFP_HIGHUSER);
@@ -881,7 +881,7 @@ static int fuse_ref_page(struct fuse_copy_state *cs, struct page *page,
 	struct pipe_buffer *buf;
 	int err;
 
-	if (cs->nr_segs >= cs->pipe->max_usage)
+	if (cs->nr_segs == cs->pipe->buffers)
 		return -EIO;
 
 	err = unlock_request(cs->req);
@@ -1343,7 +1343,7 @@ static ssize_t fuse_dev_splice_read(struct file *in, loff_t *ppos,
 	if (!fud)
 		return -EPERM;
 
-	bufs = kvmalloc_array(pipe->max_usage, sizeof(struct pipe_buffer),
+	bufs = kvmalloc_array(pipe->buffers, sizeof(struct pipe_buffer),
 			      GFP_KERNEL);
 	if (!bufs)
 		return -ENOMEM;
@@ -1355,7 +1355,7 @@ static ssize_t fuse_dev_splice_read(struct file *in, loff_t *ppos,
 	if (ret < 0)
 		goto out;
 
-	if (pipe_occupancy(pipe->head, pipe->tail) + cs.nr_segs > pipe->max_usage) {
+	if (pipe->nrbufs + cs.nr_segs > pipe->buffers) {
 		ret = -EIO;
 		goto out;
 	}
@@ -1937,7 +1937,6 @@ static ssize_t fuse_dev_splice_write(struct pipe_inode_info *pipe,
 				     struct file *out, loff_t *ppos,
 				     size_t len, unsigned int flags)
 {
-	unsigned int head, tail, mask, count;
 	unsigned nbuf;
 	unsigned idx;
 	struct pipe_buffer *bufs;
@@ -1952,12 +1951,8 @@ static ssize_t fuse_dev_splice_write(struct pipe_inode_info *pipe,
 
 	pipe_lock(pipe);
 
-	head = pipe->head;
-	tail = pipe->tail;
-	mask = pipe->ring_size - 1;
-	count = head - tail;
-
-	bufs = kvmalloc_array(count, sizeof(struct pipe_buffer), GFP_KERNEL);
+	bufs = kvmalloc_array(pipe->nrbufs, sizeof(struct pipe_buffer),
+			      GFP_KERNEL);
 	if (!bufs) {
 		pipe_unlock(pipe);
 		return -ENOMEM;
@@ -1965,8 +1960,8 @@ static ssize_t fuse_dev_splice_write(struct pipe_inode_info *pipe,
 
 	nbuf = 0;
 	rem = 0;
-	for (idx = tail; idx != head && rem < len; idx++)
-		rem += pipe->bufs[idx & mask].len;
+	for (idx = 0; idx < pipe->nrbufs && rem < len; idx++)
+		rem += pipe->bufs[(pipe->curbuf + idx) & (pipe->buffers - 1)].len;
 
 	ret = -EINVAL;
 	if (rem < len)
@@ -1977,16 +1972,16 @@ static ssize_t fuse_dev_splice_write(struct pipe_inode_info *pipe,
 		struct pipe_buffer *ibuf;
 		struct pipe_buffer *obuf;
 
-		BUG_ON(nbuf >= pipe->ring_size);
-		BUG_ON(tail == head);
-		ibuf = &pipe->bufs[tail & mask];
+		BUG_ON(nbuf >= pipe->buffers);
+		BUG_ON(!pipe->nrbufs);
+		ibuf = &pipe->bufs[pipe->curbuf];
 		obuf = &bufs[nbuf];
 
 		if (rem >= ibuf->len) {
 			*obuf = *ibuf;
 			ibuf->ops = NULL;
-			tail++;
-			pipe->tail = tail;
+			pipe->curbuf = (pipe->curbuf + 1) & (pipe->buffers - 1);
+			pipe->nrbufs--;
 		} else {
 			if (!pipe_buf_get(pipe, ibuf))
 				goto out_free;
@@ -2267,7 +2262,7 @@ const struct file_operations fuse_dev_operations = {
 	.release	= fuse_dev_release,
 	.fasync		= fuse_dev_fasync,
 	.unlocked_ioctl = fuse_dev_ioctl,
-	.compat_ioctl   = compat_ptr_ioctl,
+	.compat_ioctl   = fuse_dev_ioctl,
 };
 EXPORT_SYMBOL_GPL(fuse_dev_operations);
 

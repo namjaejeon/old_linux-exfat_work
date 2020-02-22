@@ -340,6 +340,8 @@ static const struct of_device_id sram_dt_ids[] = {
 static int sram_probe(struct platform_device *pdev)
 {
 	struct sram_dev *sram;
+	struct resource *res;
+	size_t size;
 	int ret;
 	int (*init_func)(void);
 
@@ -349,14 +351,25 @@ static int sram_probe(struct platform_device *pdev)
 
 	sram->dev = &pdev->dev;
 
-	if (of_property_read_bool(pdev->dev.of_node, "no-memory-wc"))
-		sram->virt_base = devm_platform_ioremap_resource(pdev, 0);
-	else
-		sram->virt_base = devm_platform_ioremap_resource_wc(pdev, 0);
-	if (IS_ERR(sram->virt_base)) {
-		dev_err(&pdev->dev, "could not map SRAM registers\n");
-		return PTR_ERR(sram->virt_base);
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	if (!res) {
+		dev_err(sram->dev, "found no memory resource\n");
+		return -EINVAL;
 	}
+
+	size = resource_size(res);
+
+	if (!devm_request_mem_region(sram->dev, res->start, size, pdev->name)) {
+		dev_err(sram->dev, "could not request region for resource\n");
+		return -EBUSY;
+	}
+
+	if (of_property_read_bool(pdev->dev.of_node, "no-memory-wc"))
+		sram->virt_base = devm_ioremap(sram->dev, res->start, size);
+	else
+		sram->virt_base = devm_ioremap_wc(sram->dev, res->start, size);
+	if (!sram->virt_base)
+		return -ENOMEM;
 
 	sram->pool = devm_gen_pool_create(sram->dev, ilog2(SRAM_GRANULARITY),
 					  NUMA_NO_NODE, NULL);
@@ -369,8 +382,7 @@ static int sram_probe(struct platform_device *pdev)
 	else
 		clk_prepare_enable(sram->clk);
 
-	ret = sram_reserve_regions(sram,
-			platform_get_resource(pdev, IORESOURCE_MEM, 0));
+	ret = sram_reserve_regions(sram, res);
 	if (ret)
 		goto err_disable_clk;
 

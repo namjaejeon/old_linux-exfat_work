@@ -10,8 +10,6 @@
 #include "callchain.h"
 #include "values.h"
 #include "hist.h"
-#include "stat.h"
-#include "spark.h"
 
 struct option;
 struct thread;
@@ -73,8 +71,6 @@ struct hist_entry_diff {
 		/* PERF_HPP_DIFF__CYCLES */
 		s64	cycles;
 	};
-	struct stats	stats;
-	unsigned long	svals[NUM_SPARKS];
 };
 
 struct hist_entry_ops {
@@ -163,8 +159,6 @@ static __pure inline bool hist_entry__has_callchains(struct hist_entry *he)
 {
 	return he->callchain_size != 0;
 }
-
-int hist_entry__sym_snprintf(struct hist_entry *he, char *bf, size_t size, unsigned int width);
 
 static inline bool hist_entry__has_pairs(struct hist_entry *he)
 {

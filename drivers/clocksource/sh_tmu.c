@@ -24,10 +24,6 @@
 #include <linux/slab.h>
 #include <linux/spinlock.h>
 
-#ifdef CONFIG_SUPERH
-#include <asm/platform_early.h>
-#endif
-
 enum sh_tmu_model {
 	SH_TMU,
 	SH_TMU_SH3,
@@ -486,7 +482,7 @@ static int sh_tmu_map_memory(struct sh_tmu_device *tmu)
 		return -ENXIO;
 	}
 
-	tmu->mapbase = ioremap(res->start, resource_size(res));
+	tmu->mapbase = ioremap_nocache(res->start, resource_size(res));
 	if (tmu->mapbase == NULL)
 		return -ENXIO;
 
@@ -599,7 +595,7 @@ static int sh_tmu_probe(struct platform_device *pdev)
 	struct sh_tmu_device *tmu = platform_get_drvdata(pdev);
 	int ret;
 
-	if (!is_sh_early_platform_device(pdev)) {
+	if (!is_early_platform_device(pdev)) {
 		pm_runtime_set_active(&pdev->dev);
 		pm_runtime_enable(&pdev->dev);
 	}
@@ -619,8 +615,7 @@ static int sh_tmu_probe(struct platform_device *pdev)
 		pm_runtime_idle(&pdev->dev);
 		return ret;
 	}
-
-	if (is_sh_early_platform_device(pdev))
+	if (is_early_platform_device(pdev))
 		return 0;
 
  out:
@@ -670,10 +665,7 @@ static void __exit sh_tmu_exit(void)
 	platform_driver_unregister(&sh_tmu_device_driver);
 }
 
-#ifdef CONFIG_SUPERH
-sh_early_platform_init("earlytimer", &sh_tmu_device_driver);
-#endif
-
+early_platform_init("earlytimer", &sh_tmu_device_driver);
 subsys_initcall(sh_tmu_init);
 module_exit(sh_tmu_exit);
 

@@ -14,6 +14,7 @@
 #include <linux/types.h>
 #include <linux/interrupt.h>
 #include <linux/i2c.h>
+#include <linux/gpio.h>
 #include <linux/irq.h>
 #include <linux/delay.h>
 #include <linux/iio/iio.h>

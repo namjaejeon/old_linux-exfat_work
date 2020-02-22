@@ -2288,9 +2288,9 @@ static int ocfs2_extend_rotate_transaction(handle_t *handle, int subtree_depth,
 	int ret = 0;
 	int credits = (path->p_tree_depth - subtree_depth) * 2 + 1 + op_credits;
 
-	if (jbd2_handle_buffer_credits(handle) < credits)
+	if (handle->h_buffer_credits < credits)
 		ret = ocfs2_extend_trans(handle,
-				credits - jbd2_handle_buffer_credits(handle));
+					 credits - handle->h_buffer_credits);
 
 	return ret;
 }
@@ -2367,7 +2367,7 @@ static int ocfs2_rotate_tree_right(handle_t *handle,
 				   struct ocfs2_path *right_path,
 				   struct ocfs2_path **ret_left_path)
 {
-	int ret, start, orig_credits = jbd2_handle_buffer_credits(handle);
+	int ret, start, orig_credits = handle->h_buffer_credits;
 	u32 cpos;
 	struct ocfs2_path *left_path = NULL;
 	struct super_block *sb = ocfs2_metadata_cache_get_super(et->et_ci);
@@ -3148,7 +3148,7 @@ static int ocfs2_rotate_tree_left(handle_t *handle,
 				  struct ocfs2_path *path,
 				  struct ocfs2_cached_dealloc_ctxt *dealloc)
 {
-	int ret, orig_credits = jbd2_handle_buffer_credits(handle);
+	int ret, orig_credits = handle->h_buffer_credits;
 	struct ocfs2_path *tmp_path = NULL, *restart_path = NULL;
 	struct ocfs2_extent_block *eb;
 	struct ocfs2_extent_list *el;
@@ -3386,8 +3386,8 @@ static int ocfs2_merge_rec_right(struct ocfs2_path *left_path,
 							right_path);
 
 		ret = ocfs2_extend_rotate_transaction(handle, subtree_index,
-					jbd2_handle_buffer_credits(handle),
-					right_path);
+						      handle->h_buffer_credits,
+						      right_path);
 		if (ret) {
 			mlog_errno(ret);
 			goto out;
@@ -3548,8 +3548,8 @@ static int ocfs2_merge_rec_left(struct ocfs2_path *right_path,
 							right_path);
 
 		ret = ocfs2_extend_rotate_transaction(handle, subtree_index,
-					jbd2_handle_buffer_credits(handle),
-					left_path);
+						      handle->h_buffer_credits,
+						      left_path);
 		if (ret) {
 			mlog_errno(ret);
 			goto out;
@@ -3623,7 +3623,7 @@ static int ocfs2_merge_rec_left(struct ocfs2_path *right_path,
 		    le16_to_cpu(el->l_next_free_rec) == 1) {
 			/* extend credit for ocfs2_remove_rightmost_path */
 			ret = ocfs2_extend_rotate_transaction(handle, 0,
-					jbd2_handle_buffer_credits(handle),
+					handle->h_buffer_credits,
 					right_path);
 			if (ret) {
 				mlog_errno(ret);
@@ -3669,7 +3669,7 @@ static int ocfs2_try_to_merge_extent(handle_t *handle,
 	if (ctxt->c_split_covers_rec && ctxt->c_has_empty_extent) {
 		/* extend credit for ocfs2_remove_rightmost_path */
 		ret = ocfs2_extend_rotate_transaction(handle, 0,
-				jbd2_handle_buffer_credits(handle),
+				handle->h_buffer_credits,
 				path);
 		if (ret) {
 			mlog_errno(ret);
@@ -3725,7 +3725,7 @@ static int ocfs2_try_to_merge_extent(handle_t *handle,
 
 		/* extend credit for ocfs2_remove_rightmost_path */
 		ret = ocfs2_extend_rotate_transaction(handle, 0,
-					jbd2_handle_buffer_credits(handle),
+					handle->h_buffer_credits,
 					path);
 		if (ret) {
 			mlog_errno(ret);
@@ -3755,7 +3755,7 @@ static int ocfs2_try_to_merge_extent(handle_t *handle,
 
 		/* extend credit for ocfs2_remove_rightmost_path */
 		ret = ocfs2_extend_rotate_transaction(handle, 0,
-				jbd2_handle_buffer_credits(handle),
+				handle->h_buffer_credits,
 				path);
 		if (ret) {
 			mlog_errno(ret);
@@ -3799,7 +3799,7 @@ static int ocfs2_try_to_merge_extent(handle_t *handle,
 		if (ctxt->c_split_covers_rec) {
 			/* extend credit for ocfs2_remove_rightmost_path */
 			ret = ocfs2_extend_rotate_transaction(handle, 0,
-					jbd2_handle_buffer_credits(handle),
+					handle->h_buffer_credits,
 					path);
 			if (ret) {
 				mlog_errno(ret);
@@ -5358,7 +5358,7 @@ static int ocfs2_truncate_rec(handle_t *handle,
 	if (ocfs2_is_empty_extent(&el->l_recs[0]) && index > 0) {
 		/* extend credit for ocfs2_remove_rightmost_path */
 		ret = ocfs2_extend_rotate_transaction(handle, 0,
-				jbd2_handle_buffer_credits(handle),
+				handle->h_buffer_credits,
 				path);
 		if (ret) {
 			mlog_errno(ret);
@@ -5427,8 +5427,8 @@ static int ocfs2_truncate_rec(handle_t *handle,
 	}
 
 	ret = ocfs2_extend_rotate_transaction(handle, 0,
-					jbd2_handle_buffer_credits(handle),
-					path);
+					      handle->h_buffer_credits,
+					      path);
 	if (ret) {
 		mlog_errno(ret);
 		goto out;

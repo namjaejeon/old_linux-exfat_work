@@ -23,10 +23,6 @@
 #include <linux/slab.h>
 #include <linux/spinlock.h>
 
-#ifdef CONFIG_SUPERH
-#include <asm/platform_early.h>
-#endif
-
 struct sh_mtu2_device;
 
 struct sh_mtu2_channel {
@@ -332,13 +328,12 @@ static int sh_mtu2_register(struct sh_mtu2_channel *ch, const char *name)
 	return 0;
 }
 
-static const unsigned int sh_mtu2_channel_offsets[] = {
-	0x300, 0x380, 0x000,
-};
-
 static int sh_mtu2_setup_channel(struct sh_mtu2_channel *ch, unsigned int index,
 				 struct sh_mtu2_device *mtu)
 {
+	static const unsigned int channel_offsets[] = {
+		0x300, 0x380, 0x000,
+	};
 	char name[6];
 	int irq;
 	int ret;
@@ -361,7 +356,7 @@ static int sh_mtu2_setup_channel(struct sh_mtu2_channel *ch, unsigned int index,
 		return ret;
 	}
 
-	ch->base = mtu->mapbase + sh_mtu2_channel_offsets[index];
+	ch->base = mtu->mapbase + channel_offsets[index];
 	ch->index = index;
 
 	return sh_mtu2_register(ch, dev_name(&mtu->pdev->dev));
@@ -377,7 +372,7 @@ static int sh_mtu2_map_memory(struct sh_mtu2_device *mtu)
 		return -ENXIO;
 	}
 
-	mtu->mapbase = ioremap(res->start, resource_size(res));
+	mtu->mapbase = ioremap_nocache(res->start, resource_size(res));
 	if (mtu->mapbase == NULL)
 		return -ENXIO;
 
@@ -413,12 +408,7 @@ static int sh_mtu2_setup(struct sh_mtu2_device *mtu,
 	}
 
 	/* Allocate and setup the channels. */
-	ret = platform_irq_count(pdev);
-	if (ret < 0)
-		goto err_unmap;
-
-	mtu->num_channels = min_t(unsigned int, ret,
-				  ARRAY_SIZE(sh_mtu2_channel_offsets));
+	mtu->num_channels = 3;
 
 	mtu->channels = kcalloc(mtu->num_channels, sizeof(*mtu->channels),
 				GFP_KERNEL);
@@ -452,7 +442,7 @@ static int sh_mtu2_probe(struct platform_device *pdev)
 	struct sh_mtu2_device *mtu = platform_get_drvdata(pdev);
 	int ret;
 
-	if (!is_sh_early_platform_device(pdev)) {
+	if (!is_early_platform_device(pdev)) {
 		pm_runtime_set_active(&pdev->dev);
 		pm_runtime_enable(&pdev->dev);
 	}
@@ -472,7 +462,7 @@ static int sh_mtu2_probe(struct platform_device *pdev)
 		pm_runtime_idle(&pdev->dev);
 		return ret;
 	}
-	if (is_sh_early_platform_device(pdev))
+	if (is_early_platform_device(pdev))
 		return 0;
 
  out:
@@ -521,10 +511,7 @@ static void __exit sh_mtu2_exit(void)
 	platform_driver_unregister(&sh_mtu2_device_driver);
 }
 
-#ifdef CONFIG_SUPERH
-sh_early_platform_init("earlytimer", &sh_mtu2_device_driver);
-#endif
-
+early_platform_init("earlytimer", &sh_mtu2_device_driver);
 subsys_initcall(sh_mtu2_init);
 module_exit(sh_mtu2_exit);
 

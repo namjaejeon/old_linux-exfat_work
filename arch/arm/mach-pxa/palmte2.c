@@ -23,6 +23,7 @@
 #include <linux/gpio.h>
 #include <linux/wm97xx.h>
 #include <linux/power_supply.h>
+#include <linux/usb/gpio_vbus.h>
 
 #include <asm/mach-types.h>
 #include <asm/mach/arch.h>
@@ -200,20 +201,18 @@ static struct pxaficp_platform_data palmte2_ficp_platform_data = {
 /******************************************************************************
  * UDC
  ******************************************************************************/
-static struct gpiod_lookup_table palmte2_udc_gpiod_table = {
-	.dev_id = "gpio-vbus",
-	.table = {
-		GPIO_LOOKUP("gpio-pxa", GPIO_NR_PALMTE2_USB_DETECT_N,
-			    "vbus", GPIO_ACTIVE_LOW),
-		GPIO_LOOKUP("gpio-pxa", GPIO_NR_PALMTE2_USB_PULLUP,
-			    "pullup", GPIO_ACTIVE_HIGH),
-		{ },
-	},
+static struct gpio_vbus_mach_info palmte2_udc_info = {
+	.gpio_vbus		= GPIO_NR_PALMTE2_USB_DETECT_N,
+	.gpio_vbus_inverted	= 1,
+	.gpio_pullup		= GPIO_NR_PALMTE2_USB_PULLUP,
 };
 
 static struct platform_device palmte2_gpio_vbus = {
 	.name	= "gpio-vbus",
 	.id	= -1,
+	.dev	= {
+		.platform_data	= &palmte2_udc_info,
+	},
 };
 
 /******************************************************************************
@@ -369,7 +368,6 @@ static void __init palmte2_init(void)
 	pxa_set_ficp_info(&palmte2_ficp_platform_data);
 
 	pwm_add_table(palmte2_pwm_lookup, ARRAY_SIZE(palmte2_pwm_lookup));
-	gpiod_add_lookup_table(&palmte2_udc_gpiod_table);
 	platform_add_devices(devices, ARRAY_SIZE(devices));
 }
 

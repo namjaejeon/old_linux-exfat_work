@@ -22,7 +22,6 @@
 #include <linux/irq.h>
 #include <linux/gpio/driver.h>
 #include <linux/bitops.h>
-#include <linux/interrupt.h>
 
 #define MPC8XXX_GPIO_PINS	32
 
@@ -128,19 +127,20 @@ static int mpc8xxx_gpio_to_irq(struct gpio_chip *gc, unsigned offset)
 		return -ENXIO;
 }
 
-static irqreturn_t mpc8xxx_gpio_irq_cascade(int irq, void *data)
+static void mpc8xxx_gpio_irq_cascade(struct irq_desc *desc)
 {
-	struct mpc8xxx_gpio_chip *mpc8xxx_gc = data;
+	struct mpc8xxx_gpio_chip *mpc8xxx_gc = irq_desc_get_handler_data(desc);
+	struct irq_chip *chip = irq_desc_get_chip(desc);
 	struct gpio_chip *gc = &mpc8xxx_gc->gc;
-	unsigned long mask;
-	int i;
+	unsigned int mask;
 
 	mask = gc->read_reg(mpc8xxx_gc->regs + GPIO_IER)
 		& gc->read_reg(mpc8xxx_gc->regs + GPIO_IMR);
-	for_each_set_bit(i, &mask, 32)
-		generic_handle_irq(irq_linear_revmap(mpc8xxx_gc->irq, 31 - i));
-
-	return IRQ_HANDLED;
+	if (mask)
+		generic_handle_irq(irq_linear_revmap(mpc8xxx_gc->irq,
+						     32 - ffs(mask)));
+	if (chip->irq_eoi)
+		chip->irq_eoi(&desc->irq_data);
 }
 
 static void mpc8xxx_irq_unmask(struct irq_data *d)
@@ -296,7 +296,6 @@ static const struct mpc8xxx_gpio_devtype mpc512x_gpio_devtype = {
 
 static const struct mpc8xxx_gpio_devtype ls1028a_gpio_devtype = {
 	.gpio_dir_in_init = ls1028a_gpio_dir_in_init,
-	.irq_set_type = mpc8xxx_irq_set_type,
 };
 
 static const struct mpc8xxx_gpio_devtype mpc5125_gpio_devtype = {
@@ -347,7 +346,6 @@ static int mpc8xxx_probe(struct platform_device *pdev)
 		return -ENOMEM;
 
 	gc = &mpc8xxx_gc->gc;
-	gc->parent = &pdev->dev;
 
 	if (of_property_read_bool(np, "little-endian")) {
 		ret = bgpio_init(gc, &pdev->dev, 4,
@@ -379,8 +377,7 @@ static int mpc8xxx_probe(struct platform_device *pdev)
 	 * It's assumed that only a single type of gpio controller is available
 	 * on the current machine, so overwriting global data is fine.
 	 */
-	if (devtype->irq_set_type)
-		mpc8xxx_irq_chip.irq_set_type = devtype->irq_set_type;
+	mpc8xxx_irq_chip.irq_set_type = devtype->irq_set_type;
 
 	if (devtype->gpio_dir_out)
 		gc->direction_output = devtype->gpio_dir_out;
@@ -388,9 +385,6 @@ static int mpc8xxx_probe(struct platform_device *pdev)
 		gc->get = devtype->gpio_get;
 
 	gc->to_irq = mpc8xxx_gpio_to_irq;
-
-	if (of_device_is_compatible(np, "fsl,qoriq-gpio"))
-		gc->write_reg(mpc8xxx_gc->regs + GPIO_IBE, 0xffffffff);
 
 	ret = gpiochip_add_data(gc, mpc8xxx_gc);
 	if (ret) {
@@ -415,16 +409,8 @@ static int mpc8xxx_probe(struct platform_device *pdev)
 	if (devtype->gpio_dir_in_init)
 		devtype->gpio_dir_in_init(gc);
 
-	ret = devm_request_irq(&pdev->dev, mpc8xxx_gc->irqn,
-			       mpc8xxx_gpio_irq_cascade,
-			       IRQF_NO_THREAD | IRQF_SHARED, "gpio-cascade",
-			       mpc8xxx_gc);
-	if (ret) {
-		dev_err(&pdev->dev, "%s: failed to devm_request_irq(%d), ret = %d\n",
-			np->full_name, mpc8xxx_gc->irqn, ret);
-		goto err;
-	}
-
+	irq_set_chained_handler_and_data(mpc8xxx_gc->irqn,
+					 mpc8xxx_gpio_irq_cascade, mpc8xxx_gc);
 	return 0;
 err:
 	iounmap(mpc8xxx_gc->regs);

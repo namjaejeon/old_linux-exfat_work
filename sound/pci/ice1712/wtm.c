@@ -477,7 +477,7 @@ static const DECLARE_TLV_DB_SCALE(db_scale_adc, 0, 150, 0);
 /*
  * Control tabs
  */
-static const struct snd_kcontrol_new stac9640_controls[] = {
+static struct snd_kcontrol_new stac9640_controls[] = {
 	{
 		.iface = SNDRV_CTL_ELEM_IFACE_MIXER,
 		.access = (SNDRV_CTL_ELEM_ACCESS_READWRITE |
@@ -567,12 +567,12 @@ static int wtm_add_controls(struct snd_ice1712 *ice)
 
 static int wtm_init(struct snd_ice1712 *ice)
 {
-	static const unsigned short stac_inits_wtm[] = {
+	static unsigned short stac_inits_wtm[] = {
 		STAC946X_RESET, 0,
 		STAC946X_MASTER_CLOCKING, 0x11,
 		(unsigned short)-1
 	};
-	const unsigned short *p;
+	unsigned short *p;
 	struct wtm_spec *spec;
 
 	/*WTM 192M*/
@@ -599,7 +599,7 @@ static int wtm_init(struct snd_ice1712 *ice)
 }
 
 
-static const unsigned char wtm_eeprom[] = {
+static unsigned char wtm_eeprom[] = {
 	[ICE_EEP2_SYSCONF]      = 0x67, /*SYSCONF: clock 192KHz, mpu401,
 							4ADC, 8DAC */
 	[ICE_EEP2_ACLINK]       = 0x80, /* ACLINK : I2S */

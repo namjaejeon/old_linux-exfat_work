@@ -294,6 +294,5 @@ xfs_bitmap_set_btblocks(
 	struct xfs_bitmap	*bitmap,
 	struct xfs_btree_cur	*cur)
 {
-	return xfs_btree_visit_blocks(cur, xfs_bitmap_collect_btblock,
-			XFS_BTREE_VISIT_ALL, bitmap);
+	return xfs_btree_visit_blocks(cur, xfs_bitmap_collect_btblock, bitmap);
 }

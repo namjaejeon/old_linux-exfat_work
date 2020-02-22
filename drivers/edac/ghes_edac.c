@@ -21,21 +21,13 @@ struct ghes_edac_pvt {
 	struct mem_ctl_info *mci;
 
 	/* Buffers for the error handling routine */
-	char other_detail[400];
+	char detail_location[240];
+	char other_detail[160];
 	char msg[80];
 };
 
-static refcount_t ghes_refcount = REFCOUNT_INIT(0);
-
-/*
- * Access to ghes_pvt must be protected by ghes_lock. The spinlock
- * also provides the necessary (implicit) memory barrier for the SMP
- * case to make the pointer visible on another CPU.
- */
+static atomic_t ghes_init = ATOMIC_INIT(0);
 static struct ghes_edac_pvt *ghes_pvt;
-
-/* GHES registration mutex */
-static DEFINE_MUTEX(ghes_reg_mutex);
 
 /*
  * Sync with other, potentially concurrent callers of
@@ -87,15 +79,15 @@ static void ghes_edac_count_dimms(const struct dmi_header *dh, void *arg)
 		(*num_dimm)++;
 }
 
-static int get_dimm_smbios_index(struct mem_ctl_info *mci, u16 handle)
+static int get_dimm_smbios_index(u16 handle)
 {
-	struct dimm_info *dimm;
+	struct mem_ctl_info *mci = ghes_pvt->mci;
+	int i;
 
-	mci_for_each_dimm(mci, dimm) {
-		if (dimm->smbios_handle == handle)
-			return dimm->idx;
+	for (i = 0; i < mci->tot_dimms; i++) {
+		if (mci->dimms[i]->smbios_handle == handle)
+			return i;
 	}
-
 	return -1;
 }
 
@@ -106,7 +98,9 @@ static void ghes_edac_dmidecode(const struct dmi_header *dh, void *arg)
 
 	if (dh->type == DMI_ENTRY_MEM_DEVICE) {
 		struct memdev_dmi_entry *entry = (struct memdev_dmi_entry *)dh;
-		struct dimm_info *dimm = edac_get_dimm(mci, dimm_fill->count, 0, 0);
+		struct dimm_info *dimm = EDAC_DIMM_PTR(mci->layers, mci->dimms,
+						       mci->n_layers,
+						       dimm_fill->count, 0, 0);
 		u16 rdr_mask = BIT(7) | BIT(13);
 
 		if (entry->size == 0xffff) {
@@ -204,9 +198,13 @@ void ghes_edac_report_mem_error(int sev, struct cper_sec_mem_err *mem_err)
 	enum hw_event_mc_err_type type;
 	struct edac_raw_error_desc *e;
 	struct mem_ctl_info *mci;
-	struct ghes_edac_pvt *pvt;
+	struct ghes_edac_pvt *pvt = ghes_pvt;
 	unsigned long flags;
 	char *p;
+	u8 grain_bits;
+
+	if (!pvt)
+		return;
 
 	/*
 	 * We can do the locking below because GHES defers error processing
@@ -218,17 +216,12 @@ void ghes_edac_report_mem_error(int sev, struct cper_sec_mem_err *mem_err)
 
 	spin_lock_irqsave(&ghes_lock, flags);
 
-	pvt = ghes_pvt;
-	if (!pvt)
-		goto unlock;
-
 	mci = pvt->mci;
 	e = &mci->error_desc;
 
 	/* Cleans the error report buffer */
 	memset(e, 0, sizeof (*e));
 	e->error_count = 1;
-	e->grain = 1;
 	strcpy(e->label, "unknown label");
 	e->msg = pvt->msg;
 	e->other_detail = pvt->other_detail;
@@ -318,13 +311,13 @@ void ghes_edac_report_mem_error(int sev, struct cper_sec_mem_err *mem_err)
 
 	/* Error address */
 	if (mem_err->validation_bits & CPER_MEM_VALID_PA) {
-		e->page_frame_number = PHYS_PFN(mem_err->physical_addr);
-		e->offset_in_page = offset_in_page(mem_err->physical_addr);
+		e->page_frame_number = mem_err->physical_addr >> PAGE_SHIFT;
+		e->offset_in_page = mem_err->physical_addr & ~PAGE_MASK;
 	}
 
 	/* Error grain */
 	if (mem_err->validation_bits & CPER_MEM_VALID_PA_MASK)
-		e->grain = ~mem_err->physical_addr_mask + 1;
+		e->grain = ~(mem_err->physical_addr_mask & ~PAGE_MASK);
 
 	/* Memory error location, mapped on e->location */
 	p = e->location;
@@ -355,7 +348,7 @@ void ghes_edac_report_mem_error(int sev, struct cper_sec_mem_err *mem_err)
 			p += sprintf(p, "DIMM DMI handle: 0x%.4x ",
 				     mem_err->mem_dev_handle);
 
-		index = get_dimm_smbios_index(mci, mem_err->mem_dev_handle);
+		index = get_dimm_smbios_index(mem_err->mem_dev_handle);
 		if (index >= 0) {
 			e->top_layer = index;
 			e->enable_per_layer_report = true;
@@ -367,8 +360,6 @@ void ghes_edac_report_mem_error(int sev, struct cper_sec_mem_err *mem_err)
 
 	/* All other fields are mapped on e->other_detail */
 	p = pvt->other_detail;
-	p += snprintf(p, sizeof(pvt->other_detail),
-		"APEI location: %s ", e->location);
 	if (mem_err->validation_bits & CPER_MEM_VALID_ERROR_STATUS) {
 		u64 status = mem_err->error_status;
 
@@ -442,9 +433,16 @@ void ghes_edac_report_mem_error(int sev, struct cper_sec_mem_err *mem_err)
 	if (p > pvt->other_detail)
 		*(p - 1) = '\0';
 
-	edac_raw_mc_handle_error(type, mci, e);
+	/* Generate the trace event */
+	grain_bits = fls_long(e->grain);
+	snprintf(pvt->detail_location, sizeof(pvt->detail_location),
+		 "APEI location: %s %s", e->location, e->other_detail);
+	trace_mc_event(type, e->msg, e->label, e->error_count,
+		       mci->mc_idx, e->top_layer, e->mid_layer, e->low_layer,
+		       (e->page_frame_number << PAGE_SHIFT) | e->offset_in_page,
+		       grain_bits, e->syndrome, pvt->detail_location);
 
-unlock:
+	edac_raw_mc_handle_error(type, mci, e);
 	spin_unlock_irqrestore(&ghes_lock, flags);
 }
 
@@ -459,12 +457,10 @@ static struct acpi_platform_list plat_list[] = {
 int ghes_edac_register(struct ghes *ghes, struct device *dev)
 {
 	bool fake = false;
-	int rc = 0, num_dimm = 0;
+	int rc, num_dimm = 0;
 	struct mem_ctl_info *mci;
-	struct ghes_edac_pvt *pvt;
 	struct edac_mc_layer layers[1];
 	struct ghes_edac_dimm_fill dimm_fill;
-	unsigned long flags;
 	int idx = -1;
 
 	if (IS_ENABLED(CONFIG_X86)) {
@@ -476,14 +472,11 @@ int ghes_edac_register(struct ghes *ghes, struct device *dev)
 		idx = 0;
 	}
 
-	/* finish another registration/unregistration instance first */
-	mutex_lock(&ghes_reg_mutex);
-
 	/*
 	 * We have only one logical memory controller to which all DIMMs belong.
 	 */
-	if (refcount_inc_not_zero(&ghes_refcount))
-		goto unlock;
+	if (atomic_inc_return(&ghes_init) > 1)
+		return 0;
 
 	/* Get the number of DIMMs */
 	dmi_walk(ghes_edac_count_dimms, &num_dimm);
@@ -501,13 +494,12 @@ int ghes_edac_register(struct ghes *ghes, struct device *dev)
 	mci = edac_mc_alloc(0, ARRAY_SIZE(layers), layers, sizeof(struct ghes_edac_pvt));
 	if (!mci) {
 		pr_info("Can't allocate memory for EDAC data\n");
-		rc = -ENOMEM;
-		goto unlock;
+		return -ENOMEM;
 	}
 
-	pvt		= mci->pvt_info;
-	pvt->ghes	= ghes;
-	pvt->mci	= mci;
+	ghes_pvt	= mci->pvt_info;
+	ghes_pvt->ghes	= ghes;
+	ghes_pvt->mci	= mci;
 
 	mci->pdev = dev;
 	mci->mtype_cap = MEM_FLAG_EMPTY;
@@ -535,7 +527,8 @@ int ghes_edac_register(struct ghes *ghes, struct device *dev)
 		dimm_fill.mci = mci;
 		dmi_walk(ghes_edac_dmidecode, &dimm_fill);
 	} else {
-		struct dimm_info *dimm = edac_get_dimm(mci, 0, 0, 0);
+		struct dimm_info *dimm = EDAC_DIMM_PTR(mci->layers, mci->dimms,
+						       mci->n_layers, 0, 0, 0);
 
 		dimm->nr_pages = 1;
 		dimm->grain = 128;
@@ -548,48 +541,23 @@ int ghes_edac_register(struct ghes *ghes, struct device *dev)
 	if (rc < 0) {
 		pr_info("Can't register at EDAC core\n");
 		edac_mc_free(mci);
-		rc = -ENODEV;
-		goto unlock;
+		return -ENODEV;
 	}
-
-	spin_lock_irqsave(&ghes_lock, flags);
-	ghes_pvt = pvt;
-	spin_unlock_irqrestore(&ghes_lock, flags);
-
-	/* only set on success */
-	refcount_set(&ghes_refcount, 1);
-
-unlock:
-	mutex_unlock(&ghes_reg_mutex);
-
-	return rc;
+	return 0;
 }
 
 void ghes_edac_unregister(struct ghes *ghes)
 {
 	struct mem_ctl_info *mci;
-	unsigned long flags;
 
-	mutex_lock(&ghes_reg_mutex);
+	if (!ghes_pvt)
+		return;
 
-	if (!refcount_dec_and_test(&ghes_refcount))
-		goto unlock;
+	if (atomic_dec_return(&ghes_init))
+		return;
 
-	/*
-	 * Wait for the irq handler being finished.
-	 */
-	spin_lock_irqsave(&ghes_lock, flags);
-	mci = ghes_pvt ? ghes_pvt->mci : NULL;
+	mci = ghes_pvt->mci;
 	ghes_pvt = NULL;
-	spin_unlock_irqrestore(&ghes_lock, flags);
-
-	if (!mci)
-		goto unlock;
-
-	mci = edac_mc_del_mc(mci->pdev);
-	if (mci)
-		edac_mc_free(mci);
-
-unlock:
-	mutex_unlock(&ghes_reg_mutex);
+	edac_mc_del_mc(mci->pdev);
+	edac_mc_free(mci);
 }

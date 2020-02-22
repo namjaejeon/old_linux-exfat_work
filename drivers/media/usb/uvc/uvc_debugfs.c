@@ -108,7 +108,15 @@ void uvc_debugfs_cleanup_stream(struct uvc_streaming *stream)
 
 void uvc_debugfs_init(void)
 {
-	uvc_debugfs_root_dir = debugfs_create_dir("uvcvideo", usb_debug_root);
+	struct dentry *dir;
+
+	dir = debugfs_create_dir("uvcvideo", usb_debug_root);
+	if (IS_ERR_OR_NULL(dir)) {
+		uvc_printk(KERN_INFO, "Unable to create debugfs directory\n");
+		return;
+	}
+
+	uvc_debugfs_root_dir = dir;
 }
 
 void uvc_debugfs_cleanup(void)

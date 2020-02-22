@@ -1728,7 +1728,7 @@ static bool is_mnt_ns_file(struct dentry *dentry)
 	       dentry->d_fsdata == &mntns_operations;
 }
 
-static struct mnt_namespace *to_mnt_ns(struct ns_common *ns)
+struct mnt_namespace *to_mnt_ns(struct ns_common *ns)
 {
 	return container_of(ns, struct mnt_namespace, ns);
 }
@@ -2356,7 +2356,7 @@ static struct file *open_detached_copy(struct path *path, bool recursive)
 	return file;
 }
 
-SYSCALL_DEFINE3(open_tree, int, dfd, const char __user *, filename, unsigned, flags)
+SYSCALL_DEFINE3(open_tree, int, dfd, const char *, filename, unsigned, flags)
 {
 	struct file *file;
 	struct path path;
@@ -2478,10 +2478,8 @@ static void mnt_warn_timestamp_expiry(struct path *mountpoint, struct vfsmount *
 
 		time64_to_tm(sb->s_time_max, 0, &tm);
 
-		pr_warn("%s filesystem being %s at %s supports timestamps until %04ld (0x%llx)\n",
-			sb->s_type->name,
-			is_mounted(mnt) ? "remounted" : "mounted",
-			mntpath,
+		pr_warn("Mounted %s file system at %s supports timestamps until %04ld (0x%llx)\n",
+			sb->s_type->name, mntpath,
 			tm.tm_year+1900, (unsigned long long)sb->s_time_max);
 
 		free_page((unsigned long)buf);
@@ -2766,11 +2764,14 @@ static int do_new_mount_fc(struct fs_context *fc, struct path *mountpoint,
 	if (IS_ERR(mnt))
 		return PTR_ERR(mnt);
 
+	error = do_add_mount(real_mount(mnt), mountpoint, mnt_flags);
+	if (error < 0) {
+		mntput(mnt);
+		return error;
+	}
+
 	mnt_warn_timestamp_expiry(mountpoint, mnt);
 
-	error = do_add_mount(real_mount(mnt), mountpoint, mnt_flags);
-	if (error < 0)
-		mntput(mnt);
 	return error;
 }
 
@@ -2979,10 +2980,39 @@ static void shrink_submounts(struct mount *mnt)
 	}
 }
 
+/*
+ * Some copy_from_user() implementations do not return the exact number of
+ * bytes remaining to copy on a fault.  But copy_mount_options() requires that.
+ * Note that this function differs from copy_from_user() in that it will oops
+ * on bad values of `to', rather than returning a short copy.
+ */
+static long exact_copy_from_user(void *to, const void __user * from,
+				 unsigned long n)
+{
+	char *t = to;
+	const char __user *f = from;
+	char c;
+
+	if (!access_ok(from, n))
+		return n;
+
+	while (n) {
+		if (__get_user(c, f)) {
+			memset(t, 0, n);
+			break;
+		}
+		*t++ = c;
+		f++;
+		n--;
+	}
+	return n;
+}
+
 void *copy_mount_options(const void __user * data)
 {
+	int i;
+	unsigned long size;
 	char *copy;
-	unsigned size;
 
 	if (!data)
 		return NULL;
@@ -2991,16 +3021,22 @@ void *copy_mount_options(const void __user * data)
 	if (!copy)
 		return ERR_PTR(-ENOMEM);
 
-	size = PAGE_SIZE - offset_in_page(data);
+	/* We only care that *some* data at the address the user
+	 * gave us is valid.  Just in case, we'll zero
+	 * the remainder of the page.
+	 */
+	/* copy_from_user cannot cross TASK_SIZE ! */
+	size = TASK_SIZE - (unsigned long)untagged_addr(data);
+	if (size > PAGE_SIZE)
+		size = PAGE_SIZE;
 
-	if (copy_from_user(copy, data, size)) {
+	i = size - exact_copy_from_user(copy, data, size);
+	if (!i) {
 		kfree(copy);
 		return ERR_PTR(-EFAULT);
 	}
-	if (size != PAGE_SIZE) {
-		if (copy_from_user(copy + size, data + size, PAGE_SIZE - size))
-			memset(copy + size, 0, PAGE_SIZE - size);
-	}
+	if (i != PAGE_SIZE)
+		memset(copy + i, 0, PAGE_SIZE - i);
 	return copy;
 }
 
@@ -3290,8 +3326,8 @@ struct dentry *mount_subtree(struct vfsmount *m, const char *name)
 }
 EXPORT_SYMBOL(mount_subtree);
 
-SYSCALL_DEFINE5(mount, char __user *, dev_name, char __user *, dir_name,
-		char __user *, type, unsigned long, flags, void __user *, data)
+int ksys_mount(const char __user *dev_name, const char __user *dir_name,
+	       const char __user *type, unsigned long flags, void __user *data)
 {
 	int ret;
 	char *kernel_type;
@@ -3322,6 +3358,12 @@ out_dev:
 	kfree(kernel_type);
 out_type:
 	return ret;
+}
+
+SYSCALL_DEFINE5(mount, char __user *, dev_name, char __user *, dir_name,
+		char __user *, type, unsigned long, flags, void __user *, data)
+{
+	return ksys_mount(dev_name, dir_name, type, flags, data);
 }
 
 /*
@@ -3473,8 +3515,8 @@ err_fsfd:
  * Note the flags value is a combination of MOVE_MOUNT_* flags.
  */
 SYSCALL_DEFINE5(move_mount,
-		int, from_dfd, const char __user *, from_pathname,
-		int, to_dfd, const char __user *, to_pathname,
+		int, from_dfd, const char *, from_pathname,
+		int, to_dfd, const char *, to_pathname,
 		unsigned int, flags)
 {
 	struct path from_path, to_path;

@@ -615,7 +615,7 @@ static struct coh901_pinpair coh901_pintable[] = {
 static int __init u300_gpio_probe(struct platform_device *pdev)
 {
 	struct u300_gpio *gpio;
-	struct gpio_irq_chip *girq;
+	struct resource *memres;
 	int err = 0;
 	int portno;
 	u32 val;
@@ -632,7 +632,8 @@ static int __init u300_gpio_probe(struct platform_device *pdev)
 	gpio->chip.base = 0;
 	gpio->dev = &pdev->dev;
 
-	gpio->base = devm_platform_ioremap_resource(pdev, 0);
+	memres = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	gpio->base = devm_ioremap_resource(&pdev->dev, memres);
 	if (IS_ERR(gpio->base))
 		return PTR_ERR(gpio->base);
 
@@ -671,17 +672,26 @@ static int __init u300_gpio_probe(struct platform_device *pdev)
 	       gpio->base + U300_GPIO_CR);
 	u300_gpio_init_coh901571(gpio);
 
-	girq = &gpio->chip.irq;
-	girq->chip = &u300_gpio_irqchip;
-	girq->parent_handler = u300_gpio_irq_handler;
-	girq->num_parents = U300_GPIO_NUM_PORTS;
-	girq->parents = devm_kcalloc(gpio->dev, U300_GPIO_NUM_PORTS,
-				     sizeof(*girq->parents),
-				     GFP_KERNEL);
-	if (!girq->parents) {
-		err = -ENOMEM;
-		goto err_dis_clk;
+#ifdef CONFIG_OF_GPIO
+	gpio->chip.of_node = pdev->dev.of_node;
+#endif
+	err = gpiochip_add_data(&gpio->chip, gpio);
+	if (err) {
+		dev_err(gpio->dev, "unable to add gpiochip: %d\n", err);
+		goto err_no_chip;
 	}
+
+	err = gpiochip_irqchip_add(&gpio->chip,
+				   &u300_gpio_irqchip,
+				   0,
+				   handle_simple_irq,
+				   IRQ_TYPE_EDGE_FALLING);
+	if (err) {
+		dev_err(gpio->dev, "no GPIO irqchip\n");
+		goto err_no_irqchip;
+	}
+
+	/* Add each port with its IRQ separately */
 	for (portno = 0 ; portno < U300_GPIO_NUM_PORTS; portno++) {
 		struct u300_gpio_port *port = &gpio->ports[portno];
 
@@ -690,21 +700,16 @@ static int __init u300_gpio_probe(struct platform_device *pdev)
 		port->gpio = gpio;
 
 		port->irq = platform_get_irq(pdev, portno);
-		girq->parents[portno] = port->irq;
+
+		gpiochip_set_chained_irqchip(&gpio->chip,
+					     &u300_gpio_irqchip,
+					     port->irq,
+					     u300_gpio_irq_handler);
 
 		/* Turns off irq force (test register) for this port */
 		writel(0x0, gpio->base + portno * gpio->stride + ifr);
 	}
-	girq->default_type = IRQ_TYPE_EDGE_FALLING;
-	girq->handler = handle_simple_irq;
-#ifdef CONFIG_OF_GPIO
-	gpio->chip.of_node = pdev->dev.of_node;
-#endif
-	err = gpiochip_add_data(&gpio->chip, gpio);
-	if (err) {
-		dev_err(gpio->dev, "unable to add gpiochip: %d\n", err);
-		goto err_dis_clk;
-	}
+	dev_dbg(gpio->dev, "initialized %d GPIO ports\n", portno);
 
 	/*
 	 * Add pinctrl pin ranges, the pin controller must be registered
@@ -724,8 +729,9 @@ static int __init u300_gpio_probe(struct platform_device *pdev)
 	return 0;
 
 err_no_range:
+err_no_irqchip:
 	gpiochip_remove(&gpio->chip);
-err_dis_clk:
+err_no_chip:
 	clk_disable_unprepare(gpio->clk);
 	dev_err(&pdev->dev, "module ERROR:%d\n", err);
 	return err;

@@ -103,7 +103,7 @@
 	bswapq 			RX0; \
 	xorq RX0, 		(RIO);
 
-SYM_FUNC_START(__blowfish_enc_blk)
+ENTRY(__blowfish_enc_blk)
 	/* input:
 	 *	%rdi: ctx
 	 *	%rsi: dst
@@ -139,9 +139,9 @@ SYM_FUNC_START(__blowfish_enc_blk)
 .L__enc_xor:
 	xor_block();
 	ret;
-SYM_FUNC_END(__blowfish_enc_blk)
+ENDPROC(__blowfish_enc_blk)
 
-SYM_FUNC_START(blowfish_dec_blk)
+ENTRY(blowfish_dec_blk)
 	/* input:
 	 *	%rdi: ctx
 	 *	%rsi: dst
@@ -171,7 +171,7 @@ SYM_FUNC_START(blowfish_dec_blk)
 	movq %r11, %r12;
 
 	ret;
-SYM_FUNC_END(blowfish_dec_blk)
+ENDPROC(blowfish_dec_blk)
 
 /**********************************************************************
   4-way blowfish, four blocks parallel
@@ -283,7 +283,7 @@ SYM_FUNC_END(blowfish_dec_blk)
 	bswapq 			RX3; \
 	xorq RX3,		24(RIO);
 
-SYM_FUNC_START(__blowfish_enc_blk_4way)
+ENTRY(__blowfish_enc_blk_4way)
 	/* input:
 	 *	%rdi: ctx
 	 *	%rsi: dst
@@ -330,9 +330,9 @@ SYM_FUNC_START(__blowfish_enc_blk_4way)
 	popq %rbx;
 	popq %r12;
 	ret;
-SYM_FUNC_END(__blowfish_enc_blk_4way)
+ENDPROC(__blowfish_enc_blk_4way)
 
-SYM_FUNC_START(blowfish_dec_blk_4way)
+ENTRY(blowfish_dec_blk_4way)
 	/* input:
 	 *	%rdi: ctx
 	 *	%rsi: dst
@@ -365,4 +365,4 @@ SYM_FUNC_START(blowfish_dec_blk_4way)
 	popq %r12;
 
 	ret;
-SYM_FUNC_END(blowfish_dec_blk_4way)
+ENDPROC(blowfish_dec_blk_4way)

@@ -17,6 +17,7 @@
  * H. Nikolaus Schaller <hns@goldelico.com>
  */
 
+#include <linux/backlight.h>
 #include <linux/delay.h>
 #include <linux/module.h>
 #include <linux/spi/spi.h>
@@ -82,6 +83,7 @@ struct td028ttec1_panel {
 	struct drm_panel panel;
 
 	struct spi_device *spi;
+	struct backlight_device *backlight;
 };
 
 #define to_td028ttec1_device(p) container_of(p, struct td028ttec1_panel, panel)
@@ -241,12 +243,16 @@ static int td028ttec1_enable(struct drm_panel *panel)
 	if (ret)
 		return ret;
 
+	backlight_enable(lcd->backlight);
+
 	return 0;
 }
 
 static int td028ttec1_disable(struct drm_panel *panel)
 {
 	struct td028ttec1_panel *lcd = to_td028ttec1_device(panel);
+
+	backlight_disable(lcd->backlight);
 
 	jbt_ret_write_0(lcd, JBT_REG_DISPLAY_OFF, NULL);
 
@@ -281,12 +287,12 @@ static const struct drm_display_mode td028ttec1_mode = {
 	.height_mm = 58,
 };
 
-static int td028ttec1_get_modes(struct drm_panel *panel,
-				struct drm_connector *connector)
+static int td028ttec1_get_modes(struct drm_panel *panel)
 {
+	struct drm_connector *connector = panel->connector;
 	struct drm_display_mode *mode;
 
-	mode = drm_mode_duplicate(connector->dev, &td028ttec1_mode);
+	mode = drm_mode_duplicate(panel->drm, &td028ttec1_mode);
 	if (!mode)
 		return -ENOMEM;
 
@@ -328,6 +334,10 @@ static int td028ttec1_probe(struct spi_device *spi)
 	spi_set_drvdata(spi, lcd);
 	lcd->spi = spi;
 
+	lcd->backlight = devm_of_find_backlight(&spi->dev);
+	if (IS_ERR(lcd->backlight))
+		return PTR_ERR(lcd->backlight);
+
 	spi->mode = SPI_MODE_3;
 	spi->bits_per_word = 9;
 
@@ -337,12 +347,9 @@ static int td028ttec1_probe(struct spi_device *spi)
 		return ret;
 	}
 
-	drm_panel_init(&lcd->panel, &lcd->spi->dev, &td028ttec1_funcs,
-		       DRM_MODE_CONNECTOR_DPI);
-
-	ret = drm_panel_of_backlight(&lcd->panel);
-	if (ret)
-		return ret;
+	drm_panel_init(&lcd->panel);
+	lcd->panel.dev = &lcd->spi->dev;
+	lcd->panel.funcs = &td028ttec1_funcs;
 
 	return drm_panel_add(&lcd->panel);
 }

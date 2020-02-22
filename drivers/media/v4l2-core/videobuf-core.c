@@ -19,7 +19,6 @@
 #include <linux/interrupt.h>
 
 #include <media/videobuf-core.h>
-#include <media/v4l2-common.h>
 
 #define MAGIC_BUFFER 0x20070728
 #define MAGIC_CHECK(is, should)						\
@@ -365,7 +364,7 @@ static void videobuf_status(struct videobuf_queue *q, struct v4l2_buffer *b,
 	}
 
 	b->field     = vb->field;
-	v4l2_buffer_set_timestamp(b, vb->ts);
+	b->timestamp = ns_to_timeval(vb->ts);
 	b->bytesused = vb->size;
 	b->sequence  = vb->field_count >> 1;
 }
@@ -579,7 +578,7 @@ int videobuf_qbuf(struct videobuf_queue *q, struct v4l2_buffer *b)
 		    || q->type == V4L2_BUF_TYPE_SDR_OUTPUT) {
 			buf->size = b->bytesused;
 			buf->field = b->field;
-			buf->ts = v4l2_buffer_get_timestamp(b);
+			buf->ts = v4l2_timeval_to_ns(&b->timestamp);
 		}
 		break;
 	case V4L2_MEMORY_USERPTR:

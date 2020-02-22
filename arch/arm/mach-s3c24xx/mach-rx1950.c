@@ -377,7 +377,6 @@ static struct pwm_lookup rx1950_pwm_lookup[] = {
 };
 
 static struct pwm_device *lcd_pwm;
-static struct pwm_state lcd_pwm_state;
 
 static void rx1950_lcd_power(int enable)
 {
@@ -430,16 +429,15 @@ static void rx1950_lcd_power(int enable)
 
 		/* GPB1->OUTPUT, GPB1->0 */
 		gpio_direction_output(S3C2410_GPB(1), 0);
-
-		lcd_pwm_state.enabled = false;
-		pwm_apply_state(lcd_pwm, &lcd_pwm_state);
+		pwm_config(lcd_pwm, 0, LCD_PWM_PERIOD);
+		pwm_disable(lcd_pwm);
 
 		/* GPC0->0, GPC10->0 */
 		gpio_direction_output(S3C2410_GPC(0), 0);
 		gpio_direction_output(S3C2410_GPC(10), 0);
 	} else {
-		lcd_pwm_state.enabled = true;
-		pwm_apply_state(lcd_pwm, &lcd_pwm_state);
+		pwm_config(lcd_pwm, LCD_PWM_DUTY, LCD_PWM_PERIOD);
+		pwm_enable(lcd_pwm);
 
 		gpio_direction_output(S3C2410_GPC(0), 1);
 		gpio_direction_output(S3C2410_GPC(5), 1);
@@ -495,13 +493,10 @@ static int rx1950_backlight_init(struct device *dev)
 	}
 
 	/*
-	 * This is only required to initialize .polarity; all other values are
-	 * fixed in this driver.
+	 * FIXME: pwm_apply_args() should be removed when switching to
+	 * the atomic PWM API.
 	 */
-	pwm_init_state(lcd_pwm, &lcd_pwm_state);
-
-	lcd_pwm_state.period = LCD_PWM_PERIOD;
-	lcd_pwm_state.duty_cycle = LCD_PWM_DUTY;
+	pwm_apply_args(lcd_pwm);
 
 	rx1950_lcd_power(1);
 	rx1950_bl_power(1);

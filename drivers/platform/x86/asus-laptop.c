@@ -34,6 +34,7 @@
 #include <linux/uaccess.h>
 #include <linux/input.h>
 #include <linux/input/sparse-keymap.h>
+#include <linux/input-polldev.h>
 #include <linux/rfkill.h>
 #include <linux/slab.h>
 #include <linux/dmi.h>
@@ -243,7 +244,7 @@ struct asus_laptop {
 
 	struct input_dev *inputdev;
 	struct key_entry *keymap;
-	struct input_dev *pega_accel_poll;
+	struct input_polled_dev *pega_accel_poll;
 
 	struct asus_led wled;
 	struct asus_led bled;
@@ -445,9 +446,9 @@ static int pega_acc_axis(struct asus_laptop *asus, int curr, char *method)
 	return clamp_val((short)val, -PEGA_ACC_CLAMP, PEGA_ACC_CLAMP);
 }
 
-static void pega_accel_poll(struct input_dev *input)
+static void pega_accel_poll(struct input_polled_dev *ipd)
 {
-	struct device *parent = input->dev.parent;
+	struct device *parent = ipd->input->dev.parent;
 	struct asus_laptop *asus = dev_get_drvdata(parent);
 
 	/* In some cases, the very first call to poll causes a
@@ -456,10 +457,10 @@ static void pega_accel_poll(struct input_dev *input)
 	 * device, and perhaps a firmware bug. Fake the first report. */
 	if (!asus->pega_acc_live) {
 		asus->pega_acc_live = true;
-		input_report_abs(input, ABS_X, 0);
-		input_report_abs(input, ABS_Y, 0);
-		input_report_abs(input, ABS_Z, 0);
-		input_sync(input);
+		input_report_abs(ipd->input, ABS_X, 0);
+		input_report_abs(ipd->input, ABS_Y, 0);
+		input_report_abs(ipd->input, ABS_Z, 0);
+		input_sync(ipd->input);
 		return;
 	}
 
@@ -470,24 +471,25 @@ static void pega_accel_poll(struct input_dev *input)
 	/* Note transform, convert to "right/up/out" in the native
 	 * landscape orientation (i.e. the vector is the direction of
 	 * "real up" in the device's cartiesian coordinates). */
-	input_report_abs(input, ABS_X, -asus->pega_acc_x);
-	input_report_abs(input, ABS_Y, -asus->pega_acc_y);
-	input_report_abs(input, ABS_Z,  asus->pega_acc_z);
-	input_sync(input);
+	input_report_abs(ipd->input, ABS_X, -asus->pega_acc_x);
+	input_report_abs(ipd->input, ABS_Y, -asus->pega_acc_y);
+	input_report_abs(ipd->input, ABS_Z,  asus->pega_acc_z);
+	input_sync(ipd->input);
 }
 
 static void pega_accel_exit(struct asus_laptop *asus)
 {
 	if (asus->pega_accel_poll) {
-		input_unregister_device(asus->pega_accel_poll);
-		asus->pega_accel_poll = NULL;
+		input_unregister_polled_device(asus->pega_accel_poll);
+		input_free_polled_device(asus->pega_accel_poll);
 	}
+	asus->pega_accel_poll = NULL;
 }
 
 static int pega_accel_init(struct asus_laptop *asus)
 {
 	int err;
-	struct input_dev *input;
+	struct input_polled_dev *ipd;
 
 	if (!asus->is_pega_lucid)
 		return -ENODEV;
@@ -497,39 +499,37 @@ static int pega_accel_init(struct asus_laptop *asus)
 	    acpi_check_handle(asus->handle, METHOD_XLRZ, NULL))
 		return -ENODEV;
 
-	input = input_allocate_device();
-	if (!input)
+	ipd = input_allocate_polled_device();
+	if (!ipd)
 		return -ENOMEM;
 
-	input->name = PEGA_ACCEL_DESC;
-	input->phys = PEGA_ACCEL_NAME "/input0";
-	input->dev.parent = &asus->platform_device->dev;
-	input->id.bustype = BUS_HOST;
+	ipd->poll = pega_accel_poll;
+	ipd->poll_interval = 125;
+	ipd->poll_interval_min = 50;
+	ipd->poll_interval_max = 2000;
 
-	input_set_abs_params(input, ABS_X,
+	ipd->input->name = PEGA_ACCEL_DESC;
+	ipd->input->phys = PEGA_ACCEL_NAME "/input0";
+	ipd->input->dev.parent = &asus->platform_device->dev;
+	ipd->input->id.bustype = BUS_HOST;
+
+	set_bit(EV_ABS, ipd->input->evbit);
+	input_set_abs_params(ipd->input, ABS_X,
 			     -PEGA_ACC_CLAMP, PEGA_ACC_CLAMP, 0, 0);
-	input_set_abs_params(input, ABS_Y,
+	input_set_abs_params(ipd->input, ABS_Y,
 			     -PEGA_ACC_CLAMP, PEGA_ACC_CLAMP, 0, 0);
-	input_set_abs_params(input, ABS_Z,
+	input_set_abs_params(ipd->input, ABS_Z,
 			     -PEGA_ACC_CLAMP, PEGA_ACC_CLAMP, 0, 0);
 
-	err = input_setup_polling(input, pega_accel_poll);
+	err = input_register_polled_device(ipd);
 	if (err)
 		goto exit;
 
-	input_set_poll_interval(input, 125);
-	input_set_min_poll_interval(input, 50);
-	input_set_max_poll_interval(input, 2000);
-
-	err = input_register_device(input);
-	if (err)
-		goto exit;
-
-	asus->pega_accel_poll = input;
+	asus->pega_accel_poll = ipd;
 	return 0;
 
 exit:
-	input_free_device(input);
+	input_free_polled_device(ipd);
 	return err;
 }
 
@@ -1148,7 +1148,7 @@ static void asus_als_switch(struct asus_laptop *asus, int value)
 		ret = write_acpi_int(asus->handle, METHOD_ALS_CONTROL, value);
 	}
 	if (ret)
-		pr_warn("Error setting light sensor switch\n");
+		pr_warning("Error setting light sensor switch\n");
 
 	asus->light_switch = value;
 }
@@ -1550,7 +1550,8 @@ static void asus_acpi_notify(struct acpi_device *device, u32 event)
 
 	/* Accelerometer "coarse orientation change" event */
 	if (asus->pega_accel_poll && event == 0xEA) {
-		kobject_uevent(&asus->pega_accel_poll->dev.kobj, KOBJ_CHANGE);
+		kobject_uevent(&asus->pega_accel_poll->input->dev.kobj,
+			       KOBJ_CHANGE);
 		return ;
 	}
 

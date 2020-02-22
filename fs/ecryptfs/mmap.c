@@ -524,12 +524,16 @@ out:
 
 static sector_t ecryptfs_bmap(struct address_space *mapping, sector_t block)
 {
-	struct inode *lower_inode = ecryptfs_inode_to_lower(mapping->host);
-	int ret = bmap(lower_inode, &block);
+	int rc = 0;
+	struct inode *inode;
+	struct inode *lower_inode;
 
-	if (ret)
-		return 0;
-	return block;
+	inode = (struct inode *)mapping->host;
+	lower_inode = ecryptfs_inode_to_lower(inode);
+	if (lower_inode->i_mapping->a_ops->bmap)
+		rc = lower_inode->i_mapping->a_ops->bmap(lower_inode->i_mapping,
+							 block);
+	return rc;
 }
 
 const struct address_space_operations ecryptfs_aops = {

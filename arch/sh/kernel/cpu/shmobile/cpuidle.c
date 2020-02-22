@@ -67,7 +67,7 @@ static struct cpuidle_driver cpuidle_driver = {
 			.enter = cpuidle_sleep_enter,
 			.name = "C2",
 			.desc = "SuperH Sleep Mode [SF]",
-			.flags = CPUIDLE_FLAG_UNUSABLE,
+			.disabled = true,
 		},
 		{
 			.exit_latency = 2300,
@@ -76,7 +76,7 @@ static struct cpuidle_driver cpuidle_driver = {
 			.enter = cpuidle_sleep_enter,
 			.name = "C3",
 			.desc = "SuperH Mobile Standby Mode [SF]",
-			.flags = CPUIDLE_FLAG_UNUSABLE,
+			.disabled = true,
 		},
 	},
 	.safe_state_index = 0,
@@ -86,10 +86,10 @@ static struct cpuidle_driver cpuidle_driver = {
 int __init sh_mobile_setup_cpuidle(void)
 {
 	if (sh_mobile_sleep_supported & SUSP_SH_SF)
-		cpuidle_driver.states[1].flags = CPUIDLE_FLAG_NONE;
+		cpuidle_driver.states[1].disabled = false;
 
 	if (sh_mobile_sleep_supported & SUSP_SH_STANDBY)
-		cpuidle_driver.states[2].flags = CPUIDLE_FLAG_NONE;
+		cpuidle_driver.states[2].disabled = false;
 
 	return cpuidle_register(&cpuidle_driver, NULL);
 }

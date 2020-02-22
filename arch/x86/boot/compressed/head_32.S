@@ -61,7 +61,7 @@
 	.hidden _egot
 
 	__HEAD
-SYM_FUNC_START(startup_32)
+ENTRY(startup_32)
 	cld
 	/*
 	 * Test KEEP_SEGMENTS flag to see if the bootloader is asking
@@ -142,23 +142,74 @@ SYM_FUNC_START(startup_32)
  */
 	leal	.Lrelocated(%ebx), %eax
 	jmp	*%eax
-SYM_FUNC_END(startup_32)
+ENDPROC(startup_32)
 
 #ifdef CONFIG_EFI_STUB
-SYM_FUNC_START(efi32_stub_entry)
-SYM_FUNC_START_ALIAS(efi_stub_entry)
+/*
+ * We don't need the return address, so set up the stack so efi_main() can find
+ * its arguments.
+ */
+ENTRY(efi_pe_entry)
 	add	$0x4, %esp
+
+	call	1f
+1:	popl	%esi
+	subl	$1b, %esi
+
+	popl	%ecx
+	movl	%ecx, efi32_config(%esi)	/* Handle */
+	popl	%ecx
+	movl	%ecx, efi32_config+8(%esi)	/* EFI System table pointer */
+
+	/* Relocate efi_config->call() */
+	leal	efi32_config(%esi), %eax
+	add	%esi, 40(%eax)
+	pushl	%eax
+
+	call	make_boot_params
+	cmpl	$0, %eax
+	je	fail
+	movl	%esi, BP_code32_start(%eax)
+	popl	%ecx
+	pushl	%eax
+	pushl	%ecx
+	jmp	2f		/* Skip efi_config initialization */
+ENDPROC(efi_pe_entry)
+
+ENTRY(efi32_stub_entry)
+	add	$0x4, %esp
+	popl	%ecx
+	popl	%edx
+
+	call	1f
+1:	popl	%esi
+	subl	$1b, %esi
+
+	movl	%ecx, efi32_config(%esi)	/* Handle */
+	movl	%edx, efi32_config+8(%esi)	/* EFI System table pointer */
+
+	/* Relocate efi_config->call() */
+	leal	efi32_config(%esi), %eax
+	add	%esi, 40(%eax)
+	pushl	%eax
+2:
 	call	efi_main
+	cmpl	$0, %eax
 	movl	%eax, %esi
+	jne	2f
+fail:
+	/* EFI init failed, so hang. */
+	hlt
+	jmp	fail
+2:
 	movl	BP_code32_start(%esi), %eax
 	leal	startup_32(%eax), %eax
 	jmp	*%eax
-SYM_FUNC_END(efi32_stub_entry)
-SYM_FUNC_END_ALIAS(efi_stub_entry)
+ENDPROC(efi32_stub_entry)
 #endif
 
 	.text
-SYM_FUNC_START_LOCAL_NOALIGN(.Lrelocated)
+.Lrelocated:
 
 /*
  * Clear BSS (stack is currently empty)
@@ -189,9 +240,11 @@ SYM_FUNC_START_LOCAL_NOALIGN(.Lrelocated)
 				/* push arguments for extract_kernel: */
 	pushl	$z_output_len	/* decompressed length, end of relocs */
 
-	leal	_end(%ebx), %eax
-	subl    BP_init_size(%esi), %eax
-	pushl	%eax		/* output address */
+	movl    BP_init_size(%esi), %eax
+	subl    $_end, %eax
+	movl    %ebx, %ebp
+	subl    %eax, %ebp
+	pushl	%ebp		/* output address */
 
 	pushl	$z_input_len	/* input_len */
 	leal	input_data(%ebx), %eax
@@ -207,7 +260,15 @@ SYM_FUNC_START_LOCAL_NOALIGN(.Lrelocated)
  */
 	xorl	%ebx, %ebx
 	jmp	*%eax
-SYM_FUNC_END(.Lrelocated)
+
+#ifdef CONFIG_EFI_STUB
+	.data
+efi32_config:
+	.fill 5,8,0
+	.long efi_call_phys
+	.long 0
+	.byte 0
+#endif
 
 /*
  * Stack and heap for uncompression

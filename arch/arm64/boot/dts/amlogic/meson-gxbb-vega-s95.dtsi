@@ -152,7 +152,6 @@
 	status = "okay";
 	pinctrl-0 = <&remote_input_ao_pins>;
 	pinctrl-names = "default";
-	linux,rc-map-name = "rc-vega-s9x";
 };
 
 &pwm_ef {
@@ -183,9 +182,6 @@
 
 	non-removable;
 	disable-wp;
-
-	/* WiFi firmware requires power to be kept while in suspend */
-	keep-power-in-suspend;
 
 	mmc-pwrseq = <&sdio_pwrseq>;
 

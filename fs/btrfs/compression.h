@@ -93,8 +93,7 @@ blk_status_t btrfs_submit_compressed_write(struct inode *inode, u64 start,
 				  unsigned long compressed_len,
 				  struct page **compressed_pages,
 				  unsigned long nr_pages,
-				  unsigned int write_flags,
-				  struct cgroup_subsys_state *blkcg_css);
+				  unsigned int write_flags);
 blk_status_t btrfs_submit_compressed_read(struct inode *inode, struct bio *bio,
 				 int mirror_num, unsigned long bio_flags);
 
@@ -105,10 +104,11 @@ enum btrfs_compression_type {
 	BTRFS_COMPRESS_ZLIB  = 1,
 	BTRFS_COMPRESS_LZO   = 2,
 	BTRFS_COMPRESS_ZSTD  = 3,
-	BTRFS_NR_COMPRESS_TYPES = 4,
+	BTRFS_COMPRESS_TYPES = 3,
 };
 
 struct workspace_manager {
+	const struct btrfs_compress_op *ops;
 	struct list_head idle_ws;
 	spinlock_t ws_lock;
 	/* Number of free workspaces */
@@ -119,18 +119,50 @@ struct workspace_manager {
 	wait_queue_head_t ws_wait;
 };
 
-struct list_head *btrfs_get_workspace(int type, unsigned int level);
-void btrfs_put_workspace(int type, struct list_head *ws);
+void btrfs_init_workspace_manager(struct workspace_manager *wsm,
+				  const struct btrfs_compress_op *ops);
+struct list_head *btrfs_get_workspace(struct workspace_manager *wsm,
+				      unsigned int level);
+void btrfs_put_workspace(struct workspace_manager *wsm, struct list_head *ws);
+void btrfs_cleanup_workspace_manager(struct workspace_manager *wsm);
 
 struct btrfs_compress_op {
-	struct workspace_manager *workspace_manager;
+	void (*init_workspace_manager)(void);
+
+	void (*cleanup_workspace_manager)(void);
+
+	struct list_head *(*get_workspace)(unsigned int level);
+
+	void (*put_workspace)(struct list_head *ws);
+
+	struct list_head *(*alloc_workspace)(unsigned int level);
+
+	void (*free_workspace)(struct list_head *workspace);
+
+	int (*compress_pages)(struct list_head *workspace,
+			      struct address_space *mapping,
+			      u64 start,
+			      struct page **pages,
+			      unsigned long *out_pages,
+			      unsigned long *total_in,
+			      unsigned long *total_out);
+
+	int (*decompress_bio)(struct list_head *workspace,
+				struct compressed_bio *cb);
+
+	int (*decompress)(struct list_head *workspace,
+			  unsigned char *data_in,
+			  struct page *dest_page,
+			  unsigned long start_byte,
+			  size_t srclen, size_t destlen);
+
 	/* Maximum level supported by the compression algorithm */
 	unsigned int max_level;
 	unsigned int default_level;
 };
 
 /* The heuristic workspaces are managed via the 0th workspace manager */
-#define BTRFS_NR_WORKSPACE_MANAGERS	BTRFS_NR_COMPRESS_TYPES
+#define BTRFS_NR_WORKSPACE_MANAGERS	(BTRFS_COMPRESS_TYPES + 1)
 
 extern const struct btrfs_compress_op btrfs_heuristic_compress;
 extern const struct btrfs_compress_op btrfs_zlib_compress;

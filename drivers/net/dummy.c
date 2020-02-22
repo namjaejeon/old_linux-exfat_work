@@ -51,15 +51,41 @@ static void set_multicast_list(struct net_device *dev)
 {
 }
 
+struct pcpu_dstats {
+	u64			tx_packets;
+	u64			tx_bytes;
+	struct u64_stats_sync	syncp;
+};
+
 static void dummy_get_stats64(struct net_device *dev,
 			      struct rtnl_link_stats64 *stats)
 {
-	dev_lstats_read(dev, &stats->tx_packets, &stats->tx_bytes);
+	int i;
+
+	for_each_possible_cpu(i) {
+		const struct pcpu_dstats *dstats;
+		u64 tbytes, tpackets;
+		unsigned int start;
+
+		dstats = per_cpu_ptr(dev->dstats, i);
+		do {
+			start = u64_stats_fetch_begin_irq(&dstats->syncp);
+			tbytes = dstats->tx_bytes;
+			tpackets = dstats->tx_packets;
+		} while (u64_stats_fetch_retry_irq(&dstats->syncp, start));
+		stats->tx_bytes += tbytes;
+		stats->tx_packets += tpackets;
+	}
 }
 
 static netdev_tx_t dummy_xmit(struct sk_buff *skb, struct net_device *dev)
 {
-	dev_lstats_add(dev, skb->len);
+	struct pcpu_dstats *dstats = this_cpu_ptr(dev->dstats);
+
+	u64_stats_update_begin(&dstats->syncp);
+	dstats->tx_packets++;
+	dstats->tx_bytes += skb->len;
+	u64_stats_update_end(&dstats->syncp);
 
 	skb_tx_timestamp(skb);
 	dev_kfree_skb(skb);
@@ -68,8 +94,8 @@ static netdev_tx_t dummy_xmit(struct sk_buff *skb, struct net_device *dev)
 
 static int dummy_dev_init(struct net_device *dev)
 {
-	dev->lstats = netdev_alloc_pcpu_stats(struct pcpu_lstats);
-	if (!dev->lstats)
+	dev->dstats = netdev_alloc_pcpu_stats(struct pcpu_dstats);
+	if (!dev->dstats)
 		return -ENOMEM;
 
 	return 0;
@@ -77,7 +103,7 @@ static int dummy_dev_init(struct net_device *dev)
 
 static void dummy_dev_uninit(struct net_device *dev)
 {
-	free_percpu(dev->lstats);
+	free_percpu(dev->dstats);
 }
 
 static int dummy_change_carrier(struct net_device *dev, bool new_carrier)

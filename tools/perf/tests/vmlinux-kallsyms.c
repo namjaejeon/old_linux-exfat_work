@@ -182,7 +182,7 @@ next_pair:
 
 	header_printed = false;
 
-	maps__for_each_entry(maps, map) {
+	for (map = maps__first(maps); map; map = map__next(map)) {
 		struct map *
 		/*
 		 * If it is the kernel, kallsyms is always "[kernel.kallsyms]", while
@@ -190,9 +190,10 @@ next_pair:
 		 * so use the short name, less descriptive but the same ("[kernel]" in
 		 * both cases.
 		 */
-		pair = maps__find_by_name(&kallsyms.kmaps, (map->dso->kernel ?
-								map->dso->short_name :
-								map->dso->name));
+		pair = map_groups__find_by_name(&kallsyms.kmaps,
+						(map->dso->kernel ?
+							map->dso->short_name :
+							map->dso->name));
 		if (pair) {
 			pair->priv = 1;
 		} else {
@@ -206,13 +207,13 @@ next_pair:
 
 	header_printed = false;
 
-	maps__for_each_entry(maps, map) {
+	for (map = maps__first(maps); map; map = map__next(map)) {
 		struct map *pair;
 
 		mem_start = vmlinux_map->unmap_ip(vmlinux_map, map->start);
 		mem_end = vmlinux_map->unmap_ip(vmlinux_map, map->end);
 
-		pair = maps__find(&kallsyms.kmaps, mem_start);
+		pair = map_groups__find(&kallsyms.kmaps, mem_start);
 		if (pair == NULL || pair->priv)
 			continue;
 
@@ -236,7 +237,7 @@ next_pair:
 
 	maps = machine__kernel_maps(&kallsyms);
 
-	maps__for_each_entry(maps, map) {
+	for (map = maps__first(maps); map; map = map__next(map)) {
 		if (!map->priv) {
 			if (!header_printed) {
 				pr_info("WARN: Maps only in kallsyms:\n");

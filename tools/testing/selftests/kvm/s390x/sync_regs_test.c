@@ -25,15 +25,12 @@
 
 static void guest_code(void)
 {
-	/*
-	 * We embed diag 501 here instead of doing a ucall to avoid that
-	 * the compiler has messed with r11 at the time of the ucall.
-	 */
-	asm volatile (
-		"0:	diag 0,0,0x501\n"
-		"	ahi 11,1\n"
-		"	j 0b\n"
-	);
+	register u64 stage asm("11") = 0;
+
+	for (;;) {
+		GUEST_SYNC(0);
+		asm volatile ("ahi %0,1" : : "r"(stage));
+	}
 }
 
 #define REG_COMPARE(reg) \

@@ -5,6 +5,7 @@
  * Copyright (C) 2017 Glider bvba
  */
 
+#include <linux/bug.h>
 #include <linux/kernel.h>
 
 #include <dt-bindings/power/r8a77995-sysc.h>

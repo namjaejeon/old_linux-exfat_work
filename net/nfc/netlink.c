@@ -102,14 +102,22 @@ nla_put_failure:
 
 static struct nfc_dev *__get_device_from_cb(struct netlink_callback *cb)
 {
-	const struct genl_dumpit_info *info = genl_dumpit_info(cb);
+	struct nlattr **attrbuf = genl_family_attrbuf(&nfc_genl_family);
 	struct nfc_dev *dev;
+	int rc;
 	u32 idx;
 
-	if (!info->attrs[NFC_ATTR_DEVICE_INDEX])
+	rc = nlmsg_parse_deprecated(cb->nlh,
+				    GENL_HDRLEN + nfc_genl_family.hdrsize,
+				    attrbuf, nfc_genl_family.maxattr,
+				    nfc_genl_policy, NULL);
+	if (rc < 0)
+		return ERR_PTR(rc);
+
+	if (!attrbuf[NFC_ATTR_DEVICE_INDEX])
 		return ERR_PTR(-EINVAL);
 
-	idx = nla_get_u32(info->attrs[NFC_ATTR_DEVICE_INDEX]);
+	idx = nla_get_u32(attrbuf[NFC_ATTR_DEVICE_INDEX]);
 
 	dev = nfc_get_device(idx);
 	if (!dev)
@@ -1091,6 +1099,7 @@ static int nfc_genl_llc_set_params(struct sk_buff *skb, struct genl_info *info)
 
 	local = nfc_llcp_find_local(dev);
 	if (!local) {
+		nfc_put_device(dev);
 		rc = -ENODEV;
 		goto exit;
 	}
@@ -1150,6 +1159,7 @@ static int nfc_genl_llc_sdreq(struct sk_buff *skb, struct genl_info *info)
 
 	local = nfc_llcp_find_local(dev);
 	if (!local) {
+		nfc_put_device(dev);
 		rc = -ENODEV;
 		goto exit;
 	}
@@ -1687,8 +1697,7 @@ static const struct genl_ops nfc_genl_ops[] = {
 	},
 	{
 		.cmd = NFC_CMD_GET_TARGET,
-		.validate = GENL_DONT_VALIDATE_STRICT |
-			    GENL_DONT_VALIDATE_DUMP_STRICT,
+		.validate = GENL_DONT_VALIDATE_STRICT | GENL_DONT_VALIDATE_DUMP,
 		.dumpit = nfc_genl_dump_targets,
 		.done = nfc_genl_dump_targets_done,
 	},

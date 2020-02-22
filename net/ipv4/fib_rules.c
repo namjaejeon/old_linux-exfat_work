@@ -65,10 +65,9 @@ bool fib4_rule_default(const struct fib_rule *rule)
 }
 EXPORT_SYMBOL_GPL(fib4_rule_default);
 
-int fib4_rules_dump(struct net *net, struct notifier_block *nb,
-		    struct netlink_ext_ack *extack)
+int fib4_rules_dump(struct net *net, struct notifier_block *nb)
 {
-	return fib_rules_dump(net, nb, AF_INET, extack);
+	return fib_rules_dump(net, nb, AF_INET);
 }
 
 unsigned int fib4_rules_seq_read(struct net *net)

@@ -1097,7 +1097,7 @@ static void lance_piozero(void __iomem *dest, int len)
 		sbus_writeb(0, piobuf);
 }
 
-static void lance_tx_timeout(struct net_device *dev, unsigned int txqueue)
+static void lance_tx_timeout(struct net_device *dev)
 {
 	struct lance_private *lp = netdev_priv(dev);
 

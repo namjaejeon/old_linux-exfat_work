@@ -203,9 +203,9 @@ static int gpio_siox_direction_output(struct gpio_chip *chip,
 static int gpio_siox_get_direction(struct gpio_chip *chip, unsigned int offset)
 {
 	if (offset < 12)
-		return GPIO_LINE_DIRECTION_IN;
+		return 1; /* input */
 	else
-		return GPIO_LINE_DIRECTION_OUT;
+		return 0; /* output */
 }
 
 static int gpio_siox_probe(struct siox_device *sdevice)

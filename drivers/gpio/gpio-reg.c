@@ -26,8 +26,7 @@ static int gpio_reg_get_direction(struct gpio_chip *gc, unsigned offset)
 {
 	struct gpio_reg *r = to_gpio_reg(gc);
 
-	return r->direction & BIT(offset) ? GPIO_LINE_DIRECTION_IN :
-					    GPIO_LINE_DIRECTION_OUT;
+	return r->direction & BIT(offset) ? 1 : 0;
 }
 
 static int gpio_reg_direction_output(struct gpio_chip *gc, unsigned offset,

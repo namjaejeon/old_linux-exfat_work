@@ -134,8 +134,7 @@ int glue_cbc_decrypt_req_128bit(const struct common_glue_ctx *gctx,
 				src -= num_blocks - 1;
 				dst -= num_blocks - 1;
 
-				gctx->funcs[i].fn_u.cbc(ctx, (u8 *)dst,
-							(const u8 *)src);
+				gctx->funcs[i].fn_u.cbc(ctx, dst, src);
 
 				nbytes -= func_bytes;
 				if (nbytes < bsize)
@@ -189,9 +188,7 @@ int glue_ctr_req_128bit(const struct common_glue_ctx *gctx,
 
 			/* Process multi-block batch */
 			do {
-				gctx->funcs[i].fn_u.ctr(ctx, (u8 *)dst,
-							(const u8 *)src,
-							&ctrblk);
+				gctx->funcs[i].fn_u.ctr(ctx, dst, src, &ctrblk);
 				src += num_blocks;
 				dst += num_blocks;
 				nbytes -= func_bytes;
@@ -213,8 +210,7 @@ int glue_ctr_req_128bit(const struct common_glue_ctx *gctx,
 
 		be128_to_le128(&ctrblk, (be128 *)walk.iv);
 		memcpy(&tmp, walk.src.virt.addr, nbytes);
-		gctx->funcs[gctx->num_funcs - 1].fn_u.ctr(ctx, (u8 *)&tmp,
-							  (const u8 *)&tmp,
+		gctx->funcs[gctx->num_funcs - 1].fn_u.ctr(ctx, &tmp, &tmp,
 							  &ctrblk);
 		memcpy(walk.dst.virt.addr, &tmp, nbytes);
 		le128_to_be128((be128 *)walk.iv, &ctrblk);
@@ -244,8 +240,7 @@ static unsigned int __glue_xts_req_128bit(const struct common_glue_ctx *gctx,
 
 		if (nbytes >= func_bytes) {
 			do {
-				gctx->funcs[i].fn_u.xts(ctx, (u8 *)dst,
-							(const u8 *)src,
+				gctx->funcs[i].fn_u.xts(ctx, dst, src,
 							walk->iv);
 
 				src += num_blocks;
@@ -359,8 +354,8 @@ out:
 }
 EXPORT_SYMBOL_GPL(glue_xts_req_128bit);
 
-void glue_xts_crypt_128bit_one(const void *ctx, u8 *dst, const u8 *src,
-			       le128 *iv, common_glue_func_t fn)
+void glue_xts_crypt_128bit_one(void *ctx, u128 *dst, const u128 *src, le128 *iv,
+			       common_glue_func_t fn)
 {
 	le128 ivblk = *iv;
 
@@ -368,13 +363,13 @@ void glue_xts_crypt_128bit_one(const void *ctx, u8 *dst, const u8 *src,
 	gf128mul_x_ble(iv, &ivblk);
 
 	/* CC <- T xor C */
-	u128_xor((u128 *)dst, (const u128 *)src, (u128 *)&ivblk);
+	u128_xor(dst, src, (u128 *)&ivblk);
 
 	/* PP <- D(Key2,CC) */
-	fn(ctx, dst, dst);
+	fn(ctx, (u8 *)dst, (u8 *)dst);
 
 	/* P <- T xor PP */
-	u128_xor((u128 *)dst, (u128 *)dst, (u128 *)&ivblk);
+	u128_xor(dst, dst, (u128 *)&ivblk);
 }
 EXPORT_SYMBOL_GPL(glue_xts_crypt_128bit_one);
 

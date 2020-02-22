@@ -218,9 +218,13 @@ static const struct pflag_desc mlx5e_priv_flags[MLX5E_NUM_PFLAGS];
 
 int mlx5e_ethtool_get_sset_count(struct mlx5e_priv *priv, int sset)
 {
+	int i, num_stats = 0;
+
 	switch (sset) {
 	case ETH_SS_STATS:
-		return mlx5e_stats_total_num(priv);
+		for (i = 0; i < mlx5e_num_stats_grps; i++)
+			num_stats += mlx5e_stats_grps[i].get_num_stats(priv);
+		return num_stats;
 	case ETH_SS_PRIV_FLAGS:
 		return MLX5E_NUM_PFLAGS;
 	case ETH_SS_TEST:
@@ -236,6 +240,14 @@ static int mlx5e_get_sset_count(struct net_device *dev, int sset)
 	struct mlx5e_priv *priv = netdev_priv(dev);
 
 	return mlx5e_ethtool_get_sset_count(priv, sset);
+}
+
+static void mlx5e_fill_stats_strings(struct mlx5e_priv *priv, u8 *data)
+{
+	int i, idx = 0;
+
+	for (i = 0; i < mlx5e_num_stats_grps; i++)
+		idx = mlx5e_stats_grps[i].fill_strings(priv, data, idx);
 }
 
 void mlx5e_ethtool_get_strings(struct mlx5e_priv *priv, u32 stringset, u8 *data)
@@ -256,7 +268,7 @@ void mlx5e_ethtool_get_strings(struct mlx5e_priv *priv, u32 stringset, u8 *data)
 		break;
 
 	case ETH_SS_STATS:
-		mlx5e_stats_fill_strings(priv, data);
+		mlx5e_fill_stats_strings(priv, data);
 		break;
 	}
 }
@@ -271,13 +283,14 @@ static void mlx5e_get_strings(struct net_device *dev, u32 stringset, u8 *data)
 void mlx5e_ethtool_get_ethtool_stats(struct mlx5e_priv *priv,
 				     struct ethtool_stats *stats, u64 *data)
 {
-	int idx = 0;
+	int i, idx = 0;
 
 	mutex_lock(&priv->state_lock);
-	mlx5e_stats_update(priv);
+	mlx5e_update_stats(priv);
 	mutex_unlock(&priv->state_lock);
 
-	mlx5e_stats_fill(priv, data, idx);
+	for (i = 0; i < mlx5e_num_stats_grps; i++)
+		idx = mlx5e_stats_grps[i].fill_stats(priv, data, idx);
 }
 
 static void mlx5e_get_ethtool_stats(struct net_device *dev,
@@ -695,9 +708,9 @@ static int get_fec_supported_advertised(struct mlx5_core_dev *dev,
 
 static void ptys2ethtool_supported_advertised_port(struct ethtool_link_ksettings *link_ksettings,
 						   u32 eth_proto_cap,
-						   u8 connector_type, bool ext)
+						   u8 connector_type)
 {
-	if ((!connector_type && !ext) || connector_type >= MLX5E_CONNECTOR_TYPE_NUMBER) {
+	if (!connector_type || connector_type >= MLX5E_CONNECTOR_TYPE_NUMBER) {
 		if (eth_proto_cap & (MLX5E_PROT_MASK(MLX5E_10GBASE_CR)
 				   | MLX5E_PROT_MASK(MLX5E_10GBASE_SR)
 				   | MLX5E_PROT_MASK(MLX5E_40GBASE_CR4)
@@ -829,9 +842,9 @@ static int ptys2connector_type[MLX5E_CONNECTOR_TYPE_NUMBER] = {
 		[MLX5E_PORT_OTHER]              = PORT_OTHER,
 	};
 
-static u8 get_connector_port(u32 eth_proto, u8 connector_type, bool ext)
+static u8 get_connector_port(u32 eth_proto, u8 connector_type)
 {
-	if ((connector_type || ext) && connector_type < MLX5E_CONNECTOR_TYPE_NUMBER)
+	if (connector_type && connector_type < MLX5E_CONNECTOR_TYPE_NUMBER)
 		return ptys2connector_type[connector_type];
 
 	if (eth_proto &
@@ -932,9 +945,9 @@ int mlx5e_ethtool_get_link_ksettings(struct mlx5e_priv *priv,
 	eth_proto_oper = eth_proto_oper ? eth_proto_oper : eth_proto_cap;
 
 	link_ksettings->base.port = get_connector_port(eth_proto_oper,
-						       connector_type, ext);
+						       connector_type);
 	ptys2ethtool_supported_advertised_port(link_ksettings, eth_proto_admin,
-					       connector_type, ext);
+					       connector_type);
 	get_lp_advertising(mdev, eth_proto_lp, link_ksettings);
 
 	if (an_status == MLX5_AN_COMPLETE)
@@ -1014,11 +1027,18 @@ static bool ext_link_mode_requested(const unsigned long *adver)
 	return bitmap_intersects(modes, adver, __ETHTOOL_LINK_MODE_MASK_NBITS);
 }
 
-static bool ext_requested(u8 autoneg, const unsigned long *adver, bool ext_supported)
+static bool ext_speed_requested(u32 speed)
+{
+#define MLX5E_MAX_PTYS_LEGACY_SPEED 100000
+	return !!(speed > MLX5E_MAX_PTYS_LEGACY_SPEED);
+}
+
+static bool ext_requested(u8 autoneg, const unsigned long *adver, u32 speed)
 {
 	bool ext_link_mode = ext_link_mode_requested(adver);
+	bool ext_speed = ext_speed_requested(speed);
 
-	return  autoneg == AUTONEG_ENABLE ? ext_link_mode : ext_supported;
+	return  autoneg == AUTONEG_ENABLE ? ext_link_mode : ext_speed;
 }
 
 int mlx5e_ethtool_set_link_ksettings(struct mlx5e_priv *priv,
@@ -1045,8 +1065,8 @@ int mlx5e_ethtool_set_link_ksettings(struct mlx5e_priv *priv,
 	autoneg = link_ksettings->base.autoneg;
 	speed = link_ksettings->base.speed;
 
+	ext = ext_requested(autoneg, adver, speed),
 	ext_supported = MLX5_CAP_PCAM_FEATURE(mdev, ptys_extended_ethernet);
-	ext = ext_requested(autoneg, adver, ext_supported);
 	if (!ext_supported && ext)
 		return -EOPNOTSUPP;
 
@@ -1623,7 +1643,7 @@ static int mlx5e_get_module_info(struct net_device *netdev,
 		break;
 	case MLX5_MODULE_ID_SFP:
 		modinfo->type       = ETH_MODULE_SFF_8472;
-		modinfo->eeprom_len = ETH_MODULE_SFF_8472_LEN;
+		modinfo->eeprom_len = MLX5_EEPROM_PAGE_LENGTH;
 		break;
 	default:
 		netdev_err(priv->netdev, "%s: cable type not recognized:0x%x\n",

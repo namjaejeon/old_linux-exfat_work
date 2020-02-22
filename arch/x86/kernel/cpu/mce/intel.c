@@ -85,10 +85,8 @@ static int cmci_supported(int *banks)
 	 * initialization is vendor keyed and this
 	 * makes sure none of the backdoors are entered otherwise.
 	 */
-	if (boot_cpu_data.x86_vendor != X86_VENDOR_INTEL &&
-	    boot_cpu_data.x86_vendor != X86_VENDOR_ZHAOXIN)
+	if (boot_cpu_data.x86_vendor != X86_VENDOR_INTEL)
 		return 0;
-
 	if (!boot_cpu_has(X86_FEATURE_APIC) || lapic_get_maxlvt() < 6)
 		return 0;
 	rdmsrl(MSR_IA32_MCG_CAP, cap);
@@ -115,16 +113,15 @@ static bool lmce_supported(void)
 
 	/*
 	 * BIOS should indicate support for LMCE by setting bit 20 in
-	 * IA32_FEAT_CTL without which touching MCG_EXT_CTL will generate a #GP
-	 * fault.  The MSR must also be locked for LMCE_ENABLED to take effect.
-	 * WARN if the MSR isn't locked as init_ia32_feat_ctl() unconditionally
-	 * locks the MSR in the event that it wasn't already locked by BIOS.
+	 * IA32_FEATURE_CONTROL without which touching MCG_EXT_CTL will
+	 * generate a #GP fault.
 	 */
-	rdmsrl(MSR_IA32_FEAT_CTL, tmp);
-	if (WARN_ON_ONCE(!(tmp & FEAT_CTL_LOCKED)))
-		return false;
+	rdmsrl(MSR_IA32_FEATURE_CONTROL, tmp);
+	if ((tmp & (FEATURE_CONTROL_LOCKED | FEATURE_CONTROL_LMCE)) ==
+		   (FEATURE_CONTROL_LOCKED | FEATURE_CONTROL_LMCE))
+		return true;
 
-	return tmp & FEAT_CTL_LMCE_ENABLED;
+	return false;
 }
 
 bool mce_intel_cmci_poll(void)
@@ -426,7 +423,7 @@ void cmci_disable_bank(int bank)
 	raw_spin_unlock_irqrestore(&cmci_discover_lock, flags);
 }
 
-void intel_init_cmci(void)
+static void intel_init_cmci(void)
 {
 	int banks;
 
@@ -445,7 +442,7 @@ void intel_init_cmci(void)
 	cmci_recheck();
 }
 
-void intel_init_lmce(void)
+static void intel_init_lmce(void)
 {
 	u64 val;
 
@@ -458,7 +455,7 @@ void intel_init_lmce(void)
 		wrmsrl(MSR_IA32_MCG_EXT_CTL, val | MCG_EXT_CTL_LMCE_EN);
 }
 
-void intel_clear_lmce(void)
+static void intel_clear_lmce(void)
 {
 	u64 val;
 
@@ -485,7 +482,6 @@ static void intel_ppin_init(struct cpuinfo_x86 *c)
 	case INTEL_FAM6_BROADWELL_D:
 	case INTEL_FAM6_BROADWELL_X:
 	case INTEL_FAM6_SKYLAKE_X:
-	case INTEL_FAM6_ICELAKE_X:
 	case INTEL_FAM6_XEON_PHI_KNL:
 	case INTEL_FAM6_XEON_PHI_KNM:
 

@@ -8,16 +8,14 @@ title: Allwinner A31 MIPI-DSI Controller Device Tree Bindings
 
 maintainers:
   - Chen-Yu Tsai <wens@csie.org>
-  - Maxime Ripard <mripard@kernel.org>
+  - Maxime Ripard <maxime.ripard@bootlin.com>
 
 properties:
   "#address-cells": true
   "#size-cells": true
 
   compatible:
-    enum:
-      - allwinner,sun6i-a31-mipi-dsi
-      - allwinner,sun50i-a64-mipi-dsi
+    const: allwinner,sun6i-a31-mipi-dsi
 
   reg:
     maxItems: 1
@@ -26,8 +24,6 @@ properties:
     maxItems: 1
 
   clocks:
-    minItems: 1
-    maxItems: 2
     items:
       - description: Bus Clock
       - description: Module Clock
@@ -39,9 +35,6 @@ properties:
 
   resets:
     maxItems: 1
-
-  vcc-dsi-supply:
-    description: VCC-DSI power supply of the DSI encoder
 
   phys:
     maxItems: 1
@@ -67,37 +60,11 @@ required:
   - reg
   - interrupts
   - clocks
+  - clock-names
   - phys
   - phy-names
   - resets
-  - vcc-dsi-supply
   - port
-
-allOf:
-  - if:
-      properties:
-         compatible:
-           contains:
-             const: allwinner,sun6i-a31-mipi-dsi
-
-    then:
-        properties:
-          clocks:
-            minItems: 2
-
-        required:
-          - clock-names
-
-  - if:
-      properties:
-         compatible:
-           contains:
-             const: allwinner,sun50i-a64-mipi-dsi
-
-    then:
-        properties:
-          clocks:
-            minItems: 1
 
 additionalProperties: false
 
@@ -112,7 +79,6 @@ examples:
         resets = <&ccu 4>;
         phys = <&dphy0>;
         phy-names = "dphy";
-        vcc-dsi-supply = <&reg_dcdc1>;
         #address-cells = <1>;
         #size-cells = <0>;
 

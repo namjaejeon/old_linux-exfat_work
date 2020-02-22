@@ -39,7 +39,7 @@
 #ifdef IP_SET_HASH_WITH_MULTI
 #define AHASH_MAX(h)			((h)->ahash_max)
 
-static u8
+static inline u8
 tune_ahash_max(u8 curr, u32 multi)
 {
 	u32 n;
@@ -909,7 +909,7 @@ out:
 	return ret;
 }
 
-static int
+static inline int
 mtype_data_match(struct mtype_elem *data, const struct ip_set_ext *ext,
 		 struct ip_set_ext *mext, struct ip_set *set, u32 flags)
 {

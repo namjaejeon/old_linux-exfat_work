@@ -12,7 +12,6 @@
 #include <linux/mm.h>
 #include <linux/sh_timer.h>
 #include <asm/addrspace.h>
-#include <asm/platform_early.h>
 
 static struct plat_sci_port scif0_platform_data = {
 	.flags		= UPF_IOREMAP,
@@ -116,6 +115,6 @@ arch_initcall(sh5_devices_setup);
 
 void __init plat_early_device_setup(void)
 {
-	sh_early_platform_add_devices(sh5_early_devices,
+	early_platform_add_devices(sh5_early_devices,
 				   ARRAY_SIZE(sh5_early_devices));
 }

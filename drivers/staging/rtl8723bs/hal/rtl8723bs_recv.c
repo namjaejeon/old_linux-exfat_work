@@ -179,6 +179,8 @@ static void rtl8723bs_c2h_packet_handler(struct adapter *padapter,
 		kfree(tmp);
 
 	/* DBG_871X("-%s res(%d)\n", __func__, res); */
+
+	return;
 }
 
 static inline union recv_frame *try_alloc_recvframe(struct recv_priv *precvpriv,
@@ -230,7 +232,7 @@ static inline bool pkt_exceeds_tail(struct recv_priv *precvpriv,
 	return false;
 }
 
-static void rtl8723bs_recv_tasklet(unsigned long priv)
+static void rtl8723bs_recv_tasklet(void *priv)
 {
 	struct adapter *padapter;
 	struct hal_com_data *p_hal_data;
@@ -244,7 +246,7 @@ static void rtl8723bs_recv_tasklet(unsigned long priv)
 	_pkt *pkt_copy = NULL;
 	u8 shift_sz = 0, rx_report_sz = 0;
 
-	padapter = (struct adapter *)priv;
+	padapter = priv;
 	p_hal_data = GET_HAL_DATA(padapter);
 	precvpriv = &padapter->recvpriv;
 	recv_buf_queue = &precvpriv->recv_buf_pending_queue;
@@ -462,8 +464,11 @@ s32 rtl8723bs_init_recv_priv(struct adapter *padapter)
 		goto initbuferror;
 
 	/* 3 2. init tasklet */
-	tasklet_init(&precvpriv->recv_tasklet, rtl8723bs_recv_tasklet,
-		     (unsigned long)padapter);
+	tasklet_init(
+		&precvpriv->recv_tasklet,
+		(void(*)(unsigned long))rtl8723bs_recv_tasklet,
+		(unsigned long)padapter
+	);
 
 	goto exit;
 

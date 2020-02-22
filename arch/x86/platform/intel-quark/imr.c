@@ -29,8 +29,6 @@
 #include <asm/cpu_device_id.h>
 #include <asm/imr.h>
 #include <asm/iosf_mbi.h>
-#include <asm/io.h>
-
 #include <linux/debugfs.h>
 #include <linux/init.h>
 #include <linux/mm.h>

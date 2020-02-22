@@ -46,90 +46,80 @@ each snapshot of your disk statistics.
 In 2.4, the statistics fields are those after the device name. In
 the above example, the first field of statistics would be 446216.
 By contrast, in 2.6+ if you look at ``/sys/block/hda/stat``, you'll
-find just the 15 fields, beginning with 446216.  If you look at
-``/proc/diskstats``, the 15 fields will be preceded by the major and
+find just the eleven fields, beginning with 446216.  If you look at
+``/proc/diskstats``, the eleven fields will be preceded by the major and
 minor device numbers, and device name.  Each of these formats provides
-15 fields of statistics, each meaning exactly the same things.
+eleven fields of statistics, each meaning exactly the same things.
 All fields except field 9 are cumulative since boot.  Field 9 should
 go to zero as I/Os complete; all others only increase (unless they
-overflow and wrap). Wrapping might eventually occur on a very busy
-or long-lived system; so applications should be prepared to deal with
-it. Regarding wrapping, the types of the fields are either unsigned
-int (32 bit) or unsigned long (32-bit or 64-bit, depending on your
-machine) as noted per-field below. Unless your observations are very
-spread in time, these fields should not wrap twice before you notice it.
+overflow and wrap).  Yes, these are (32-bit or 64-bit) unsigned long
+(native word size) numbers, and on a very busy or long-lived system they
+may wrap. Applications should be prepared to deal with that; unless
+your observations are measured in large numbers of minutes or hours,
+they should not wrap twice before you notice them.
 
 Each set of stats only applies to the indicated device; if you want
 system-wide stats you'll have to find all the devices and sum them all up.
 
-Field  1 -- # of reads completed (unsigned long)
+Field  1 -- # of reads completed
     This is the total number of reads completed successfully.
 
-Field  2 -- # of reads merged, field 6 -- # of writes merged (unsigned long)
+Field  2 -- # of reads merged, field 6 -- # of writes merged
     Reads and writes which are adjacent to each other may be merged for
     efficiency.  Thus two 4K reads may become one 8K read before it is
     ultimately handed to the disk, and so it will be counted (and queued)
     as only one I/O.  This field lets you know how often this was done.
 
-Field  3 -- # of sectors read (unsigned long)
+Field  3 -- # of sectors read
     This is the total number of sectors read successfully.
 
-Field  4 -- # of milliseconds spent reading (unsigned int)
+Field  4 -- # of milliseconds spent reading
     This is the total number of milliseconds spent by all reads (as
     measured from __make_request() to end_that_request_last()).
 
-Field  5 -- # of writes completed (unsigned long)
+Field  5 -- # of writes completed
     This is the total number of writes completed successfully.
 
-Field  6 -- # of writes merged  (unsigned long)
+Field  6 -- # of writes merged
     See the description of field 2.
 
-Field  7 -- # of sectors written (unsigned long)
+Field  7 -- # of sectors written
     This is the total number of sectors written successfully.
 
-Field  8 -- # of milliseconds spent writing (unsigned int)
+Field  8 -- # of milliseconds spent writing
     This is the total number of milliseconds spent by all writes (as
     measured from __make_request() to end_that_request_last()).
 
-Field  9 -- # of I/Os currently in progress (unsigned int)
+Field  9 -- # of I/Os currently in progress
     The only field that should go to zero. Incremented as requests are
     given to appropriate struct request_queue and decremented as they finish.
 
-Field 10 -- # of milliseconds spent doing I/Os (unsigned int)
+Field 10 -- # of milliseconds spent doing I/Os
     This field increases so long as field 9 is nonzero.
 
     Since 5.0 this field counts jiffies when at least one request was
     started or completed. If request runs more than 2 jiffies then some
     I/O time will not be accounted unless there are other requests.
 
-Field 11 -- weighted # of milliseconds spent doing I/Os (unsigned int)
+Field 11 -- weighted # of milliseconds spent doing I/Os
     This field is incremented at each I/O start, I/O completion, I/O
     merge, or read of these stats by the number of I/Os in progress
     (field 9) times the number of milliseconds spent doing I/O since the
     last update of this field.  This can provide an easy measure of both
     I/O completion time and the backlog that may be accumulating.
 
-Field 12 -- # of discards completed (unsigned long)
+Field 12 -- # of discards completed
     This is the total number of discards completed successfully.
 
-Field 13 -- # of discards merged (unsigned long)
+Field 13 -- # of discards merged
     See the description of field 2
 
-Field 14 -- # of sectors discarded (unsigned long)
+Field 14 -- # of sectors discarded
     This is the total number of sectors discarded successfully.
 
-Field 15 -- # of milliseconds spent discarding (unsigned int)
+Field 15 -- # of milliseconds spent discarding
     This is the total number of milliseconds spent by all discards (as
     measured from __make_request() to end_that_request_last()).
-
-Field 16 -- # of flush requests completed
-    This is the total number of flush requests completed successfully.
-
-    Block layer combines flush requests and executes at most one at a time.
-    This counts flush requests executed by disk. Not tracked for partitions.
-
-Field 17 -- # of milliseconds spent flushing
-    This is the total number of milliseconds spent by all flush requests.
 
 To avoid introducing performance bottlenecks, no locks are held while
 modifying these counters.  This implies that minor inaccuracies may be

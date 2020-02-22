@@ -12,14 +12,16 @@
  */
 
 #include <linux/module.h>
+#include <linux/of_device.h>
 #include <linux/init.h>
 #include <linux/irq.h>
 #include <linux/i2c.h>
-#include <linux/property.h>
 #include <linux/regmap.h>
 #include <linux/pm_runtime.h>
 #include <linux/mutex.h>
 #include <linux/delay.h>
+
+#include <linux/platform_data/ads1015.h>
 
 #include <linux/iio/iio.h>
 #include <linux/iio/types.h>
@@ -30,8 +32,6 @@
 #include <linux/iio/trigger_consumer.h>
 
 #define ADS1015_DRV_NAME "ads1015"
-
-#define ADS1015_CHANNELS 8
 
 #define ADS1015_CONV_REG	0x00
 #define ADS1015_CFG_REG		0x01
@@ -77,7 +77,6 @@
 #define ADS1015_DEFAULT_CHAN		0
 
 enum chip_ids {
-	ADSXXXX = 0,
 	ADS1015,
 	ADS1115,
 };
@@ -219,12 +218,6 @@ static const struct iio_event_spec ads1015_events[] = {
 	.num_event_specs = ARRAY_SIZE(ads1015_events),		\
 	.datasheet_name = "AIN"#_chan"-AIN"#_chan2,		\
 }
-
-struct ads1015_channel_data {
-	bool enabled;
-	unsigned int pga;
-	unsigned int data_rate;
-};
 
 struct ads1015_thresh_data {
 	unsigned int comp_queue;
@@ -844,58 +837,65 @@ static const struct iio_info ads1115_info = {
 	.attrs          = &ads1115_attribute_group,
 };
 
-static int ads1015_client_get_channels_config(struct i2c_client *client)
+#ifdef CONFIG_OF
+static int ads1015_get_channels_config_of(struct i2c_client *client)
 {
 	struct iio_dev *indio_dev = i2c_get_clientdata(client);
 	struct ads1015_data *data = iio_priv(indio_dev);
-	struct device *dev = &client->dev;
-	struct fwnode_handle *node;
-	int i = -1;
+	struct device_node *node;
 
-	device_for_each_child_node(dev, node) {
+	if (!client->dev.of_node ||
+	    !of_get_next_child(client->dev.of_node, NULL))
+		return -EINVAL;
+
+	for_each_child_of_node(client->dev.of_node, node) {
 		u32 pval;
 		unsigned int channel;
 		unsigned int pga = ADS1015_DEFAULT_PGA;
 		unsigned int data_rate = ADS1015_DEFAULT_DATA_RATE;
 
-		if (fwnode_property_read_u32(node, "reg", &pval)) {
-			dev_err(dev, "invalid reg on %pfw\n", node);
+		if (of_property_read_u32(node, "reg", &pval)) {
+			dev_err(&client->dev, "invalid reg on %pOF\n",
+				node);
 			continue;
 		}
 
 		channel = pval;
 		if (channel >= ADS1015_CHANNELS) {
-			dev_err(dev, "invalid channel index %d on %pfw\n",
+			dev_err(&client->dev,
+				"invalid channel index %d on %pOF\n",
 				channel, node);
 			continue;
 		}
 
-		if (!fwnode_property_read_u32(node, "ti,gain", &pval)) {
+		if (!of_property_read_u32(node, "ti,gain", &pval)) {
 			pga = pval;
 			if (pga > 6) {
-				dev_err(dev, "invalid gain on %pfw\n", node);
-				fwnode_handle_put(node);
+				dev_err(&client->dev, "invalid gain on %pOF\n",
+					node);
+				of_node_put(node);
 				return -EINVAL;
 			}
 		}
 
-		if (!fwnode_property_read_u32(node, "ti,datarate", &pval)) {
+		if (!of_property_read_u32(node, "ti,datarate", &pval)) {
 			data_rate = pval;
 			if (data_rate > 7) {
-				dev_err(dev, "invalid data_rate on %pfw\n", node);
-				fwnode_handle_put(node);
+				dev_err(&client->dev,
+					"invalid data_rate on %pOF\n",
+					node);
+				of_node_put(node);
 				return -EINVAL;
 			}
 		}
 
 		data->channel_data[channel].pga = pga;
 		data->channel_data[channel].data_rate = data_rate;
-
-		i++;
 	}
 
-	return i < 0 ? -EINVAL : 0;
+	return 0;
 }
+#endif
 
 static void ads1015_get_channels_config(struct i2c_client *client)
 {
@@ -903,10 +903,19 @@ static void ads1015_get_channels_config(struct i2c_client *client)
 
 	struct iio_dev *indio_dev = i2c_get_clientdata(client);
 	struct ads1015_data *data = iio_priv(indio_dev);
+	struct ads1015_platform_data *pdata = dev_get_platdata(&client->dev);
 
-	if (!ads1015_client_get_channels_config(client))
+	/* prefer platform data */
+	if (pdata) {
+		memcpy(data->channel_data, pdata->channel_data,
+		       sizeof(data->channel_data));
 		return;
+	}
 
+#ifdef CONFIG_OF
+	if (!ads1015_get_channels_config_of(client))
+		return;
+#endif
 	/* fallback on default configuration */
 	for (k = 0; k < ADS1015_CHANNELS; ++k) {
 		data->channel_data[k].pga = ADS1015_DEFAULT_PGA;
@@ -944,8 +953,9 @@ static int ads1015_probe(struct i2c_client *client,
 	indio_dev->name = ADS1015_DRV_NAME;
 	indio_dev->modes = INDIO_DIRECT_MODE;
 
-	chip = (enum chip_ids)device_get_match_data(&client->dev);
-	if (chip == ADSXXXX)
+	if (client->dev.of_node)
+		chip = (enum chip_ids)of_device_get_match_data(&client->dev);
+	else
 		chip = id->driver_data;
 	switch (chip) {
 	case ADS1015:
@@ -960,9 +970,6 @@ static int ads1015_probe(struct i2c_client *client,
 		indio_dev->info = &ads1115_info;
 		data->data_rate = (unsigned int *) &ads1115_data_rate;
 		break;
-	default:
-		dev_err(&client->dev, "Unknown chip %d\n", chip);
-		return -EINVAL;
 	}
 
 	data->event_channel = ADS1015_CHANNELS;

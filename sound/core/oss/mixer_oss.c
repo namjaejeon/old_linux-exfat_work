@@ -486,7 +486,7 @@ struct slot {
 	unsigned int channels;
 	unsigned int numid[SNDRV_MIXER_OSS_ITEM_COUNT];
 	unsigned int capture_item;
-	const struct snd_mixer_oss_assign_table *assigned;
+	struct snd_mixer_oss_assign_table *assigned;
 	unsigned int allocated: 1;
 };
 
@@ -934,8 +934,8 @@ static void snd_mixer_oss_slot_free(struct snd_mixer_oss_slot *chn)
 	struct slot *p = chn->private_data;
 	if (p) {
 		if (p->allocated && p->assigned) {
-			kfree_const(p->assigned->name);
-			kfree_const(p->assigned);
+			kfree(p->assigned->name);
+			kfree(p->assigned);
 		}
 		kfree(p);
 	}
@@ -953,7 +953,7 @@ static void mixer_slot_clear(struct snd_mixer_oss_slot *rslot)
 /* In a separate function to keep gcc 3.2 happy - do NOT merge this in
    snd_mixer_oss_build_input! */
 static int snd_mixer_oss_build_test_all(struct snd_mixer_oss *mixer,
-					const struct snd_mixer_oss_assign_table *ptr,
+					struct snd_mixer_oss_assign_table *ptr,
 					struct slot *slot)
 {
 	char str[64];
@@ -1017,9 +1017,7 @@ static int snd_mixer_oss_build_test_all(struct snd_mixer_oss *mixer,
  * ptr_allocated means the entry is dynamically allocated (change via proc file).
  * when replace_old = 1, the old entry is replaced with the new one.
  */
-static int snd_mixer_oss_build_input(struct snd_mixer_oss *mixer,
-				     const struct snd_mixer_oss_assign_table *ptr,
-				     int ptr_allocated, int replace_old)
+static int snd_mixer_oss_build_input(struct snd_mixer_oss *mixer, struct snd_mixer_oss_assign_table *ptr, int ptr_allocated, int replace_old)
 {
 	struct slot slot;
 	struct slot *pslot;
@@ -1109,7 +1107,7 @@ static int snd_mixer_oss_build_input(struct snd_mixer_oss *mixer,
 /*
  */
 #define MIXER_VOL(name) [SOUND_MIXER_##name] = #name
-static const char * const oss_mixer_names[SNDRV_OSS_MAX_MIXERS] = {
+static char *oss_mixer_names[SNDRV_OSS_MAX_MIXERS] = {
 	MIXER_VOL(VOLUME),
 	MIXER_VOL(BASS),
 	MIXER_VOL(TREBLE),
@@ -1257,7 +1255,7 @@ static void snd_mixer_oss_proc_done(struct snd_mixer_oss *mixer)
 
 static void snd_mixer_oss_build(struct snd_mixer_oss *mixer)
 {
-	static const struct snd_mixer_oss_assign_table table[] = {
+	static struct snd_mixer_oss_assign_table table[] = {
 		{ SOUND_MIXER_VOLUME, 	"Master",		0 },
 		{ SOUND_MIXER_VOLUME, 	"Front",		0 }, /* fallback */
 		{ SOUND_MIXER_BASS,	"Tone Control - Bass",	0 },

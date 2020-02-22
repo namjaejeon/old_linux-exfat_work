@@ -31,7 +31,6 @@
 #include <linux/pm_runtime.h>
 
 #include <drm/drm_atomic_helper.h>
-#include <drm/drm_bridge.h>
 #include <drm/drm_edid.h>
 #include <drm/drm_mipi_dsi.h>
 #include <drm/drm_of.h>
@@ -499,7 +498,6 @@ struct vc4_dsi {
 	struct mipi_dsi_host dsi_host;
 	struct drm_encoder *encoder;
 	struct drm_bridge *bridge;
-	struct list_head bridge_chain;
 
 	void __iomem *regs;
 
@@ -753,19 +751,10 @@ static void vc4_dsi_encoder_disable(struct drm_encoder *encoder)
 	struct vc4_dsi_encoder *vc4_encoder = to_vc4_dsi_encoder(encoder);
 	struct vc4_dsi *dsi = vc4_encoder->dsi;
 	struct device *dev = &dsi->pdev->dev;
-	struct drm_bridge *iter;
 
-	list_for_each_entry_reverse(iter, &dsi->bridge_chain, chain_node) {
-		if (iter->funcs->disable)
-			iter->funcs->disable(iter);
-	}
-
+	drm_bridge_disable(dsi->bridge);
 	vc4_dsi_ulps(dsi, true);
-
-	list_for_each_entry_from(iter, &dsi->bridge_chain, chain_node) {
-		if (iter->funcs->post_disable)
-			iter->funcs->post_disable(iter);
-	}
+	drm_bridge_post_disable(dsi->bridge);
 
 	clk_disable_unprepare(dsi->pll_phy_clock);
 	clk_disable_unprepare(dsi->escape_clock);
@@ -833,7 +822,6 @@ static void vc4_dsi_encoder_enable(struct drm_encoder *encoder)
 	struct vc4_dsi *dsi = vc4_encoder->dsi;
 	struct device *dev = &dsi->pdev->dev;
 	bool debug_dump_regs = false;
-	struct drm_bridge *iter;
 	unsigned long hs_clock;
 	u32 ui_ns;
 	/* Minimum LP state duration in escape clock cycles. */
@@ -1066,10 +1054,7 @@ static void vc4_dsi_encoder_enable(struct drm_encoder *encoder)
 
 	vc4_dsi_ulps(dsi, false);
 
-	list_for_each_entry_reverse(iter, &dsi->bridge_chain, chain_node) {
-		if (iter->funcs->pre_enable)
-			iter->funcs->pre_enable(iter);
-	}
+	drm_bridge_pre_enable(dsi->bridge);
 
 	if (dsi->mode_flags & MIPI_DSI_MODE_VIDEO) {
 		DSI_PORT_WRITE(DISP0_CTRL,
@@ -1086,10 +1071,7 @@ static void vc4_dsi_encoder_enable(struct drm_encoder *encoder)
 			       DSI_DISP0_ENABLE);
 	}
 
-	list_for_each_entry(iter, &dsi->bridge_chain, chain_node) {
-		if (iter->funcs->enable)
-			iter->funcs->enable(iter);
-	}
+	drm_bridge_enable(dsi->bridge);
 
 	if (debug_dump_regs) {
 		struct drm_printer p = drm_info_printer(&dsi->pdev->dev);
@@ -1477,8 +1459,6 @@ static int vc4_dsi_bind(struct device *dev, struct device *master, void *data)
 				       GFP_KERNEL);
 	if (!vc4_dsi_encoder)
 		return -ENOMEM;
-
-	INIT_LIST_HEAD(&dsi->bridge_chain);
 	vc4_dsi_encoder->base.type = VC4_ENCODER_TYPE_DSI1;
 	vc4_dsi_encoder->dsi = dsi;
 	dsi->encoder = &vc4_dsi_encoder->base.base;
@@ -1595,8 +1575,8 @@ static int vc4_dsi_bind(struct device *dev, struct device *master, void *data)
 	}
 
 	if (panel) {
-		dsi->bridge = devm_drm_panel_bridge_add_typed(dev, panel,
-							      DRM_MODE_CONNECTOR_DSI);
+		dsi->bridge = devm_drm_panel_bridge_add(dev, panel,
+							DRM_MODE_CONNECTOR_DSI);
 		if (IS_ERR(dsi->bridge))
 			return PTR_ERR(dsi->bridge);
 	}
@@ -1629,7 +1609,7 @@ static int vc4_dsi_bind(struct device *dev, struct device *master, void *data)
 	 * from our driver, since we need to sequence them within the
 	 * encoder's enable/disable paths.
 	 */
-	list_splice_init(&dsi->encoder->bridge_chain, &dsi->bridge_chain);
+	dsi->encoder->bridge = NULL;
 
 	if (dsi->port == 0)
 		vc4_debugfs_add_regset32(drm, "dsi0_regs", &dsi->regset);
@@ -1651,11 +1631,6 @@ static void vc4_dsi_unbind(struct device *dev, struct device *master,
 	if (dsi->bridge)
 		pm_runtime_disable(dev);
 
-	/*
-	 * Restore the bridge_chain so the bridge detach procedure can happen
-	 * normally.
-	 */
-	list_splice_init(&dsi->bridge_chain, &dsi->encoder->bridge_chain);
 	vc4_dsi_encoder_destroy(dsi->encoder);
 
 	if (dsi->port == 1)

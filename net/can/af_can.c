@@ -86,12 +86,11 @@ static atomic_t skbcounter = ATOMIC_INIT(0);
 
 /* af_can socket functions */
 
-void can_sock_destruct(struct sock *sk)
+static void can_sock_destruct(struct sock *sk)
 {
 	skb_queue_purge(&sk->sk_receive_queue);
 	skb_queue_purge(&sk->sk_error_queue);
 }
-EXPORT_SYMBOL(can_sock_destruct);
 
 static const struct can_proto *can_get_proto(int protocol)
 {

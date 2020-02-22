@@ -207,6 +207,6 @@ struct cpuidle_monitor cpuidle_sysfs_monitor = {
 	.stop			= cpuidle_stop,
 	.do_register		= cpuidle_register,
 	.unregister		= cpuidle_unregister,
-	.flags.needs_root	= 0,
+	.needs_root		= 0,
 	.overflow_s		= UINT_MAX,
 };

@@ -158,10 +158,6 @@ void __init prom_meminit(void)
 	}
 }
 
-void __weak __init prom_cleanup(void)
-{
-}
-
 void __init prom_free_prom_memory(void)
 {
 	int i;
@@ -173,9 +169,4 @@ void __init prom_free_prom_memory(void)
 		free_init_pages("prom memory",
 			prom_mem_base[i], prom_mem_base[i] + prom_mem_size[i]);
 	}
-	/*
-	 * at this point it isn't safe to call PROM functions
-	 * give platforms a way to do PROM cleanups
-	 */
-	prom_cleanup();
 }

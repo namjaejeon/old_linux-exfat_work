@@ -1282,21 +1282,25 @@ static int acpi_pmu_probe_active_mcb_mcu_l3c(struct xgene_pmu *xgene_pmu,
 					     struct platform_device *pdev)
 {
 	void __iomem *csw_csr, *mcba_csr, *mcbb_csr;
+	struct resource *res;
 	unsigned int reg;
 
-	csw_csr = devm_platform_ioremap_resource(pdev, 1);
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 1);
+	csw_csr = devm_ioremap_resource(&pdev->dev, res);
 	if (IS_ERR(csw_csr)) {
 		dev_err(&pdev->dev, "ioremap failed for CSW CSR resource\n");
 		return PTR_ERR(csw_csr);
 	}
 
-	mcba_csr = devm_platform_ioremap_resource(pdev, 2);
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 2);
+	mcba_csr = devm_ioremap_resource(&pdev->dev, res);
 	if (IS_ERR(mcba_csr)) {
 		dev_err(&pdev->dev, "ioremap failed for MCBA CSR resource\n");
 		return PTR_ERR(mcba_csr);
 	}
 
-	mcbb_csr = devm_platform_ioremap_resource(pdev, 3);
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 3);
+	mcbb_csr = devm_ioremap_resource(&pdev->dev, res);
 	if (IS_ERR(mcbb_csr)) {
 		dev_err(&pdev->dev, "ioremap failed for MCBB CSR resource\n");
 		return PTR_ERR(mcbb_csr);
@@ -1328,11 +1332,13 @@ static int acpi_pmu_v3_probe_active_mcb_mcu_l3c(struct xgene_pmu *xgene_pmu,
 						struct platform_device *pdev)
 {
 	void __iomem *csw_csr;
+	struct resource *res;
 	unsigned int reg;
 	u32 mcb0routing;
 	u32 mcb1routing;
 
-	csw_csr = devm_platform_ioremap_resource(pdev, 1);
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 1);
+	csw_csr = devm_ioremap_resource(&pdev->dev, res);
 	if (IS_ERR(csw_csr)) {
 		dev_err(&pdev->dev, "ioremap failed for CSW CSR resource\n");
 		return PTR_ERR(csw_csr);

@@ -85,7 +85,6 @@ struct erofs_sb_info {
 
 	u8 uuid[16];                    /* 128-bit uuid for volume */
 	u8 volume_name[16];             /* volume name */
-	u32 feature_compat;
 	u32 feature_incompat;
 
 	unsigned int mount_opt;
@@ -279,7 +278,9 @@ static inline unsigned int erofs_inode_datalayout(unsigned int value)
 extern const struct super_operations erofs_sops;
 
 extern const struct address_space_operations erofs_raw_access_aops;
-extern const struct address_space_operations z_erofs_aops;
+#ifdef CONFIG_EROFS_FS_ZIP
+extern const struct address_space_operations z_erofs_vle_normalaccess_aops;
+#endif
 
 /*
  * Logical to physical block mapping, used by erofs_map_blocks()
@@ -381,7 +382,7 @@ int erofs_namei(struct inode *dir, struct qstr *name,
 extern const struct file_operations erofs_dir_fops;
 
 /* utils.c / zdata.c */
-struct page *erofs_allocpage(struct list_head *pool, gfp_t gfp);
+struct page *erofs_allocpage(struct list_head *pool, gfp_t gfp, bool nofail);
 
 #if (EROFS_PCPUBUF_NR_PAGES > 0)
 void *erofs_get_pcpubuf(unsigned int pagenr);
@@ -401,9 +402,9 @@ static inline void *erofs_get_pcpubuf(unsigned int pagenr)
 #ifdef CONFIG_EROFS_FS_ZIP
 int erofs_workgroup_put(struct erofs_workgroup *grp);
 struct erofs_workgroup *erofs_find_workgroup(struct super_block *sb,
-					     pgoff_t index);
+					     pgoff_t index, bool *tag);
 int erofs_register_workgroup(struct super_block *sb,
-			     struct erofs_workgroup *grp);
+			     struct erofs_workgroup *grp, bool tag);
 void erofs_workgroup_free_rcu(struct erofs_workgroup *grp);
 void erofs_shrinker_register(struct super_block *sb);
 void erofs_shrinker_unregister(struct super_block *sb);

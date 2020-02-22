@@ -54,8 +54,6 @@ do {								\
 	__i915_sw_fence_init((fence), (fn), NULL, NULL)
 #endif
 
-void i915_sw_fence_reinit(struct i915_sw_fence *fence);
-
 #ifdef CONFIG_DRM_I915_SW_FENCE_DEBUG_OBJECTS
 void i915_sw_fence_fini(struct i915_sw_fence *fence);
 #else
@@ -112,8 +110,7 @@ static inline void i915_sw_fence_wait(struct i915_sw_fence *fence)
 static inline void
 i915_sw_fence_set_error_once(struct i915_sw_fence *fence, int error)
 {
-	if (unlikely(error))
-		cmpxchg(&fence->error, 0, error);
+	cmpxchg(&fence->error, 0, error);
 }
 
 #endif /* _I915_SW_FENCE_H_ */

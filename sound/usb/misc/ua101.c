@@ -730,7 +730,11 @@ static int capture_pcm_hw_params(struct snd_pcm_substream *substream,
 	mutex_lock(&ua->mutex);
 	err = start_usb_capture(ua);
 	mutex_unlock(&ua->mutex);
-	return err;
+	if (err < 0)
+		return err;
+
+	return snd_pcm_lib_alloc_vmalloc_buffer(substream,
+						params_buffer_bytes(hw_params));
 }
 
 static int playback_pcm_hw_params(struct snd_pcm_substream *substream,
@@ -744,7 +748,16 @@ static int playback_pcm_hw_params(struct snd_pcm_substream *substream,
 	if (err >= 0)
 		err = start_usb_playback(ua);
 	mutex_unlock(&ua->mutex);
-	return err;
+	if (err < 0)
+		return err;
+
+	return snd_pcm_lib_alloc_vmalloc_buffer(substream,
+						params_buffer_bytes(hw_params));
+}
+
+static int ua101_pcm_hw_free(struct snd_pcm_substream *substream)
+{
+	return snd_pcm_lib_free_vmalloc_buffer(substream);
 }
 
 static int capture_pcm_prepare(struct snd_pcm_substream *substream)
@@ -870,19 +883,25 @@ static snd_pcm_uframes_t playback_pcm_pointer(struct snd_pcm_substream *subs)
 static const struct snd_pcm_ops capture_pcm_ops = {
 	.open = capture_pcm_open,
 	.close = capture_pcm_close,
+	.ioctl = snd_pcm_lib_ioctl,
 	.hw_params = capture_pcm_hw_params,
+	.hw_free = ua101_pcm_hw_free,
 	.prepare = capture_pcm_prepare,
 	.trigger = capture_pcm_trigger,
 	.pointer = capture_pcm_pointer,
+	.page = snd_pcm_lib_get_vmalloc_page,
 };
 
 static const struct snd_pcm_ops playback_pcm_ops = {
 	.open = playback_pcm_open,
 	.close = playback_pcm_close,
+	.ioctl = snd_pcm_lib_ioctl,
 	.hw_params = playback_pcm_hw_params,
+	.hw_free = ua101_pcm_hw_free,
 	.prepare = playback_pcm_prepare,
 	.trigger = playback_pcm_trigger,
 	.pointer = playback_pcm_pointer,
+	.page = snd_pcm_lib_get_vmalloc_page,
 };
 
 static const struct uac_format_type_i_discrete_descriptor *
@@ -1277,8 +1296,6 @@ static int ua101_probe(struct usb_interface *interface,
 	strcpy(ua->pcm->name, name);
 	snd_pcm_set_ops(ua->pcm, SNDRV_PCM_STREAM_PLAYBACK, &playback_pcm_ops);
 	snd_pcm_set_ops(ua->pcm, SNDRV_PCM_STREAM_CAPTURE, &capture_pcm_ops);
-	snd_pcm_set_managed_buffer_all(ua->pcm, SNDRV_DMA_TYPE_VMALLOC,
-				       NULL, 0, 0);
 
 	err = snd_usbmidi_create(card, ua->intf[INTF_MIDI],
 				 &ua->midi_list, &midi_quirk);

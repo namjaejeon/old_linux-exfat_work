@@ -32,7 +32,6 @@
 #include <linux/swapops.h>
 #include <linux/writeback.h>
 #include <linux/pagemap.h>
-#include <linux/workqueue.h>
 
 /*********************************
 * statistics
@@ -65,11 +64,6 @@ static u64 zswap_reject_alloc_fail;
 static u64 zswap_reject_kmemcache_fail;
 /* Duplicate store was encountered (rare) */
 static u64 zswap_duplicate_entry;
-
-/* Shrinker work queue */
-static struct workqueue_struct *shrink_wq;
-/* Pool limit was hit, we need to calm down */
-static bool zswap_pool_reached_full;
 
 /*********************************
 * tunables
@@ -115,11 +109,6 @@ module_param_cb(zpool, &zswap_zpool_param_ops, &zswap_zpool_type, 0644);
 static unsigned int zswap_max_pool_percent = 20;
 module_param_named(max_pool_percent, zswap_max_pool_percent, uint, 0644);
 
-/* The threshold for accepting new pages after the max_pool_percent was hit */
-static unsigned int zswap_accept_thr_percent = 90; /* of max pool size */
-module_param_named(accept_threshold_percent, zswap_accept_thr_percent,
-		   uint, 0644);
-
 /* Enable/disable handling same-value filled pages (enabled by default) */
 static bool zswap_same_filled_pages_enabled = true;
 module_param_named(same_filled_pages_enabled, zswap_same_filled_pages_enabled,
@@ -134,8 +123,7 @@ struct zswap_pool {
 	struct crypto_comp * __percpu *tfm;
 	struct kref kref;
 	struct list_head list;
-	struct work_struct release_work;
-	struct work_struct shrink_work;
+	struct work_struct work;
 	struct hlist_node node;
 	char tfm_name[CRYPTO_MAX_ALG_NAME];
 };
@@ -223,13 +211,6 @@ static const struct zpool_ops zswap_zpool_ops = {
 static bool zswap_is_full(void)
 {
 	return totalram_pages() * zswap_max_pool_percent / 100 <
-			DIV_ROUND_UP(zswap_pool_total_size, PAGE_SIZE);
-}
-
-static bool zswap_can_accept(void)
-{
-	return totalram_pages() * zswap_accept_thr_percent / 100 *
-				zswap_max_pool_percent / 100 >
 			DIV_ROUND_UP(zswap_pool_total_size, PAGE_SIZE);
 }
 
@@ -520,16 +501,6 @@ static struct zswap_pool *zswap_pool_find_get(char *type, char *compressor)
 	return NULL;
 }
 
-static void shrink_worker(struct work_struct *w)
-{
-	struct zswap_pool *pool = container_of(w, typeof(*pool),
-						shrink_work);
-
-	if (zpool_shrink(pool->zpool, 1, NULL))
-		zswap_reject_reclaim_fail++;
-	zswap_pool_put(pool);
-}
-
 static struct zswap_pool *zswap_pool_create(char *type, char *compressor)
 {
 	struct zswap_pool *pool;
@@ -580,7 +551,6 @@ static struct zswap_pool *zswap_pool_create(char *type, char *compressor)
 	 */
 	kref_init(&pool->kref);
 	INIT_LIST_HEAD(&pool->list);
-	INIT_WORK(&pool->shrink_work, shrink_worker);
 
 	zswap_pool_debug("created", pool);
 
@@ -654,8 +624,7 @@ static int __must_check zswap_pool_get(struct zswap_pool *pool)
 
 static void __zswap_pool_release(struct work_struct *work)
 {
-	struct zswap_pool *pool = container_of(work, typeof(*pool),
-						release_work);
+	struct zswap_pool *pool = container_of(work, typeof(*pool), work);
 
 	synchronize_rcu();
 
@@ -678,8 +647,8 @@ static void __zswap_pool_empty(struct kref *kref)
 
 	list_del_rcu(&pool->list);
 
-	INIT_WORK(&pool->release_work, __zswap_pool_release);
-	schedule_work(&pool->release_work);
+	INIT_WORK(&pool->work, __zswap_pool_release);
+	schedule_work(&pool->work);
 
 	spin_unlock(&zswap_pools_lock);
 }
@@ -973,6 +942,22 @@ end:
 	return ret;
 }
 
+static int zswap_shrink(void)
+{
+	struct zswap_pool *pool;
+	int ret;
+
+	pool = zswap_pool_last_get();
+	if (!pool)
+		return -ENOENT;
+
+	ret = zpool_shrink(pool->zpool, 1, NULL);
+
+	zswap_pool_put(pool);
+
+	return ret;
+}
+
 static int zswap_is_page_same_filled(void *ptr, unsigned long *value)
 {
 	unsigned int pos;
@@ -1026,23 +1011,21 @@ static int zswap_frontswap_store(unsigned type, pgoff_t offset,
 
 	/* reclaim space if needed */
 	if (zswap_is_full()) {
-		struct zswap_pool *pool;
-
 		zswap_pool_limit_hit++;
-		zswap_pool_reached_full = true;
-		pool = zswap_pool_last_get();
-		if (pool)
-			queue_work(shrink_wq, &pool->shrink_work);
-		ret = -ENOMEM;
-		goto reject;
-	}
-
-	if (zswap_pool_reached_full) {
-	       if (!zswap_can_accept()) {
+		if (zswap_shrink()) {
+			zswap_reject_reclaim_fail++;
 			ret = -ENOMEM;
 			goto reject;
-		} else
-			zswap_pool_reached_full = false;
+		}
+
+		/* A second zswap_is_full() check after
+		 * zswap_shrink() to make sure it's now
+		 * under the max_pool_percent
+		 */
+		if (zswap_is_full()) {
+			ret = -ENOMEM;
+			goto reject;
+		}
 	}
 
 	/* allocate entry */
@@ -1349,18 +1332,11 @@ static int __init init_zswap(void)
 		zswap_enabled = false;
 	}
 
-	shrink_wq = create_workqueue("zswap-shrink");
-	if (!shrink_wq)
-		goto fallback_fail;
-
 	frontswap_register_ops(&zswap_frontswap_ops);
 	if (zswap_debugfs_init())
 		pr_warn("debugfs initialization failed\n");
 	return 0;
 
-fallback_fail:
-	if (pool)
-		zswap_pool_destroy(pool);
 hp_fail:
 	cpuhp_remove_state(CPUHP_MM_ZSWP_MEM_PREPARE);
 dstmem_fail:

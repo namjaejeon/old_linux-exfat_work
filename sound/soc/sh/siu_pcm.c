@@ -281,6 +281,39 @@ static int siu_pcm_stmread_stop(struct siu_port *port_info)
 	return 0;
 }
 
+static int siu_pcm_hw_params(struct snd_pcm_substream *ss,
+			     struct snd_pcm_hw_params *hw_params)
+{
+	struct siu_info *info = siu_i2s_data;
+	struct device *dev = ss->pcm->card->dev;
+	int ret;
+
+	dev_dbg(dev, "%s: port=%d\n", __func__, info->port_id);
+
+	ret = snd_pcm_lib_malloc_pages(ss, params_buffer_bytes(hw_params));
+	if (ret < 0)
+		dev_err(dev, "snd_pcm_lib_malloc_pages() failed\n");
+
+	return ret;
+}
+
+static int siu_pcm_hw_free(struct snd_pcm_substream *ss)
+{
+	struct siu_info *info = siu_i2s_data;
+	struct siu_port	*port_info = siu_port_info(ss);
+	struct device *dev = ss->pcm->card->dev;
+	struct siu_stream *siu_stream;
+
+	if (ss->stream == SNDRV_PCM_STREAM_PLAYBACK)
+		siu_stream = &port_info->playback;
+	else
+		siu_stream = &port_info->capture;
+
+	dev_dbg(dev, "%s: port=%d\n", __func__, info->port_id);
+
+	return snd_pcm_lib_free_pages(ss);
+}
+
 static bool filter(struct dma_chan *chan, void *slave)
 {
 	struct sh_dmae_slave *param = slave;
@@ -291,10 +324,11 @@ static bool filter(struct dma_chan *chan, void *slave)
 	return true;
 }
 
-static int siu_pcm_open(struct snd_soc_component *component,
-			struct snd_pcm_substream *ss)
+static int siu_pcm_open(struct snd_pcm_substream *ss)
 {
 	/* Playback / Capture */
+	struct snd_soc_pcm_runtime *rtd = ss->private_data;
+	struct snd_soc_component *component = snd_soc_rtdcom_lookup(rtd, DRV_NAME);
 	struct siu_platform *pdata = component->dev->platform_data;
 	struct siu_info *info = siu_i2s_data;
 	struct siu_port *port_info = siu_port_info(ss);
@@ -333,8 +367,7 @@ static int siu_pcm_open(struct snd_soc_component *component,
 	return 0;
 }
 
-static int siu_pcm_close(struct snd_soc_component *component,
-			 struct snd_pcm_substream *ss)
+static int siu_pcm_close(struct snd_pcm_substream *ss)
 {
 	struct siu_info *info = siu_i2s_data;
 	struct device *dev = ss->pcm->card->dev;
@@ -356,8 +389,7 @@ static int siu_pcm_close(struct snd_soc_component *component,
 	return 0;
 }
 
-static int siu_pcm_prepare(struct snd_soc_component *component,
-			   struct snd_pcm_substream *ss)
+static int siu_pcm_prepare(struct snd_pcm_substream *ss)
 {
 	struct siu_info *info = siu_i2s_data;
 	struct siu_port *port_info = siu_port_info(ss);
@@ -403,8 +435,7 @@ static int siu_pcm_prepare(struct snd_soc_component *component,
 	return 0;
 }
 
-static int siu_pcm_trigger(struct snd_soc_component *component,
-			   struct snd_pcm_substream *ss, int cmd)
+static int siu_pcm_trigger(struct snd_pcm_substream *ss, int cmd)
 {
 	struct siu_info *info = siu_i2s_data;
 	struct device *dev = ss->pcm->card->dev;
@@ -446,9 +477,7 @@ static int siu_pcm_trigger(struct snd_soc_component *component,
  * So far only resolution of one period is supported, subject to extending the
  * dmangine API
  */
-static snd_pcm_uframes_t
-siu_pcm_pointer_dma(struct snd_soc_component *component,
-		    struct snd_pcm_substream *ss)
+static snd_pcm_uframes_t siu_pcm_pointer_dma(struct snd_pcm_substream *ss)
 {
 	struct device *dev = ss->pcm->card->dev;
 	struct siu_info *info = siu_i2s_data;
@@ -483,8 +512,7 @@ siu_pcm_pointer_dma(struct snd_soc_component *component,
 	return bytes_to_frames(ss->runtime, ptr);
 }
 
-static int siu_pcm_new(struct snd_soc_component *component,
-		       struct snd_soc_pcm_runtime *rtd)
+static int siu_pcm_new(struct snd_soc_pcm_runtime *rtd)
 {
 	/* card->dev == socdev->dev, see snd_soc_new_pcms() */
 	struct snd_card *card = rtd->card->snd_card;
@@ -513,7 +541,7 @@ static int siu_pcm_new(struct snd_soc_component *component,
 		if (ret < 0)
 			return ret;
 
-		snd_pcm_set_managed_buffer_all(pcm,
+		snd_pcm_lib_preallocate_pages_for_all(pcm,
 				SNDRV_DMA_TYPE_DEV, card->dev,
 				SIU_BUFFER_BYTES_MAX, SIU_BUFFER_BYTES_MAX);
 
@@ -530,8 +558,7 @@ static int siu_pcm_new(struct snd_soc_component *component,
 	return 0;
 }
 
-static void siu_pcm_free(struct snd_soc_component *component,
-			 struct snd_pcm *pcm)
+static void siu_pcm_free(struct snd_pcm *pcm)
 {
 	struct platform_device *pdev = to_platform_device(pcm->card->dev);
 	struct siu_port *port_info = siu_ports[pdev->id];
@@ -544,14 +571,21 @@ static void siu_pcm_free(struct snd_soc_component *component,
 	dev_dbg(pcm->card->dev, "%s\n", __func__);
 }
 
-struct const snd_soc_component_driver siu_component = {
-	.name		= DRV_NAME,
+static const struct snd_pcm_ops siu_pcm_ops = {
 	.open		= siu_pcm_open,
 	.close		= siu_pcm_close,
+	.ioctl		= snd_pcm_lib_ioctl,
+	.hw_params	= siu_pcm_hw_params,
+	.hw_free	= siu_pcm_hw_free,
 	.prepare	= siu_pcm_prepare,
 	.trigger	= siu_pcm_trigger,
 	.pointer	= siu_pcm_pointer_dma,
-	.pcm_construct	= siu_pcm_new,
-	.pcm_destruct	= siu_pcm_free,
+};
+
+struct snd_soc_component_driver siu_component = {
+	.name		= DRV_NAME,
+	.ops			= &siu_pcm_ops,
+	.pcm_new	= siu_pcm_new,
+	.pcm_free	= siu_pcm_free,
 };
 EXPORT_SYMBOL_GPL(siu_component);

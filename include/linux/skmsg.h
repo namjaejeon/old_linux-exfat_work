@@ -14,7 +14,6 @@
 #include <net/strparser.h>
 
 #define MAX_MSG_FRAGS			MAX_SKB_FRAGS
-#define NR_MSG_FRAG_IDS			(MAX_MSG_FRAGS + 1)
 
 enum __sk_action {
 	__SK_DROP = 0,
@@ -29,16 +28,13 @@ struct sk_msg_sg {
 	u32				end;
 	u32				size;
 	u32				copybreak;
-	unsigned long			copy;
-	/* The extra two elements:
-	 * 1) used for chaining the front and sections when the list becomes
-	 *    partitioned (e.g. end < start). The crypto APIs require the
-	 *    chaining;
-	 * 2) to chain tailer SG entries after the message.
+	bool				copy[MAX_MSG_FRAGS];
+	/* The extra element is used for chaining the front and sections when
+	 * the list becomes partitioned (e.g. end < start). The crypto APIs
+	 * require the chaining.
 	 */
-	struct scatterlist		data[MAX_MSG_FRAGS + 2];
+	struct scatterlist		data[MAX_MSG_FRAGS + 1];
 };
-static_assert(BITS_PER_LONG >= NR_MSG_FRAG_IDS);
 
 /* UAPI in filter.c depends on struct sk_msg_sg being first element. */
 struct sk_msg {
@@ -143,15 +139,10 @@ static inline void sk_msg_apply_bytes(struct sk_psock *psock, u32 bytes)
 	}
 }
 
-static inline u32 sk_msg_iter_dist(u32 start, u32 end)
-{
-	return end >= start ? end - start : end + (NR_MSG_FRAG_IDS - start);
-}
-
 #define sk_msg_iter_var_prev(var)			\
 	do {						\
 		if (var == 0)				\
-			var = NR_MSG_FRAG_IDS - 1;	\
+			var = MAX_MSG_FRAGS - 1;	\
 		else					\
 			var--;				\
 	} while (0)
@@ -159,7 +150,7 @@ static inline u32 sk_msg_iter_dist(u32 start, u32 end)
 #define sk_msg_iter_var_next(var)			\
 	do {						\
 		var++;					\
-		if (var == NR_MSG_FRAG_IDS)		\
+		if (var == MAX_MSG_FRAGS)		\
 			var = 0;			\
 	} while (0)
 
@@ -176,9 +167,9 @@ static inline void sk_msg_clear_meta(struct sk_msg *msg)
 
 static inline void sk_msg_init(struct sk_msg *msg)
 {
-	BUILD_BUG_ON(ARRAY_SIZE(msg->sg.data) - 1 != NR_MSG_FRAG_IDS);
+	BUILD_BUG_ON(ARRAY_SIZE(msg->sg.data) - 1 != MAX_MSG_FRAGS);
 	memset(msg, 0, sizeof(*msg));
-	sg_init_marker(msg->sg.data, NR_MSG_FRAG_IDS);
+	sg_init_marker(msg->sg.data, MAX_MSG_FRAGS);
 }
 
 static inline void sk_msg_xfer(struct sk_msg *dst, struct sk_msg *src,
@@ -199,12 +190,17 @@ static inline void sk_msg_xfer_full(struct sk_msg *dst, struct sk_msg *src)
 
 static inline bool sk_msg_full(const struct sk_msg *msg)
 {
-	return sk_msg_iter_dist(msg->sg.start, msg->sg.end) == MAX_MSG_FRAGS;
+	return (msg->sg.end == msg->sg.start) && msg->sg.size;
 }
 
 static inline u32 sk_msg_elem_used(const struct sk_msg *msg)
 {
-	return sk_msg_iter_dist(msg->sg.start, msg->sg.end);
+	if (sk_msg_full(msg))
+		return MAX_MSG_FRAGS;
+
+	return msg->sg.end >= msg->sg.start ?
+		msg->sg.end - msg->sg.start :
+		msg->sg.end + (MAX_MSG_FRAGS - msg->sg.start);
 }
 
 static inline struct scatterlist *sk_msg_elem(struct sk_msg *msg, int which)
@@ -231,7 +227,7 @@ static inline void sk_msg_compute_data_pointers(struct sk_msg *msg)
 {
 	struct scatterlist *sge = sk_msg_elem(msg, msg->sg.start);
 
-	if (test_bit(msg->sg.start, &msg->sg.copy)) {
+	if (msg->sg.copy[msg->sg.start]) {
 		msg->data = NULL;
 		msg->data_end = NULL;
 	} else {
@@ -250,7 +246,7 @@ static inline void sk_msg_page_add(struct sk_msg *msg, struct page *page,
 	sg_set_page(sge, page, len, offset);
 	sg_unmark_end(sge);
 
-	__set_bit(msg->sg.end, &msg->sg.copy);
+	msg->sg.copy[msg->sg.end] = true;
 	msg->sg.size += len;
 	sk_msg_iter_next(msg, end);
 }
@@ -258,10 +254,7 @@ static inline void sk_msg_page_add(struct sk_msg *msg, struct page *page,
 static inline void sk_msg_sg_copy(struct sk_msg *msg, u32 i, bool copy_state)
 {
 	do {
-		if (copy_state)
-			__set_bit(i, &msg->sg.copy);
-		else
-			__clear_bit(i, &msg->sg.copy);
+		msg->sg.copy[i] = copy_state;
 		sk_msg_iter_var_next(i);
 		if (i == msg->sg.end)
 			break;
@@ -358,22 +351,17 @@ static inline void sk_psock_update_proto(struct sock *sk,
 static inline void sk_psock_restore_proto(struct sock *sk,
 					  struct sk_psock *psock)
 {
-	sk->sk_prot->unhash = psock->saved_unhash;
+	sk->sk_write_space = psock->saved_write_space;
 
 	if (psock->sk_proto) {
 		struct inet_connection_sock *icsk = inet_csk(sk);
 		bool has_ulp = !!icsk->icsk_ulp_data;
 
-		if (has_ulp) {
-			tcp_update_ulp(sk, psock->sk_proto,
-				       psock->saved_write_space);
-		} else {
+		if (has_ulp)
+			tcp_update_ulp(sk, psock->sk_proto);
+		else
 			sk->sk_prot = psock->sk_proto;
-			sk->sk_write_space = psock->saved_write_space;
-		}
 		psock->sk_proto = NULL;
-	} else {
-		sk->sk_write_space = psock->saved_write_space;
 	}
 }
 

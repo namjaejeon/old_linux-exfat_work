@@ -663,7 +663,7 @@ struct snd_ca0106_details {
 // definition of the chip-specific record
 struct snd_ca0106 {
 	struct snd_card *card;
-	const struct snd_ca0106_details *details;
+	struct snd_ca0106_details *details;
 	struct pci_dev *pci;
 
 	unsigned long port;

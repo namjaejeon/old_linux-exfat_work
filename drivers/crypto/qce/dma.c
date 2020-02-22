@@ -12,11 +12,11 @@ int qce_dma_request(struct device *dev, struct qce_dma_data *dma)
 {
 	int ret;
 
-	dma->txchan = dma_request_chan(dev, "tx");
+	dma->txchan = dma_request_slave_channel_reason(dev, "tx");
 	if (IS_ERR(dma->txchan))
 		return PTR_ERR(dma->txchan);
 
-	dma->rxchan = dma_request_chan(dev, "rx");
+	dma->rxchan = dma_request_slave_channel_reason(dev, "rx");
 	if (IS_ERR(dma->rxchan)) {
 		ret = PTR_ERR(dma->rxchan);
 		goto error_rx;
@@ -47,8 +47,7 @@ void qce_dma_release(struct qce_dma_data *dma)
 }
 
 struct scatterlist *
-qce_sgtable_add(struct sg_table *sgt, struct scatterlist *new_sgl,
-		int max_ents)
+qce_sgtable_add(struct sg_table *sgt, struct scatterlist *new_sgl)
 {
 	struct scatterlist *sg = sgt->sgl, *sg_last = NULL;
 
@@ -61,13 +60,12 @@ qce_sgtable_add(struct sg_table *sgt, struct scatterlist *new_sgl,
 	if (!sg)
 		return ERR_PTR(-EINVAL);
 
-	while (new_sgl && sg && max_ents) {
+	while (new_sgl && sg) {
 		sg_set_page(sg, sg_page(new_sgl), new_sgl->length,
 			    new_sgl->offset);
 		sg_last = sg;
 		sg = sg_next(sg);
 		new_sgl = sg_next(new_sgl);
-		max_ents--;
 	}
 
 	return sg_last;

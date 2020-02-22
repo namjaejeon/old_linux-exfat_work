@@ -2,11 +2,7 @@ max17042_battery
 ~~~~~~~~~~~~~~~~
 
 Required properties :
- - compatible : one of the following
- * "maxim,max17042"
- * "maxim,max17047"
- * "maxim,max17050"
- * "maxim,max17055"
+ - compatible : "maxim,max17042"
 
 Optional properties :
  - maxim,rsns-microohm : Resistance of rsns resistor in micro Ohms

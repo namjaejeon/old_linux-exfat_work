@@ -29,7 +29,8 @@
 #include <linux/export.h>
 #include <linux/i2c-algo-bit.h>
 #include <linux/i2c.h>
-#include <linux/pci.h>
+
+#include <drm/drm_pci.h>
 
 #include "mgag200_drv.h"
 

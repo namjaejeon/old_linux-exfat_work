@@ -369,13 +369,8 @@ int kfd_init_apertures(struct kfd_process *process)
 
 	/*Iterating over all devices*/
 	while (kfd_topology_enum_kfd_devices(id, &dev) == 0) {
-		if (!dev || kfd_devcgroup_check_permission(dev)) {
-			/* Skip non GPU devices and devices to which the
-			 * current process have no access to. Access can be
-			 * limited by placing the process in a specific
-			 * cgroup hierarchy
-			 */
-			id++;
+		if (!dev) {
+			id++; /* Skip non GPU devices */
 			continue;
 		}
 
@@ -410,11 +405,8 @@ int kfd_init_apertures(struct kfd_process *process)
 			case CHIP_VEGA12:
 			case CHIP_VEGA20:
 			case CHIP_RAVEN:
-			case CHIP_RENOIR:
 			case CHIP_ARCTURUS:
 			case CHIP_NAVI10:
-			case CHIP_NAVI12:
-			case CHIP_NAVI14:
 				kfd_init_apertures_v9(pdd, id);
 				break;
 			default:

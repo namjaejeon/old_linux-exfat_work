@@ -15,7 +15,7 @@
 #include "vxpocket.h"
 
 
-static const int vxp_reg_offset[VX_REG_MAX] = {
+static int vxp_reg_offset[VX_REG_MAX] = {
 	[VX_ICR]	= 0x00,		// ICR
 	[VX_CVR]	= 0x01,		// CVR
 	[VX_ISR]	= 0x02,		// ISR
@@ -581,7 +581,7 @@ static void vxp_reset_board(struct vx_core *_chip, int cold_reset)
  * callbacks
  */
 /* exported */
-const struct snd_vx_ops snd_vxpocket_ops = {
+struct snd_vx_ops snd_vxpocket_ops = {
 	.in8 = vxp_inb,
 	.out8 = vxp_outb,
 	.test_and_ack = vxp_test_and_ack,

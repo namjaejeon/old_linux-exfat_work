@@ -10,8 +10,8 @@ PHONY += kapi
 
 kapi:	$(kapi-hdrs-y)
 
-hostprogs		    += gen_facilities
-hostprogs		    += gen_opcode_table
+hostprogs-y		    += gen_facilities
+hostprogs-y		    += gen_opcode_table
 
 HOSTCFLAGS_gen_facilities.o += $(LINUXINCLUDE)
 

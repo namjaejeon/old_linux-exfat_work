@@ -49,7 +49,7 @@
 	.endm
 
 
-SYM_FUNC_START(csum_partial_copy_generic)
+ENTRY(csum_partial_copy_generic)
 	cmpl	$3*64, %edx
 	jle	.Lignore
 
@@ -225,4 +225,4 @@ SYM_FUNC_START(csum_partial_copy_generic)
 	jz   .Lende
 	movl $-EFAULT, (%rax)
 	jmp .Lende
-SYM_FUNC_END(csum_partial_copy_generic)
+ENDPROC(csum_partial_copy_generic)

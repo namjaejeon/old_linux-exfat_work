@@ -483,6 +483,7 @@ static int tegra_ahci_probe(struct platform_device *pdev)
 	struct tegra_ahci_priv *tegra;
 	struct resource *res;
 	int ret;
+	unsigned int i;
 
 	hpriv = ahci_platform_get_resources(pdev, 0);
 	if (IS_ERR(hpriv))
@@ -542,9 +543,8 @@ static int tegra_ahci_probe(struct platform_device *pdev)
 	if (!tegra->supplies)
 		return -ENOMEM;
 
-	regulator_bulk_set_supply_names(tegra->supplies,
-					tegra->soc->supply_names,
-					tegra->soc->num_supplies);
+	for (i = 0; i < tegra->soc->num_supplies; i++)
+		tegra->supplies[i].supply = tegra->soc->supply_names[i];
 
 	ret = devm_regulator_bulk_get(&pdev->dev,
 				      tegra->soc->num_supplies,

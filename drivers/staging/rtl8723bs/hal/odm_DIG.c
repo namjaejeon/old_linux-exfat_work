@@ -1074,6 +1074,7 @@ void odm_FAThresholdCheck(
 		dm_FA_thres[1] = 4000;
 		dm_FA_thres[2] = 5000;
 	}
+	return;
 }
 
 u8 odm_ForbiddenIGICheck(void *pDM_VOID, u8 DIG_Dynamic_MIN, u8 CurrentIGI)

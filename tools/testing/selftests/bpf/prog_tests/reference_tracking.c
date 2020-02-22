@@ -3,25 +3,15 @@
 
 void test_reference_tracking(void)
 {
-	const char *file = "test_sk_lookup_kern.o";
-	const char *obj_name = "ref_track";
-	DECLARE_LIBBPF_OPTS(bpf_object_open_opts, open_opts,
-		.object_name = obj_name,
-		.relaxed_maps = true,
-	);
+	const char *file = "./test_sk_lookup_kern.o";
 	struct bpf_object *obj;
 	struct bpf_program *prog;
 	__u32 duration = 0;
 	int err = 0;
 
-	obj = bpf_object__open_file(file, &open_opts);
+	obj = bpf_object__open(file);
 	if (CHECK_FAIL(IS_ERR(obj)))
 		return;
-
-	if (CHECK(strcmp(bpf_object__name(obj), obj_name), "obj_name",
-		  "wrong obj name '%s', expected '%s'\n",
-		  bpf_object__name(obj), obj_name))
-		goto cleanup;
 
 	bpf_object__for_each_program(prog, obj) {
 		const char *title;
@@ -31,8 +21,7 @@ void test_reference_tracking(void)
 		if (strstr(title, ".text") != NULL)
 			continue;
 
-		if (!test__start_subtest(title))
-			continue;
+		bpf_program__set_type(prog, BPF_PROG_TYPE_SCHED_CLS);
 
 		/* Expect verifier failure if test name has 'fail' */
 		if (strstr(title, "fail") != NULL) {
@@ -46,7 +35,5 @@ void test_reference_tracking(void)
 		}
 		CHECK(err, title, "\n");
 	}
-
-cleanup:
 	bpf_object__close(obj);
 }

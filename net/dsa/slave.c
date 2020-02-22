@@ -22,6 +22,8 @@
 
 #include "dsa_priv.h"
 
+static bool dsa_slave_dev_check(const struct net_device *dev);
+
 /* slave mii_bus handling ***************************************************/
 static int dsa_slave_phy_read(struct mii_bus *bus, int addr, int reg)
 {
@@ -113,6 +115,9 @@ static int dsa_slave_close(struct net_device *dev)
 {
 	struct net_device *master = dsa_slave_to_master(dev);
 	struct dsa_port *dp = dsa_slave_to_port(dev);
+
+	cancel_work_sync(&dp->xmit_work);
+	skb_queue_purge(&dp->xmit_queue);
 
 	phylink_stop(dp->pl);
 
@@ -513,6 +518,7 @@ static netdev_tx_t dsa_slave_xmit(struct sk_buff *skb, struct net_device *dev)
 	s->tx_bytes += skb->len;
 	u64_stats_update_end(&s->syncp);
 
+	DSA_SKB_CB(skb)->deferred_xmit = false;
 	DSA_SKB_CB(skb)->clone = NULL;
 
 	/* Identify PTP protocol packets, clone them, and pass them to the
@@ -525,11 +531,37 @@ static netdev_tx_t dsa_slave_xmit(struct sk_buff *skb, struct net_device *dev)
 	 */
 	nskb = p->xmit(skb, dev);
 	if (!nskb) {
-		kfree_skb(skb);
+		if (!DSA_SKB_CB(skb)->deferred_xmit)
+			kfree_skb(skb);
 		return NETDEV_TX_OK;
 	}
 
 	return dsa_enqueue_skb(nskb, dev);
+}
+
+void *dsa_defer_xmit(struct sk_buff *skb, struct net_device *dev)
+{
+	struct dsa_port *dp = dsa_slave_to_port(dev);
+
+	DSA_SKB_CB(skb)->deferred_xmit = true;
+
+	skb_queue_tail(&dp->xmit_queue, skb);
+	schedule_work(&dp->xmit_work);
+	return NULL;
+}
+EXPORT_SYMBOL_GPL(dsa_defer_xmit);
+
+static void dsa_port_xmit_work(struct work_struct *work)
+{
+	struct dsa_port *dp = container_of(work, struct dsa_port, xmit_work);
+	struct dsa_switch *ds = dp->ds;
+	struct sk_buff *skb;
+
+	if (unlikely(!ds->ops->port_deferred_xmit))
+		return;
+
+	while ((skb = skb_dequeue(&dp->xmit_queue)) != NULL)
+		ds->ops->port_deferred_xmit(ds, dp->index, skb);
 }
 
 /* ethtool operations *******************************************************/
@@ -755,22 +787,6 @@ static int dsa_slave_set_link_ksettings(struct net_device *dev,
 	struct dsa_port *dp = dsa_slave_to_port(dev);
 
 	return phylink_ethtool_ksettings_set(dp->pl, cmd);
-}
-
-static void dsa_slave_get_pauseparam(struct net_device *dev,
-				     struct ethtool_pauseparam *pause)
-{
-	struct dsa_port *dp = dsa_slave_to_port(dev);
-
-	phylink_ethtool_get_pauseparam(dp->pl, pause);
-}
-
-static int dsa_slave_set_pauseparam(struct net_device *dev,
-				    struct ethtool_pauseparam *pause)
-{
-	struct dsa_port *dp = dsa_slave_to_port(dev);
-
-	return phylink_ethtool_set_pauseparam(dp->pl, pause);
 }
 
 #ifdef CONFIG_NET_POLL_CONTROLLER
@@ -1176,8 +1192,6 @@ static const struct ethtool_ops dsa_slave_ethtool_ops = {
 	.get_eee		= dsa_slave_get_eee,
 	.get_link_ksettings	= dsa_slave_get_link_ksettings,
 	.set_link_ksettings	= dsa_slave_set_link_ksettings,
-	.get_pauseparam		= dsa_slave_get_pauseparam,
-	.set_pauseparam		= dsa_slave_set_pauseparam,
 	.get_rxnfc		= dsa_slave_get_rxnfc,
 	.set_rxnfc		= dsa_slave_set_rxnfc,
 	.get_ts_info		= dsa_slave_get_ts_info,
@@ -1281,12 +1295,11 @@ static int dsa_slave_phy_setup(struct net_device *slave_dev)
 	struct dsa_port *dp = dsa_slave_to_port(slave_dev);
 	struct device_node *port_dn = dp->dn;
 	struct dsa_switch *ds = dp->ds;
-	phy_interface_t mode;
 	u32 phy_flags = 0;
-	int ret;
+	int mode, ret;
 
-	ret = of_get_phy_mode(port_dn, &mode);
-	if (ret)
+	mode = of_get_phy_mode(port_dn);
+	if (mode < 0)
 		mode = PHY_INTERFACE_MODE_NA;
 
 	dp->pl_config.dev = &slave_dev->dev;
@@ -1334,6 +1347,9 @@ int dsa_slave_suspend(struct net_device *slave_dev)
 
 	if (!netif_running(slave_dev))
 		return 0;
+
+	cancel_work_sync(&dp->xmit_work);
+	skb_queue_purge(&dp->xmit_queue);
 
 	netif_device_detach(slave_dev);
 
@@ -1420,6 +1436,8 @@ int dsa_slave_create(struct dsa_port *port)
 	}
 	p->dp = port;
 	INIT_LIST_HEAD(&p->mall_tc_list);
+	INIT_WORK(&port->xmit_work, dsa_port_xmit_work);
+	skb_queue_head_init(&port->xmit_queue);
 	p->xmit = cpu_dp->tag_ops->xmit;
 	port->slave = slave_dev;
 
@@ -1471,7 +1489,7 @@ void dsa_slave_destroy(struct net_device *slave_dev)
 	free_netdev(slave_dev);
 }
 
-bool dsa_slave_dev_check(const struct net_device *dev)
+static bool dsa_slave_dev_check(const struct net_device *dev)
 {
 	return dev->netdev_ops == &dsa_slave_netdev_ops;
 }

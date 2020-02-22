@@ -2,5 +2,5 @@
 #
 # fixdep: used to generate dependency information during build process
 
-hostprogs	:= fixdep
-always-y	:= $(hostprogs)
+hostprogs-y	:= fixdep
+always		:= $(hostprogs-y)

@@ -686,14 +686,13 @@ static ssize_t telem_pss_trc_verb_write(struct file *file,
 	u32 verbosity;
 	int err;
 
-	err = kstrtou32_from_user(userbuf, count, 0, &verbosity);
-	if (err)
-		return err;
+	if (kstrtou32_from_user(userbuf, count, 0, &verbosity))
+		return -EFAULT;
 
 	err = telemetry_set_trace_verbosity(TELEM_PSS, verbosity);
 	if (err) {
 		pr_err("Changing PSS Trace Verbosity Failed. Error %d\n", err);
-		return err;
+		count = err;
 	}
 
 	return count;
@@ -734,14 +733,13 @@ static ssize_t telem_ioss_trc_verb_write(struct file *file,
 	u32 verbosity;
 	int err;
 
-	err = kstrtou32_from_user(userbuf, count, 0, &verbosity);
-	if (err)
-		return err;
+	if (kstrtou32_from_user(userbuf, count, 0, &verbosity))
+		return -EFAULT;
 
 	err = telemetry_set_trace_verbosity(TELEM_IOSS, verbosity);
 	if (err) {
 		pr_err("Changing IOSS Trace Verbosity Failed. Error %d\n", err);
-		return err;
+		count = err;
 	}
 
 	return count;

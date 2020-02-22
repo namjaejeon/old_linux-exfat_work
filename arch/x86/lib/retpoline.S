@@ -11,11 +11,11 @@
 .macro THUNK reg
 	.section .text.__x86.indirect_thunk
 
-SYM_FUNC_START(__x86_indirect_thunk_\reg)
+ENTRY(__x86_indirect_thunk_\reg)
 	CFI_STARTPROC
 	JMP_NOSPEC %\reg
 	CFI_ENDPROC
-SYM_FUNC_END(__x86_indirect_thunk_\reg)
+ENDPROC(__x86_indirect_thunk_\reg)
 .endm
 
 /*

@@ -63,7 +63,7 @@ int smc_cdc_get_free_slot(struct smc_connection *conn,
 	rc = smc_wr_tx_get_free_slot(link, smc_cdc_tx_handler, wr_buf,
 				     wr_rdma_buf,
 				     (struct smc_wr_tx_pend_priv **)pend);
-	if (conn->killed)
+	if (!conn->alert_token_local)
 		/* abnormal termination */
 		rc = -EPIPE;
 	return rc;
@@ -130,9 +130,6 @@ static int smcr_cdc_get_slot_and_msg_send(struct smc_connection *conn)
 int smc_cdc_get_slot_and_msg_send(struct smc_connection *conn)
 {
 	int rc;
-
-	if (!conn->lgr || (conn->lgr->is_smcd && conn->lgr->peer_shutdown))
-		return -EPIPE;
 
 	if (conn->lgr->is_smcd) {
 		spin_lock_bh(&conn->send_lock);
@@ -331,7 +328,7 @@ static void smcd_cdc_rx_tsklet(unsigned long data)
 	struct smcd_cdc_msg cdc;
 	struct smc_sock *smc;
 
-	if (!conn || conn->killed)
+	if (!conn)
 		return;
 
 	data_cdc = (struct smcd_cdc_msg *)conn->rmb_desc->cpu_addr;

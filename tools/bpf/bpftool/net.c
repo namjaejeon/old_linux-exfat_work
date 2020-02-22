@@ -7,8 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <bpf/bpf.h>
-#include <bpf/libbpf.h>
+#include <libbpf.h>
 #include <net/if.h>
 #include <linux/if.h>
 #include <linux/rtnetlink.h>
@@ -17,8 +16,8 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#include "bpf/nlattr.h"
-#include "bpf/libbpf_internal.h"
+#include <bpf.h>
+#include <nlattr.h>
 #include "main.h"
 #include "netlink_dumper.h"
 

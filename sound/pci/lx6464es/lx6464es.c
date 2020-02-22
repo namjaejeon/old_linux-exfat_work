@@ -342,10 +342,15 @@ static int lx_pcm_hw_params(struct snd_pcm_substream *substream,
 			    struct snd_pcm_hw_params *hw_params, int is_capture)
 {
 	struct lx6464es *chip = snd_pcm_substream_chip(substream);
+	int err = 0;
 
 	dev_dbg(chip->card->dev, "->lx_pcm_hw_params\n");
 
 	mutex_lock(&chip->setup_mutex);
+
+	/* set dma buffer */
+	err = snd_pcm_lib_malloc_pages(substream,
+				       params_buffer_bytes(hw_params));
 
 	if (is_capture)
 		chip->capture_stream.stream = substream;
@@ -353,7 +358,7 @@ static int lx_pcm_hw_params(struct snd_pcm_substream *substream,
 		chip->playback_stream.stream = substream;
 
 	mutex_unlock(&chip->setup_mutex);
-	return 0;
+	return err;
 }
 
 static int lx_pcm_hw_params_playback(struct snd_pcm_substream *substream,
@@ -394,6 +399,8 @@ static int lx_pcm_hw_free(struct snd_pcm_substream *substream)
 
 		chip->hardware_running[is_capture] = 0;
 	}
+
+	err = snd_pcm_lib_free_pages(substream);
 
 	if (is_capture)
 		chip->capture_stream.stream = NULL;
@@ -791,6 +798,7 @@ mac_ready:
 static const struct snd_pcm_ops lx_ops_playback = {
 	.open      = lx_pcm_open,
 	.close     = lx_pcm_close,
+	.ioctl     = snd_pcm_lib_ioctl,
 	.prepare   = lx_pcm_prepare,
 	.hw_params = lx_pcm_hw_params_playback,
 	.hw_free   = lx_pcm_hw_free,
@@ -801,6 +809,7 @@ static const struct snd_pcm_ops lx_ops_playback = {
 static const struct snd_pcm_ops lx_ops_capture = {
 	.open      = lx_pcm_open,
 	.close     = lx_pcm_close,
+	.ioctl     = snd_pcm_lib_ioctl,
 	.prepare   = lx_pcm_prepare,
 	.hw_params = lx_pcm_hw_params_capture,
 	.hw_free   = lx_pcm_hw_free,
@@ -836,8 +845,9 @@ static int lx_pcm_create(struct lx6464es *chip)
 	pcm->nonatomic = true;
 	strcpy(pcm->name, card_name);
 
-	snd_pcm_set_managed_buffer_all(pcm, SNDRV_DMA_TYPE_DEV,
-				       &chip->pci->dev, size, size);
+	snd_pcm_lib_preallocate_pages_for_all(pcm, SNDRV_DMA_TYPE_DEV,
+					      snd_dma_pci_data(chip->pci),
+					      size, size);
 
 	chip->pcm = pcm;
 	chip->capture_stream.is_capture = 1;
@@ -938,7 +948,7 @@ static int snd_lx6464es_create(struct snd_card *card,
 	struct lx6464es *chip;
 	int err;
 
-	static const struct snd_device_ops ops = {
+	static struct snd_device_ops ops = {
 		.dev_free = snd_lx6464es_dev_free,
 	};
 
@@ -1002,7 +1012,6 @@ static int snd_lx6464es_create(struct snd_card *card,
 		goto request_irq_failed;
 	}
 	chip->irq = pci->irq;
-	card->sync_irq = chip->irq;
 
 	err = snd_device_new(card, SNDRV_DEV_LOWLEVEL, chip, &ops);
 	if (err < 0)

@@ -32,7 +32,7 @@ static int enetc_cbd_unused(struct enetc_cbdr *r)
 		r->bd_count;
 }
 
-int enetc_send_cmd(struct enetc_si *si, struct enetc_cbd *cbd)
+static int enetc_send_cmd(struct enetc_si *si, struct enetc_cbd *cbd)
 {
 	struct enetc_cbdr *ring = &si->cbd_ring;
 	int timeout = ENETC_CBDR_TIMEOUT;
@@ -65,9 +65,6 @@ int enetc_send_cmd(struct enetc_si *si, struct enetc_cbd *cbd)
 
 	if (!timeout)
 		return -EBUSY;
-
-	/* CBD may writeback data, feedback up level */
-	*cbd = *dest_cbd;
 
 	enetc_clean_cbdr(si);
 

@@ -356,7 +356,7 @@ static int ax25_rcv(struct sk_buff *skb, struct net_device *dev,
 
 		make->sk_state = TCP_ESTABLISHED;
 
-		sk_acceptq_added(sk);
+		sk->sk_ack_backlog++;
 		bh_unlock_sock(sk);
 	} else {
 		if (!mine)

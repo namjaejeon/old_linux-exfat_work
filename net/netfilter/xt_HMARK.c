@@ -239,7 +239,11 @@ static int get_inner_hdr(const struct sk_buff *skb, int iphsz, int *nhoff)
 		return 0;
 
 	/* Error message? */
-	if (!icmp_is_err(icmph->type))
+	if (icmph->type != ICMP_DEST_UNREACH &&
+	    icmph->type != ICMP_SOURCE_QUENCH &&
+	    icmph->type != ICMP_TIME_EXCEEDED &&
+	    icmph->type != ICMP_PARAMETERPROB &&
+	    icmph->type != ICMP_REDIRECT)
 		return 0;
 
 	*nhoff += iphsz + sizeof(_ih);

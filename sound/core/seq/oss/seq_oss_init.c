@@ -460,10 +460,10 @@ enabled_str(int bool)
 	return bool ? "enabled" : "disabled";
 }
 
-static const char *
+static char *
 filemode_str(int val)
 {
-	static const char * const str[] = {
+	static char *str[] = {
 		"none", "read", "write", "read/write",
 	};
 	return str[val & SNDRV_SEQ_OSS_FILE_ACMODE];

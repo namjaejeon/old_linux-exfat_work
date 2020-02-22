@@ -273,7 +273,7 @@ static const struct irq_service_funcs irq_service_funcs_dce120 = {
 		.to_dal_irq_source = to_dal_irq_source_dce110
 };
 
-static void dce120_irq_construct(
+static void construct(
 	struct irq_service *irq_service,
 	struct irq_service_init_data *init_data)
 {
@@ -292,6 +292,6 @@ struct irq_service *dal_irq_service_dce120_create(
 	if (!irq_service)
 		return NULL;
 
-	dce120_irq_construct(irq_service, init_data);
+	construct(irq_service, init_data);
 	return irq_service;
 }

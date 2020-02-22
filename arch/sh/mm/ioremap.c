@@ -103,7 +103,7 @@ static inline int iomapping_nontranslatable(unsigned long offset)
 	return 0;
 }
 
-void iounmap(void __iomem *addr)
+void __iounmap(void __iomem *addr)
 {
 	unsigned long vaddr = (unsigned long __force)addr;
 	struct vm_struct *p;
@@ -134,4 +134,4 @@ void iounmap(void __iomem *addr)
 
 	kfree(p);
 }
-EXPORT_SYMBOL(iounmap);
+EXPORT_SYMBOL(__iounmap);

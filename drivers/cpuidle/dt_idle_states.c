@@ -111,7 +111,8 @@ static bool idle_state_valid(struct device_node *state_node, unsigned int idx,
 	for (cpu = cpumask_next(cpumask_first(cpumask), cpumask);
 	     cpu < nr_cpu_ids; cpu = cpumask_next(cpu, cpumask)) {
 		cpu_node = of_cpu_device_node_get(cpu);
-		curr_state_node = of_get_cpu_state_node(cpu_node, idx);
+		curr_state_node = of_parse_phandle(cpu_node, "cpu-idle-states",
+						   idx);
 		if (state_node != curr_state_node)
 			valid = false;
 
@@ -169,7 +170,7 @@ int dt_init_idle_driver(struct cpuidle_driver *drv,
 	cpu_node = of_cpu_device_node_get(cpumask_first(cpumask));
 
 	for (i = 0; ; i++) {
-		state_node = of_get_cpu_state_node(cpu_node, i);
+		state_node = of_parse_phandle(cpu_node, "cpu-idle-states", i);
 		if (!state_node)
 			break;
 

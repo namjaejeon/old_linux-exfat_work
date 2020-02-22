@@ -1346,9 +1346,10 @@ static int nixge_probe(struct platform_device *pdev)
 		}
 	}
 
-	err = of_get_phy_mode(pdev->dev.of_node, &priv->phy_mode);
-	if (err) {
+	priv->phy_mode = of_get_phy_mode(pdev->dev.of_node);
+	if ((int)priv->phy_mode < 0) {
 		netdev_err(ndev, "not find \"phy-mode\" property\n");
+		err = -EINVAL;
 		goto unregister_mdio;
 	}
 

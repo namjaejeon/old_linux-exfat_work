@@ -168,8 +168,3 @@
 	vdda-supply = <&ldo17_reg>;
 	status = "okay";
 };
-
-&touchkey_reg {
-	gpio = <&gpm0 0 GPIO_ACTIVE_HIGH>;
-	status = "okay";
-};

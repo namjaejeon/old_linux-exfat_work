@@ -2666,7 +2666,7 @@ static void cas_netpoll(struct net_device *dev)
 }
 #endif
 
-static void cas_tx_timeout(struct net_device *dev, unsigned int txqueue)
+static void cas_tx_timeout(struct net_device *dev)
 {
 	struct cas *cp = netdev_priv(dev);
 

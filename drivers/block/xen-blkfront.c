@@ -151,6 +151,9 @@ MODULE_PARM_DESC(max_ring_page_order, "Maximum order of pages to be used for the
 #define BLK_RING_SIZE(info)	\
 	__CONST_RING_SIZE(blkif, XEN_PAGE_SIZE * (info)->nr_ring_pages)
 
+#define BLK_MAX_RING_SIZE	\
+	__CONST_RING_SIZE(blkif, XEN_PAGE_SIZE * XENBUS_MAX_RING_GRANTS)
+
 /*
  * ring-ref%u i=(-1UL) would take 11 characters + 'ring-ref' is 8, so 19
  * characters are enough. Define to 20 to keep consistent with backend.
@@ -174,12 +177,12 @@ struct blkfront_ring_info {
 	unsigned int evtchn, irq;
 	struct work_struct work;
 	struct gnttab_free_callback callback;
+	struct blk_shadow shadow[BLK_MAX_RING_SIZE];
 	struct list_head indirect_pages;
 	struct list_head grants;
 	unsigned int persistent_gnts_c;
 	unsigned long shadow_free;
 	struct blkfront_info *dev_info;
-	struct blk_shadow shadow[];
 };
 
 /*
@@ -1110,8 +1113,8 @@ static int xlvbd_alloc_gendisk(blkif_sector_t capacity,
 	if (!VDEV_IS_EXTENDED(info->vdevice)) {
 		err = xen_translate_vdev(info->vdevice, &minor, &offset);
 		if (err)
-			return err;
-		nr_parts = PARTS_PER_DISK;
+			return err;		
+ 		nr_parts = PARTS_PER_DISK;
 	} else {
 		minor = BLKIF_MINOR_EXT(info->vdevice);
 		nr_parts = PARTS_PER_EXT_DISK;
@@ -1912,8 +1915,7 @@ static int negotiate_mq(struct blkfront_info *info)
 		info->nr_rings = 1;
 
 	info->rinfo = kvcalloc(info->nr_rings,
-			       struct_size(info->rinfo, shadow,
-					   BLK_RING_SIZE(info)),
+			       sizeof(struct blkfront_ring_info),
 			       GFP_KERNEL);
 	if (!info->rinfo) {
 		xenbus_dev_fatal(info->xbdev, -ENOMEM, "allocating ring_info structure");
@@ -2630,7 +2632,6 @@ static const struct block_device_operations xlvbd_block_fops =
 	.release = blkif_release,
 	.getgeo = blkif_getgeo,
 	.ioctl = blkif_ioctl,
-	.compat_ioctl = blkdev_compat_ptr_ioctl,
 };
 
 

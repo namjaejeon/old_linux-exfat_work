@@ -396,7 +396,11 @@ static int __init micro_probe(struct platform_device *pdev)
 	if (IS_ERR(micro->base))
 		return PTR_ERR(micro->base);
 
-	micro->sdlc = devm_platform_ioremap_resource(pdev, 1);
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 1);
+	if (!res)
+		return -EINVAL;
+
+	micro->sdlc = devm_ioremap_resource(&pdev->dev, res);
 	if (IS_ERR(micro->sdlc))
 		return PTR_ERR(micro->sdlc);
 

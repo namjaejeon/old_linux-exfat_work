@@ -220,10 +220,7 @@ static int egpio_get_direction(struct gpio_chip *chip, unsigned offset)
 
 	egpio = gpiochip_get_data(chip);
 
-	if (test_bit(offset, &egpio->is_out))
-		return GPIO_LINE_DIRECTION_OUT;
-
-	return GPIO_LINE_DIRECTION_IN;
+	return !test_bit(offset, &egpio->is_out);
 }
 
 static void egpio_write_cache(struct egpio_info *ei)
@@ -268,6 +265,7 @@ static int __init egpio_probe(struct platform_device *pdev)
 	struct gpio_chip  *chip;
 	unsigned int      irq, irq_end;
 	int               i;
+	int               ret;
 
 	/* Initialize ei data structure. */
 	ei = devm_kzalloc(&pdev->dev, sizeof(*ei), GFP_KERNEL);
@@ -277,24 +275,28 @@ static int __init egpio_probe(struct platform_device *pdev)
 	spin_lock_init(&ei->lock);
 
 	/* Find chained irq */
+	ret = -EINVAL;
 	res = platform_get_resource(pdev, IORESOURCE_IRQ, 0);
 	if (res)
 		ei->chained_irq = res->start;
 
 	/* Map egpio chip into virtual address space. */
-	ei->base_addr = devm_platform_ioremap_resource(pdev, 0);
-	if (IS_ERR(ei->base_addr))
-		return PTR_ERR(ei->base_addr);
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	if (!res)
+		goto fail;
+	ei->base_addr = devm_ioremap_nocache(&pdev->dev, res->start,
+					     resource_size(res));
+	if (!ei->base_addr)
+		goto fail;
+	pr_debug("EGPIO phys=%08x virt=%p\n", (u32)res->start, ei->base_addr);
 
 	if ((pdata->bus_width != 16) && (pdata->bus_width != 32))
-		return -EINVAL;
-
+		goto fail;
 	ei->bus_shift = fls(pdata->bus_width - 1) - 3;
 	pr_debug("bus_shift = %d\n", ei->bus_shift);
 
 	if ((pdata->reg_width != 8) && (pdata->reg_width != 16))
-		return -EINVAL;
-
+		goto fail;
 	ei->reg_shift = fls(pdata->reg_width - 1);
 	pr_debug("reg_shift = %d\n", ei->reg_shift);
 
@@ -306,9 +308,10 @@ static int __init egpio_probe(struct platform_device *pdev)
 	ei->chip = devm_kcalloc(&pdev->dev,
 				ei->nchips, sizeof(struct egpio_chip),
 				GFP_KERNEL);
-	if (!ei->chip)
-		return -ENOMEM;
-
+	if (!ei->chip) {
+		ret = -ENOMEM;
+		goto fail;
+	}
 	for (i = 0; i < ei->nchips; i++) {
 		ei->chip[i].reg_start = pdata->chip[i].reg_start;
 		ei->chip[i].cached_values = pdata->chip[i].initial_values;
@@ -318,9 +321,10 @@ static int __init egpio_probe(struct platform_device *pdev)
 		chip->label = devm_kasprintf(&pdev->dev, GFP_KERNEL,
 					     "htc-egpio-%d",
 					     i);
-		if (!chip->label)
-			return -ENOMEM;
-
+		if (!chip->label) {
+			ret = -ENOMEM;
+			goto fail;
+		}
 		chip->parent          = &pdev->dev;
 		chip->owner           = THIS_MODULE;
 		chip->get             = egpio_get;
@@ -362,6 +366,10 @@ static int __init egpio_probe(struct platform_device *pdev)
 	}
 
 	return 0;
+
+fail:
+	printk(KERN_ERR "EGPIO failed to setup\n");
+	return ret;
 }
 
 #ifdef CONFIG_PM

@@ -62,11 +62,11 @@
  *Visit http://software.intel.com/en-us/articles/
  *and refer to improving-the-performance-of-the-secure-hash-algorithm-1/
  *
- *Updates 20-byte SHA-1 record at start of 'state', from 'input', for
- *even number of 'blocks' consecutive 64-byte blocks.
+ *Updates 20-byte SHA-1 record in 'hash' for even number of
+ *'num_blocks' consecutive 64-byte blocks
  *
  *extern "C" void sha1_transform_avx2(
- *	struct sha1_state *state, const u8* input, int blocks );
+ *	int *hash, const char* input, size_t num_blocks );
  */
 
 #include <linux/linkage.h>
@@ -634,7 +634,7 @@ _loop3:
  * param: function's name
  */
 .macro SHA1_VECTOR_ASM  name
-	SYM_FUNC_START(\name)
+	ENTRY(\name)
 
 	push	%rbx
 	push	%r12
@@ -676,7 +676,7 @@ _loop3:
 
 	ret
 
-	SYM_FUNC_END(\name)
+	ENDPROC(\name)
 .endm
 
 .section .rodata

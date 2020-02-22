@@ -15,16 +15,14 @@ static bool disable_usb_sg;
 module_param_named(disable_usb_sg, disable_usb_sg, bool, 0644);
 MODULE_PARM_DESC(disable_usb_sg, "Disable usb scatter-gather support");
 
+/* should be called with usb_ctrl_mtx locked */
 static int __mt76u_vendor_request(struct mt76_dev *dev, u8 req,
 				  u8 req_type, u16 val, u16 offset,
 				  void *buf, size_t len)
 {
-	struct usb_interface *uintf = to_usb_interface(dev->dev);
-	struct usb_device *udev = interface_to_usbdev(uintf);
+	struct usb_device *udev = to_usb_device(dev->dev);
 	unsigned int pipe;
 	int i, ret;
-
-	lockdep_assert_held(&dev->usb.usb_ctrl_mtx);
 
 	pipe = (req_type & USB_DIR_IN) ? usb_rcvctrlpipe(udev, 0)
 				       : usb_sndctrlpipe(udev, 0);
@@ -62,6 +60,7 @@ int mt76u_vendor_request(struct mt76_dev *dev, u8 req,
 }
 EXPORT_SYMBOL_GPL(mt76u_vendor_request);
 
+/* should be called with usb_ctrl_mtx locked */
 static u32 __mt76u_rr(struct mt76_dev *dev, u32 addr)
 {
 	struct mt76_usb *usb = &dev->usb;
@@ -104,6 +103,7 @@ static u32 mt76u_rr(struct mt76_dev *dev, u32 addr)
 	return ret;
 }
 
+/* should be called with usb_ctrl_mtx locked */
 static void __mt76u_wr(struct mt76_dev *dev, u32 addr, u32 val)
 {
 	struct mt76_usb *usb = &dev->usb;
@@ -235,8 +235,7 @@ mt76u_rd_rp(struct mt76_dev *dev, u32 base,
 
 static bool mt76u_check_sg(struct mt76_dev *dev)
 {
-	struct usb_interface *uintf = to_usb_interface(dev->dev);
-	struct usb_device *udev = interface_to_usbdev(uintf);
+	struct usb_device *udev = to_usb_device(dev->dev);
 
 	return (!disable_usb_sg && udev->bus->sg_tablesize > 0 &&
 		(udev->bus->no_sg_constraint ||
@@ -371,8 +370,7 @@ mt76u_fill_bulk_urb(struct mt76_dev *dev, int dir, int index,
 		    struct urb *urb, usb_complete_t complete_fn,
 		    void *context)
 {
-	struct usb_interface *uintf = to_usb_interface(dev->dev);
-	struct usb_device *udev = interface_to_usbdev(uintf);
+	struct usb_device *udev = to_usb_device(dev->dev);
 	unsigned int pipe;
 
 	if (dir == USB_DIR_IN)
@@ -697,7 +695,10 @@ static void mt76u_tx_tasklet(unsigned long data)
 		mt76_txq_schedule(dev, i);
 
 		if (!test_and_set_bit(MT76_READING_STATS, &dev->state))
-			queue_work(dev->usb.stat_wq, &dev->usb.stat_work);
+			ieee80211_queue_delayed_work(dev->hw,
+						     &dev->usb.stat_work,
+						     msecs_to_jiffies(10));
+
 		if (wake)
 			ieee80211_wake_queue(dev->hw, i);
 	}
@@ -710,7 +711,7 @@ static void mt76u_tx_status_data(struct work_struct *work)
 	u8 update = 1;
 	u16 count = 0;
 
-	usb = container_of(work, struct mt76_usb, stat_work);
+	usb = container_of(work, struct mt76_usb, stat_work.work);
 	dev = container_of(usb, struct mt76_dev, usb);
 
 	while (true) {
@@ -723,7 +724,8 @@ static void mt76u_tx_status_data(struct work_struct *work)
 	}
 
 	if (count && test_bit(MT76_STATE_RUNNING, &dev->state))
-		queue_work(usb->stat_wq, &usb->stat_work);
+		ieee80211_queue_delayed_work(dev->hw, &usb->stat_work,
+					     msecs_to_jiffies(10));
 	else
 		clear_bit(MT76_READING_STATS, &dev->state);
 }
@@ -904,7 +906,7 @@ void mt76u_stop_tx(struct mt76_dev *dev)
 		}
 	}
 
-	cancel_work_sync(&dev->usb.stat_work);
+	cancel_delayed_work_sync(&dev->usb.stat_work);
 	clear_bit(MT76_READING_STATS, &dev->state);
 
 	mt76_tx_status_check(dev, NULL, true);
@@ -950,17 +952,12 @@ int mt76u_init(struct mt76_dev *dev,
 		.rd_rp = mt76u_rd_rp,
 		.type = MT76_BUS_USB,
 	};
-	struct usb_device *udev = interface_to_usbdev(intf);
 	struct mt76_usb *usb = &dev->usb;
 
 	tasklet_init(&usb->rx_tasklet, mt76u_rx_tasklet, (unsigned long)dev);
 	tasklet_init(&dev->tx_tasklet, mt76u_tx_tasklet, (unsigned long)dev);
-	INIT_WORK(&usb->stat_work, mt76u_tx_status_data);
+	INIT_DELAYED_WORK(&usb->stat_work, mt76u_tx_status_data);
 	skb_queue_head_init(&dev->rx_skb[MT_RXQ_MAIN]);
-
-	usb->stat_wq = alloc_workqueue("mt76u", WQ_UNBOUND, 0);
-	if (!usb->stat_wq)
-		return -ENOMEM;
 
 	mutex_init(&usb->mcu.mutex);
 
@@ -968,22 +965,11 @@ int mt76u_init(struct mt76_dev *dev,
 	dev->bus = &mt76u_ops;
 	dev->queue_ops = &usb_queue_ops;
 
-	dev_set_drvdata(&udev->dev, dev);
-
 	usb->sg_en = mt76u_check_sg(dev);
 
 	return mt76u_set_endpoints(intf, usb);
 }
 EXPORT_SYMBOL_GPL(mt76u_init);
-
-void mt76u_deinit(struct mt76_dev *dev)
-{
-	if (dev->usb.stat_wq) {
-		destroy_workqueue(dev->usb.stat_wq);
-		dev->usb.stat_wq = NULL;
-	}
-}
-EXPORT_SYMBOL_GPL(mt76u_deinit);
 
 MODULE_AUTHOR("Lorenzo Bianconi <lorenzo.bianconi83@gmail.com>");
 MODULE_LICENSE("Dual BSD/GPL");

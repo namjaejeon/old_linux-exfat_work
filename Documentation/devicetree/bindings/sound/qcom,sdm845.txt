@@ -5,10 +5,7 @@ This binding describes the SDM845 sound card, which uses qdsp for audio.
 - compatible:
 	Usage: required
 	Value type: <stringlist>
-	Definition: must be one of this
-			"qcom,sdm845-sndcard"
-			"qcom,db845c-sndcard"
-			"lenovo,yoga-c630-sndcard"
+	Definition: must be "qcom,sdm845-sndcard"
 
 - audio-routing:
 	Usage: Optional

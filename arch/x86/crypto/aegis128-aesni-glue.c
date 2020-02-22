@@ -144,8 +144,10 @@ static int crypto_aegis128_aesni_setkey(struct crypto_aead *aead, const u8 *key,
 {
 	struct aegis_ctx *ctx = crypto_aegis128_aesni_ctx(aead);
 
-	if (keylen != AEGIS128_KEY_SIZE)
+	if (keylen != AEGIS128_KEY_SIZE) {
+		crypto_aead_set_flags(aead, CRYPTO_TFM_RES_BAD_KEY_LEN);
 		return -EINVAL;
+	}
 
 	memcpy(ctx->key.bytes, key, AEGIS128_KEY_SIZE);
 

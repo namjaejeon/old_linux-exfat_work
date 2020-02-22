@@ -398,12 +398,9 @@ struct ksz_device *ksz_switch_alloc(struct device *base, void *priv)
 	struct dsa_switch *ds;
 	struct ksz_device *swdev;
 
-	ds = devm_kzalloc(base, sizeof(*ds), GFP_KERNEL);
+	ds = dsa_switch_alloc(base, DSA_MAX_PORTS);
 	if (!ds)
 		return NULL;
-
-	ds->dev = base;
-	ds->num_ports = DSA_MAX_PORTS;
 
 	swdev = devm_kzalloc(base, sizeof(*swdev), GFP_KERNEL);
 	if (!swdev)
@@ -422,7 +419,6 @@ EXPORT_SYMBOL(ksz_switch_alloc);
 int ksz_switch_register(struct ksz_device *dev,
 			const struct ksz_dev_ops *ops)
 {
-	phy_interface_t interface;
 	int ret;
 
 	if (dev->pdata)
@@ -457,9 +453,9 @@ int ksz_switch_register(struct ksz_device *dev,
 	 * device tree.
 	 */
 	if (dev->dev->of_node) {
-		ret = of_get_phy_mode(dev->dev->of_node, &interface);
-		if (ret == 0)
-			dev->interface = interface;
+		ret = of_get_phy_mode(dev->dev->of_node);
+		if (ret >= 0)
+			dev->interface = ret;
 		dev->synclko_125 = of_property_read_bool(dev->dev->of_node,
 							 "microchip,synclko-125");
 	}

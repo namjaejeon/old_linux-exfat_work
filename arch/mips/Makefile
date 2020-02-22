@@ -14,9 +14,6 @@
 
 archscripts: scripts_basic
 	$(Q)$(MAKE) $(build)=arch/mips/tools elf-entry
-ifeq ($(CONFIG_CPU_LOONGSON3_WORKAROUNDS),y)
-	$(Q)$(MAKE) $(build)=arch/mips/tools loongson3-llsc-check
-endif
 	$(Q)$(MAKE) $(build)=arch/mips/boot/tools relocs
 
 KBUILD_DEFCONFIG := 32r2el_defconfig
@@ -326,7 +323,7 @@ libs-$(CONFIG_MIPS_FP_SUPPORT) += arch/mips/math-emu/
 # See arch/mips/Kbuild for content of core part of the kernel
 core-y += arch/mips/
 
-drivers-y			+= arch/mips/crypto/
+drivers-$(CONFIG_MIPS_CRC_SUPPORT) += arch/mips/crypto/
 drivers-$(CONFIG_OPROFILE)	+= arch/mips/oprofile/
 
 # suspend and hibernation support

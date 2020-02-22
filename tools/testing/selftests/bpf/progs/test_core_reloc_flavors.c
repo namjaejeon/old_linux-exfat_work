@@ -3,15 +3,14 @@
 
 #include <linux/bpf.h>
 #include <stdint.h>
-#include <bpf/bpf_helpers.h>
-#include <bpf/bpf_core_read.h>
+#include "bpf_helpers.h"
 
 char _license[] SEC("license") = "GPL";
 
-struct {
+static volatile struct data {
 	char in[256];
 	char out[256];
-} data = {};
+} data;
 
 struct core_reloc_flavors {
 	int a;
@@ -40,8 +39,6 @@ struct core_reloc_flavors___weird {
 	};
 };
 
-#define CORE_READ(dst, src) bpf_core_read(dst, sizeof(*(dst)), src)
-
 SEC("raw_tracepoint/sys_enter")
 int test_core_flavors(void *ctx)
 {
@@ -51,13 +48,13 @@ int test_core_flavors(void *ctx)
 	struct core_reloc_flavors *out = (void *)&data.out;
 
 	/* read a using weird layout */
-	if (CORE_READ(&out->a, &in_weird->a))
+	if (BPF_CORE_READ(&out->a, &in_weird->a))
 		return 1;
 	/* read b using reversed layout */
-	if (CORE_READ(&out->b, &in_rev->b))
+	if (BPF_CORE_READ(&out->b, &in_rev->b))
 		return 1;
 	/* read c using original layout */
-	if (CORE_READ(&out->c, &in_orig->c))
+	if (BPF_CORE_READ(&out->c, &in_orig->c))
 		return 1;
 
 	return 0;

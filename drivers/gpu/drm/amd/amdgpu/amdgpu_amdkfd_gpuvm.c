@@ -19,6 +19,9 @@
  * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
  * OTHER DEALINGS IN THE SOFTWARE.
  */
+
+#define pr_fmt(fmt) "kfd2kgd: " fmt
+
 #include <linux/dma-buf.h>
 #include <linux/list.h>
 #include <linux/pagemap.h>
@@ -29,6 +32,11 @@
 #include "amdgpu_vm.h"
 #include "amdgpu_amdkfd.h"
 #include "amdgpu_dma_buf.h"
+
+/* Special VM and GART address alignment needed for VI pre-Fiji due to
+ * a HW bug.
+ */
+#define VI_BO_SIZE_ALIGN (0x8000)
 
 /* BO flag to indicate a KFD userptr BO */
 #define AMDGPU_AMDKFD_USERPTR_BO (1ULL << 63)
@@ -85,7 +93,7 @@ static bool check_if_add_bo_to_vm(struct amdgpu_vm *avm,
 }
 
 /* Set memory usage limits. Current, limits are
- *  System (TTM + userptr) memory - 15/16th System RAM
+ *  System (TTM + userptr) memory - 3/4th System RAM
  *  TTM memory - 3/8th System RAM
  */
 void amdgpu_amdkfd_gpuvm_init_mem_limits(void)
@@ -98,31 +106,18 @@ void amdgpu_amdkfd_gpuvm_init_mem_limits(void)
 	mem *= si.mem_unit;
 
 	spin_lock_init(&kfd_mem_limit.mem_limit_lock);
-	kfd_mem_limit.max_system_mem_limit = mem - (mem >> 4);
+	kfd_mem_limit.max_system_mem_limit = (mem >> 1) + (mem >> 2);
 	kfd_mem_limit.max_ttm_mem_limit = (mem >> 1) - (mem >> 3);
 	pr_debug("Kernel memory limit %lluM, TTM limit %lluM\n",
 		(kfd_mem_limit.max_system_mem_limit >> 20),
 		(kfd_mem_limit.max_ttm_mem_limit >> 20));
 }
 
-/* Estimate page table size needed to represent a given memory size
- *
- * With 4KB pages, we need one 8 byte PTE for each 4KB of memory
- * (factor 512, >> 9). With 2MB pages, we need one 8 byte PTE for 2MB
- * of memory (factor 256K, >> 18). ROCm user mode tries to optimize
- * for 2MB pages for TLB efficiency. However, small allocations and
- * fragmented system memory still need some 4KB pages. We choose a
- * compromise that should work in most cases without reserving too
- * much memory for page tables unnecessarily (factor 16K, >> 14).
- */
-#define ESTIMATE_PT_SIZE(mem_size) ((mem_size) >> 14)
-
 static int amdgpu_amdkfd_reserve_mem_limit(struct amdgpu_device *adev,
 		uint64_t size, u32 domain, bool sg)
 {
-	uint64_t reserved_for_pt =
-		ESTIMATE_PT_SIZE(amdgpu_amdkfd_total_mem_size);
 	size_t acc_size, system_mem_needed, ttm_mem_needed, vram_needed;
+	uint64_t reserved_for_pt = amdgpu_amdkfd_total_mem_size >> 9;
 	int ret = 0;
 
 	acc_size = ttm_bo_dma_acc_size(&adev->mman.bdev, size,
@@ -354,44 +349,11 @@ static int vm_update_pds(struct amdgpu_vm *vm, struct amdgpu_sync *sync)
 	struct amdgpu_device *adev = amdgpu_ttm_adev(pd->tbo.bdev);
 	int ret;
 
-	ret = amdgpu_vm_update_pdes(adev, vm, false);
+	ret = amdgpu_vm_update_directories(adev, vm);
 	if (ret)
 		return ret;
 
-	return amdgpu_sync_fence(sync, vm->last_update, false);
-}
-
-static uint64_t get_pte_flags(struct amdgpu_device *adev, struct kgd_mem *mem)
-{
-	struct amdgpu_device *bo_adev = amdgpu_ttm_adev(mem->bo->tbo.bdev);
-	bool coherent = mem->alloc_flags & ALLOC_MEM_FLAGS_COHERENT;
-	uint32_t mapping_flags;
-
-	mapping_flags = AMDGPU_VM_PAGE_READABLE;
-	if (mem->alloc_flags & ALLOC_MEM_FLAGS_WRITABLE)
-		mapping_flags |= AMDGPU_VM_PAGE_WRITEABLE;
-	if (mem->alloc_flags & ALLOC_MEM_FLAGS_EXECUTABLE)
-		mapping_flags |= AMDGPU_VM_PAGE_EXECUTABLE;
-
-	switch (adev->asic_type) {
-	case CHIP_ARCTURUS:
-		if (mem->alloc_flags & ALLOC_MEM_FLAGS_VRAM) {
-			if (bo_adev == adev)
-				mapping_flags |= coherent ?
-					AMDGPU_VM_MTYPE_CC : AMDGPU_VM_MTYPE_RW;
-			else
-				mapping_flags |= AMDGPU_VM_MTYPE_UC;
-		} else {
-			mapping_flags |= coherent ?
-				AMDGPU_VM_MTYPE_UC : AMDGPU_VM_MTYPE_NC;
-		}
-		break;
-	default:
-		mapping_flags |= coherent ?
-			AMDGPU_VM_MTYPE_UC : AMDGPU_VM_MTYPE_NC;
-	}
-
-	return amdgpu_gem_va_map_flags(adev, mapping_flags);
+	return amdgpu_sync_fence(NULL, sync, vm->last_update, false);
 }
 
 /* add_bo_to_vm - Add a BO to a VM
@@ -442,7 +404,8 @@ static int add_bo_to_vm(struct amdgpu_device *adev, struct kgd_mem *mem,
 	}
 
 	bo_va_entry->va = va;
-	bo_va_entry->pte_flags = get_pte_flags(adev, mem);
+	bo_va_entry->pte_flags = amdgpu_gmc_get_pte_flags(adev,
+							 mem->mapping_flags);
 	bo_va_entry->kgd_dev = (void *)adev;
 	list_add(&bo_va_entry->bo_list, list_bo_va);
 
@@ -518,7 +481,8 @@ static void remove_kgd_mem_from_kfd_bo_list(struct kgd_mem *mem,
  *
  * Returns 0 for success, negative errno for errors.
  */
-static int init_user_pages(struct kgd_mem *mem, uint64_t user_addr)
+static int init_user_pages(struct kgd_mem *mem, struct mm_struct *mm,
+			   uint64_t user_addr)
 {
 	struct amdkfd_process_info *process_info = mem->process_info;
 	struct amdgpu_bo *bo = mem->bo;
@@ -622,7 +586,7 @@ static int reserve_bo_and_vm(struct kgd_mem *mem,
 	amdgpu_vm_get_pd_bo(vm, &ctx->list, &ctx->vm_pd[0]);
 
 	ret = ttm_eu_reserve_buffers(&ctx->ticket, &ctx->list,
-				     false, &ctx->duplicates);
+				     false, &ctx->duplicates, true);
 	if (!ret)
 		ctx->reserved = true;
 	else {
@@ -695,7 +659,7 @@ static int reserve_bo_and_cond_vms(struct kgd_mem *mem,
 	}
 
 	ret = ttm_eu_reserve_buffers(&ctx->ticket, &ctx->list,
-				     false, &ctx->duplicates);
+				     false, &ctx->duplicates, true);
 	if (!ret)
 		ctx->reserved = true;
 	else
@@ -750,7 +714,7 @@ static int unmap_bo_from_gpuvm(struct amdgpu_device *adev,
 
 	amdgpu_vm_clear_freed(adev, vm, &bo_va->last_pt_update);
 
-	amdgpu_sync_fence(sync, bo_va->last_pt_update, false);
+	amdgpu_sync_fence(NULL, sync, bo_va->last_pt_update, false);
 
 	return 0;
 }
@@ -769,7 +733,7 @@ static int update_gpuvm_pte(struct amdgpu_device *adev,
 		return ret;
 	}
 
-	return amdgpu_sync_fence(sync, bo_va->last_pt_update, false);
+	return amdgpu_sync_fence(NULL, sync, bo_va->last_pt_update, false);
 }
 
 static int map_bo_to_gpuvm(struct amdgpu_device *adev,
@@ -1115,8 +1079,10 @@ int amdgpu_amdkfd_gpuvm_alloc_memory_of_gpu(
 	uint64_t user_addr = 0;
 	struct amdgpu_bo *bo;
 	struct amdgpu_bo_param bp;
+	int byte_align;
 	u32 domain, alloc_domain;
 	u64 alloc_flags;
+	uint32_t mapping_flags;
 	int ret;
 
 	/*
@@ -1169,7 +1135,25 @@ int amdgpu_amdkfd_gpuvm_alloc_memory_of_gpu(
 	if ((*mem)->aql_queue)
 		size = size >> 1;
 
-	(*mem)->alloc_flags = flags;
+	/* Workaround for TLB bug on older VI chips */
+	byte_align = (adev->family == AMDGPU_FAMILY_VI &&
+			adev->asic_type != CHIP_FIJI &&
+			adev->asic_type != CHIP_POLARIS10 &&
+			adev->asic_type != CHIP_POLARIS11 &&
+			adev->asic_type != CHIP_POLARIS12 &&
+			adev->asic_type != CHIP_VEGAM) ?
+			VI_BO_SIZE_ALIGN : 1;
+
+	mapping_flags = AMDGPU_VM_PAGE_READABLE;
+	if (flags & ALLOC_MEM_FLAGS_WRITABLE)
+		mapping_flags |= AMDGPU_VM_PAGE_WRITEABLE;
+	if (flags & ALLOC_MEM_FLAGS_EXECUTABLE)
+		mapping_flags |= AMDGPU_VM_PAGE_EXECUTABLE;
+	if (flags & ALLOC_MEM_FLAGS_COHERENT)
+		mapping_flags |= AMDGPU_VM_MTYPE_UC;
+	else
+		mapping_flags |= AMDGPU_VM_MTYPE_NC;
+	(*mem)->mapping_flags = mapping_flags;
 
 	amdgpu_sync_create(&(*mem)->sync);
 
@@ -1184,7 +1168,7 @@ int amdgpu_amdkfd_gpuvm_alloc_memory_of_gpu(
 
 	memset(&bp, 0, sizeof(bp));
 	bp.size = size;
-	bp.byte_align = 1;
+	bp.byte_align = byte_align;
 	bp.domain = alloc_domain;
 	bp.flags = alloc_flags;
 	bp.type = bo_type;
@@ -1211,7 +1195,7 @@ int amdgpu_amdkfd_gpuvm_alloc_memory_of_gpu(
 	add_kgd_mem_to_kfd_bo_list(*mem, avm->process_info, user_addr);
 
 	if (user_addr) {
-		ret = init_user_pages(*mem, user_addr);
+		ret = init_user_pages(*mem, current->mm, user_addr);
 		if (ret)
 			goto allocate_init_user_pages_failed;
 	}
@@ -1642,10 +1626,9 @@ int amdgpu_amdkfd_gpuvm_import_dmabuf(struct kgd_dev *kgd,
 
 	INIT_LIST_HEAD(&(*mem)->bo_va_list);
 	mutex_init(&(*mem)->lock);
-	(*mem)->alloc_flags =
-		((bo->preferred_domains & AMDGPU_GEM_DOMAIN_VRAM) ?
-		 ALLOC_MEM_FLAGS_VRAM : ALLOC_MEM_FLAGS_GTT) |
-		ALLOC_MEM_FLAGS_WRITABLE | ALLOC_MEM_FLAGS_EXECUTABLE;
+	(*mem)->mapping_flags =
+		AMDGPU_VM_PAGE_READABLE | AMDGPU_VM_PAGE_WRITEABLE |
+		AMDGPU_VM_PAGE_EXECUTABLE | AMDGPU_VM_MTYPE_NC;
 
 	(*mem)->bo = amdgpu_bo_ref(bo);
 	(*mem)->va = va;
@@ -1674,10 +1657,10 @@ int amdgpu_amdkfd_evict_userptr(struct kgd_mem *mem,
 				struct mm_struct *mm)
 {
 	struct amdkfd_process_info *process_info = mem->process_info;
-	int evicted_bos;
+	int invalid, evicted_bos;
 	int r = 0;
 
-	atomic_inc(&mem->invalid);
+	invalid = atomic_inc_return(&mem->invalid);
 	evicted_bos = atomic_inc_return(&process_info->evicted_bos);
 	if (evicted_bos == 1) {
 		/* First eviction, stop the queues */
@@ -1756,10 +1739,6 @@ static int update_invalid_user_pages(struct amdkfd_process_info *process_info,
 			return ret;
 		}
 
-		/*
-		 * FIXME: Cannot ignore the return code, must hold
-		 * notifier_lock
-		 */
 		amdgpu_ttm_tt_get_user_pages_done(bo->tbo.ttm);
 
 		/* Mark the BO as valid unless it was invalidated
@@ -1818,7 +1797,8 @@ static int validate_invalid_user_pages(struct amdkfd_process_info *process_info)
 	}
 
 	/* Reserve all BOs and page tables for validation */
-	ret = ttm_eu_reserve_buffers(&ticket, &resv_list, false, &duplicates);
+	ret = ttm_eu_reserve_buffers(&ticket, &resv_list, false, &duplicates,
+				     true);
 	WARN(!list_empty(&duplicates), "Duplicates should be empty");
 	if (ret)
 		goto out_free;
@@ -2016,7 +1996,7 @@ int amdgpu_amdkfd_gpuvm_restore_process_bos(void *info, struct dma_fence **ef)
 	}
 
 	ret = ttm_eu_reserve_buffers(&ctx.ticket, &ctx.list,
-				     false, &duplicate_save);
+				     false, &duplicate_save, true);
 	if (ret) {
 		pr_debug("Memory eviction: TTM Reserve Failed. Try again\n");
 		goto ttm_reserve_fail;
@@ -2048,7 +2028,7 @@ int amdgpu_amdkfd_gpuvm_restore_process_bos(void *info, struct dma_fence **ef)
 			pr_debug("Memory eviction: Validate BOs failed. Try again\n");
 			goto validate_map_fail;
 		}
-		ret = amdgpu_sync_fence(&sync_obj, bo->tbo.moving, false);
+		ret = amdgpu_sync_fence(NULL, &sync_obj, bo->tbo.moving, false);
 		if (ret) {
 			pr_debug("Memory eviction: Sync BO fence failed. Try again\n");
 			goto validate_map_fail;
@@ -2129,7 +2109,6 @@ int amdgpu_amdkfd_add_gws_to_process(void *info, void *gws, struct kgd_mem **mem
 		return -ENOMEM;
 
 	mutex_init(&(*mem)->lock);
-	INIT_LIST_HEAD(&(*mem)->bo_va_list);
 	(*mem)->bo = amdgpu_bo_ref(gws_bo);
 	(*mem)->domain = AMDGPU_GEM_DOMAIN_GWS;
 	(*mem)->process_info = process_info;

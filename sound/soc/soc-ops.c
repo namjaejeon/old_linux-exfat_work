@@ -592,16 +592,23 @@ EXPORT_SYMBOL_GPL(snd_soc_get_volsw_range);
 int snd_soc_limit_volume(struct snd_soc_card *card,
 	const char *name, int max)
 {
+	struct snd_card *snd_card = card->snd_card;
 	struct snd_kcontrol *kctl;
 	struct soc_mixer_control *mc;
+	int found = 0;
 	int ret = -EINVAL;
 
 	/* Sanity check for name and max */
 	if (unlikely(!name || max <= 0))
 		return -EINVAL;
 
-	kctl = snd_soc_card_get_kcontrol(card, name);
-	if (kctl) {
+	list_for_each_entry(kctl, &snd_card->controls, list) {
+		if (!strncmp(kctl->id.name, name, sizeof(kctl->id.name))) {
+			found = 1;
+			break;
+		}
+	}
+	if (found) {
 		mc = (struct soc_mixer_control *)kctl->private_value;
 		if (max <= mc->max) {
 			mc->platform_max = max;

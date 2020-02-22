@@ -86,7 +86,7 @@ struct pca954x {
 
 	u8 last_chan;		/* last register value */
 	/* MUX_IDLE_AS_IS, MUX_IDLE_DISCONNECT or >= 0 for channel */
-	s32 idle_state;
+	s8 idle_state;
 
 	struct i2c_client *client;
 
@@ -229,23 +229,20 @@ static int pca954x_reg_write(struct i2c_adapter *adap,
 				I2C_SMBUS_BYTE, &dummy);
 }
 
-static u8 pca954x_regval(struct pca954x *data, u8 chan)
-{
-	/* We make switches look like muxes, not sure how to be smarter. */
-	if (data->chip->muxtype == pca954x_ismux)
-		return chan | data->chip->enable;
-	else
-		return 1 << chan;
-}
-
 static int pca954x_select_chan(struct i2c_mux_core *muxc, u32 chan)
 {
 	struct pca954x *data = i2c_mux_priv(muxc);
 	struct i2c_client *client = data->client;
+	const struct chip_desc *chip = data->chip;
 	u8 regval;
 	int ret = 0;
 
-	regval = pca954x_regval(data, chan);
+	/* we make switches look like muxes, not sure how to be smarter */
+	if (chip->muxtype == pca954x_ismux)
+		regval = chan | chip->enable;
+	else
+		regval = 1 << chan;
+
 	/* Only select the channel if its different from the last channel */
 	if (data->last_chan != regval) {
 		ret = pca954x_reg_write(muxc->parent, client, regval);
@@ -259,7 +256,7 @@ static int pca954x_deselect_mux(struct i2c_mux_core *muxc, u32 chan)
 {
 	struct pca954x *data = i2c_mux_priv(muxc);
 	struct i2c_client *client = data->client;
-	s32 idle_state;
+	s8 idle_state;
 
 	idle_state = READ_ONCE(data->idle_state);
 	if (idle_state >= 0)
@@ -405,22 +402,6 @@ static void pca954x_cleanup(struct i2c_mux_core *muxc)
 	i2c_mux_del_adapters(muxc);
 }
 
-static int pca954x_init(struct i2c_client *client, struct pca954x *data)
-{
-	int ret;
-
-	if (data->idle_state >= 0)
-		data->last_chan = pca954x_regval(data, data->idle_state);
-	else
-		data->last_chan = 0; /* Disconnect multiplexer */
-
-	ret = i2c_smbus_write_byte(client, data->last_chan);
-	if (ret < 0)
-		data->last_chan = 0;
-
-	return ret;
-}
-
 /*
  * I2C init/probing/exit functions
  */
@@ -430,6 +411,7 @@ static int pca954x_probe(struct i2c_client *client,
 	struct i2c_adapter *adap = client->adapter;
 	struct device *dev = &client->dev;
 	struct device_node *np = dev->of_node;
+	bool idle_disconnect_dt;
 	struct gpio_desc *gpio;
 	struct i2c_mux_core *muxc;
 	struct pca954x *data;
@@ -480,23 +462,22 @@ static int pca954x_probe(struct i2c_client *client,
 		}
 	}
 
-	data->idle_state = MUX_IDLE_AS_IS;
-	if (of_property_read_u32(np, "idle-state", &data->idle_state)) {
-		if (np && of_property_read_bool(np, "i2c-mux-idle-disconnect"))
-			data->idle_state = MUX_IDLE_DISCONNECT;
-	}
-
-	/*
-	 * Write the mux register at addr to verify
+	/* Write the mux register at addr to verify
 	 * that the mux is in fact present. This also
-	 * initializes the mux to a channel
-	 * or disconnected state.
+	 * initializes the mux to disconnected state.
 	 */
-	ret = pca954x_init(client, data);
-	if (ret < 0) {
+	if (i2c_smbus_write_byte(client, 0) < 0) {
 		dev_warn(dev, "probe failed\n");
 		return -ENODEV;
 	}
+
+	data->last_chan = 0;		   /* force the first selection */
+	data->idle_state = MUX_IDLE_AS_IS;
+
+	idle_disconnect_dt = np &&
+		of_property_read_bool(np, "i2c-mux-idle-disconnect");
+	if (idle_disconnect_dt)
+		data->idle_state = MUX_IDLE_DISCONNECT;
 
 	ret = pca954x_irq_setup(muxc);
 	if (ret)
@@ -549,13 +530,9 @@ static int pca954x_resume(struct device *dev)
 	struct i2c_client *client = to_i2c_client(dev);
 	struct i2c_mux_core *muxc = i2c_get_clientdata(client);
 	struct pca954x *data = i2c_mux_priv(muxc);
-	int ret;
 
-	ret = pca954x_init(client, data);
-	if (ret < 0)
-		dev_err(&client->dev, "failed to verify mux presence\n");
-
-	return ret;
+	data->last_chan = 0;
+	return i2c_smbus_write_byte(client, 0);
 }
 #endif
 

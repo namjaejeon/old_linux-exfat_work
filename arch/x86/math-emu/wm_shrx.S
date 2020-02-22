@@ -33,7 +33,7 @@
  |   Results returned in the 64 bit arg and eax.                             |
  +---------------------------------------------------------------------------*/
 
-SYM_FUNC_START(FPU_shrx)
+ENTRY(FPU_shrx)
 	push	%ebp
 	movl	%esp,%ebp
 	pushl	%esi
@@ -93,7 +93,7 @@ L_more_than_95:
 	popl	%esi
 	leave
 	ret
-SYM_FUNC_END(FPU_shrx)
+ENDPROC(FPU_shrx)
 
 
 /*---------------------------------------------------------------------------+
@@ -112,7 +112,7 @@ SYM_FUNC_END(FPU_shrx)
  |   part which has been shifted out of the arg.                             |
  |   Results returned in the 64 bit arg and eax.                             |
  +---------------------------------------------------------------------------*/
-SYM_FUNC_START(FPU_shrxs)
+ENTRY(FPU_shrxs)
 	push	%ebp
 	movl	%esp,%ebp
 	pushl	%esi
@@ -204,4 +204,4 @@ Ls_more_than_95:
 	popl	%esi
 	leave
 	ret
-SYM_FUNC_END(FPU_shrxs)
+ENDPROC(FPU_shrxs)

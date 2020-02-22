@@ -37,7 +37,7 @@ static void snd_gf1_mem_proc_free(struct snd_info_entry *entry)
 	kfree(priv);
 }
 
-static const struct snd_info_entry_ops snd_gf1_mem_proc_ops = {
+static struct snd_info_entry_ops snd_gf1_mem_proc_ops = {
 	.read = snd_gf1_mem_proc_dump,
 };
 

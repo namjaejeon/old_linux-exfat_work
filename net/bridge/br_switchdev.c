@@ -129,19 +129,15 @@ br_switchdev_fdb_notify(const struct net_bridge_fdb_entry *fdb, int type)
 		br_switchdev_fdb_call_notifiers(false, fdb->key.addr.addr,
 						fdb->key.vlan_id,
 						fdb->dst->dev,
-						test_bit(BR_FDB_ADDED_BY_USER,
-							 &fdb->flags),
-						test_bit(BR_FDB_OFFLOADED,
-							 &fdb->flags));
+						fdb->added_by_user,
+						fdb->offloaded);
 		break;
 	case RTM_NEWNEIGH:
 		br_switchdev_fdb_call_notifiers(true, fdb->key.addr.addr,
 						fdb->key.vlan_id,
 						fdb->dst->dev,
-						test_bit(BR_FDB_ADDED_BY_USER,
-							 &fdb->flags),
-						test_bit(BR_FDB_OFFLOADED,
-							 &fdb->flags));
+						fdb->added_by_user,
+						fdb->offloaded);
 		break;
 	}
 }

@@ -145,7 +145,6 @@ struct perf_dom_info {
 };
 
 struct scmi_perf_info {
-	u32 version;
 	int num_domains;
 	bool power_scale_mw;
 	u64 stats_addr;
@@ -324,7 +323,7 @@ static void scmi_perf_fc_ring_db(struct scmi_fc_db_info *db)
 
 		if (db->mask)
 			val = ioread64_hi_lo(db->addr) & db->mask;
-		iowrite64_hi_lo(db->set | val, db->addr);
+		iowrite64_hi_lo(db->set, db->addr);
 	}
 #endif
 }
@@ -737,7 +736,6 @@ static int scmi_perf_protocol_init(struct scmi_handle *handle)
 			scmi_perf_domain_init_fc(handle, domain, &dom->fc_info);
 	}
 
-	pinfo->version = version;
 	handle->perf_ops = &perf_ops;
 	handle->perf_priv = pinfo;
 

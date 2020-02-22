@@ -63,8 +63,7 @@ static const struct snd_pcm_hardware dummy_dma_hardware = {
 	.periods_max		= 128,
 };
 
-static int dummy_dma_open(struct snd_soc_component *component,
-			  struct snd_pcm_substream *substream)
+static int dummy_dma_open(struct snd_pcm_substream *substream)
 {
 	struct snd_soc_pcm_runtime *rtd = substream->private_data;
 
@@ -75,8 +74,13 @@ static int dummy_dma_open(struct snd_soc_component *component,
 	return 0;
 }
 
-static const struct snd_soc_component_driver dummy_platform = {
+static const struct snd_pcm_ops snd_dummy_dma_ops = {
 	.open		= dummy_dma_open,
+	.ioctl		= snd_pcm_lib_ioctl,
+};
+
+static const struct snd_soc_component_driver dummy_platform = {
+	.ops = &snd_dummy_dma_ops,
 };
 
 static const struct snd_soc_component_driver dummy_codec = {

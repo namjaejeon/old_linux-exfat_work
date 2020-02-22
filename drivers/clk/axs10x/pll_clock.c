@@ -221,6 +221,7 @@ static int axs10x_pll_clk_probe(struct platform_device *pdev)
 	struct device *dev = &pdev->dev;
 	const char *parent_name;
 	struct axs10x_pll_clk *pll_clk;
+	struct resource *mem;
 	struct clk_init_data init = { };
 	int ret;
 
@@ -228,11 +229,13 @@ static int axs10x_pll_clk_probe(struct platform_device *pdev)
 	if (!pll_clk)
 		return -ENOMEM;
 
-	pll_clk->base = devm_platform_ioremap_resource(pdev, 0);
+	mem = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	pll_clk->base = devm_ioremap_resource(dev, mem);
 	if (IS_ERR(pll_clk->base))
 		return PTR_ERR(pll_clk->base);
 
-	pll_clk->lock = devm_platform_ioremap_resource(pdev, 1);
+	mem = platform_get_resource(pdev, IORESOURCE_MEM, 1);
+	pll_clk->lock = devm_ioremap_resource(dev, mem);
 	if (IS_ERR(pll_clk->lock))
 		return PTR_ERR(pll_clk->lock);
 

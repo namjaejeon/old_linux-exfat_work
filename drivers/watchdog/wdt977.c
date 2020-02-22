@@ -422,7 +422,6 @@ static const struct file_operations wdt977_fops = {
 	.llseek		= no_llseek,
 	.write		= wdt977_write,
 	.unlocked_ioctl	= wdt977_ioctl,
-	.compat_ioctl	= compat_ptr_ioctl,
 	.open		= wdt977_open,
 	.release	= wdt977_release,
 };

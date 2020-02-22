@@ -1048,7 +1048,7 @@ static ssize_t broadsheetfb_write(struct fb_info *info, const char __user *buf,
 	return (err) ? err : count;
 }
 
-static const struct fb_ops broadsheetfb_ops = {
+static struct fb_ops broadsheetfb_ops = {
 	.owner		= THIS_MODULE,
 	.fb_read        = fb_sys_read,
 	.fb_write	= broadsheetfb_write,

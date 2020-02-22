@@ -1495,20 +1495,20 @@ static void
 nvmet_fc_ls_disconnect(struct nvmet_fc_tgtport *tgtport,
 			struct nvmet_fc_ls_iod *iod)
 {
-	struct fcnvme_ls_disconnect_assoc_rqst *rqst =
-			(struct fcnvme_ls_disconnect_assoc_rqst *)iod->rqstbuf;
-	struct fcnvme_ls_disconnect_assoc_acc *acc =
-			(struct fcnvme_ls_disconnect_assoc_acc *)iod->rspbuf;
+	struct fcnvme_ls_disconnect_rqst *rqst =
+			(struct fcnvme_ls_disconnect_rqst *)iod->rqstbuf;
+	struct fcnvme_ls_disconnect_acc *acc =
+			(struct fcnvme_ls_disconnect_acc *)iod->rspbuf;
 	struct nvmet_fc_tgt_assoc *assoc;
 	int ret = 0;
 
 	memset(acc, 0, sizeof(*acc));
 
-	if (iod->rqstdatalen < sizeof(struct fcnvme_ls_disconnect_assoc_rqst))
+	if (iod->rqstdatalen < sizeof(struct fcnvme_ls_disconnect_rqst))
 		ret = VERR_DISCONN_LEN;
 	else if (rqst->desc_list_len !=
 			fcnvme_lsdesc_len(
-				sizeof(struct fcnvme_ls_disconnect_assoc_rqst)))
+				sizeof(struct fcnvme_ls_disconnect_rqst)))
 		ret = VERR_DISCONN_RQST_LEN;
 	else if (rqst->associd.desc_tag != cpu_to_be32(FCNVME_LSDESC_ASSOC_ID))
 		ret = VERR_ASSOC_ID;
@@ -1523,11 +1523,8 @@ nvmet_fc_ls_disconnect(struct nvmet_fc_tgtport *tgtport,
 			fcnvme_lsdesc_len(
 				sizeof(struct fcnvme_lsdesc_disconn_cmd)))
 		ret = VERR_DISCONN_CMD_LEN;
-	/*
-	 * As the standard changed on the LS, check if old format and scope
-	 * something other than Association (e.g. 0).
-	 */
-	else if (rqst->discon_cmd.rsvd8[0])
+	else if ((rqst->discon_cmd.scope != FCNVME_DISCONN_ASSOCIATION) &&
+			(rqst->discon_cmd.scope != FCNVME_DISCONN_CONNECTION))
 		ret = VERR_DISCONN_SCOPE;
 	else {
 		/* match an active association */
@@ -1559,8 +1556,8 @@ nvmet_fc_ls_disconnect(struct nvmet_fc_tgtport *tgtport,
 
 	nvmet_fc_format_rsp_hdr(acc, FCNVME_LS_ACC,
 			fcnvme_lsdesc_len(
-				sizeof(struct fcnvme_ls_disconnect_assoc_acc)),
-			FCNVME_LS_DISCONNECT_ASSOC);
+				sizeof(struct fcnvme_ls_disconnect_acc)),
+			FCNVME_LS_DISCONNECT);
 
 	/* release get taken in nvmet_fc_find_target_assoc */
 	nvmet_fc_tgt_a_put(iod->assoc);
@@ -1635,7 +1632,7 @@ nvmet_fc_handle_ls_rqst(struct nvmet_fc_tgtport *tgtport,
 		/* Creates an IO Queue/Connection */
 		nvmet_fc_ls_create_connection(tgtport, iod);
 		break;
-	case FCNVME_LS_DISCONNECT_ASSOC:
+	case FCNVME_LS_DISCONNECT:
 		/* Terminate a Queue/Connection or the Association */
 		nvmet_fc_ls_disconnect(tgtport, iod);
 		break;
@@ -2018,7 +2015,7 @@ nvmet_fc_fod_op_done(struct nvmet_fc_fcp_iod *fod)
 		}
 
 		/* data transfer complete, resume with nvmet layer */
-		fod->req.execute(&fod->req);
+		nvmet_req_execute(&fod->req);
 		break;
 
 	case NVMET_FCOP_READDATA:
@@ -2234,7 +2231,7 @@ nvmet_fc_handle_fcp_rqst(struct nvmet_fc_tgtport *tgtport,
 	 * can invoke the nvmet_layer now. If read data, cmd completion will
 	 * push the data
 	 */
-	fod->req.execute(&fod->req);
+	nvmet_req_execute(&fod->req);
 	return;
 
 transport_error:
@@ -2302,7 +2299,7 @@ nvmet_fc_rcv_fcp_req(struct nvmet_fc_target_port *target_port,
 
 	/* validate iu, so the connection id can be used to find the queue */
 	if ((cmdiubuf_len != sizeof(*cmdiu)) ||
-			(cmdiu->format_id != NVME_CMD_FORMAT_ID) ||
+			(cmdiu->scsi_id != NVME_CMD_SCSI_ID) ||
 			(cmdiu->fc_id != NVME_CMD_FC_ID) ||
 			(be16_to_cpu(cmdiu->iu_len) != (sizeof(*cmdiu)/4)))
 		return -EIO;

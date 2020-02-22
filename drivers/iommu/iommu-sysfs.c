@@ -87,7 +87,6 @@ error:
 	put_device(iommu->dev);
 	return ret;
 }
-EXPORT_SYMBOL_GPL(iommu_device_sysfs_add);
 
 void iommu_device_sysfs_remove(struct iommu_device *iommu)
 {
@@ -95,8 +94,6 @@ void iommu_device_sysfs_remove(struct iommu_device *iommu)
 	device_unregister(iommu->dev);
 	iommu->dev = NULL;
 }
-EXPORT_SYMBOL_GPL(iommu_device_sysfs_remove);
-
 /*
  * IOMMU drivers can indicate a device is managed by a given IOMMU using
  * this interface.  A link to the device will be created in the "devices"
@@ -122,7 +119,6 @@ int iommu_device_link(struct iommu_device *iommu, struct device *link)
 
 	return ret;
 }
-EXPORT_SYMBOL_GPL(iommu_device_link);
 
 void iommu_device_unlink(struct iommu_device *iommu, struct device *link)
 {
@@ -132,4 +128,3 @@ void iommu_device_unlink(struct iommu_device *iommu, struct device *link)
 	sysfs_remove_link(&link->kobj, "iommu");
 	sysfs_remove_link_from_group(&iommu->dev->kobj, "devices", dev_name(link));
 }
-EXPORT_SYMBOL_GPL(iommu_device_unlink);

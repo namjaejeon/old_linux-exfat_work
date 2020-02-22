@@ -27,7 +27,5 @@ static inline int pci_get_legacy_ide_irq(struct pci_dev *dev, int channel)
 	return channel ? 15 : 14;
 }
 
-extern void pcibios_report_status(unsigned int status_mask, int warn);
-
 #endif /* __KERNEL__ */
 #endif

@@ -43,8 +43,7 @@ static const char *mv88e6060_get_name(struct mii_bus *bus, int sw_addr)
 }
 
 static enum dsa_tag_protocol mv88e6060_get_tag_protocol(struct dsa_switch *ds,
-							int port,
-							enum dsa_tag_protocol m)
+							int port)
 {
 	return DSA_TAG_PROTO_TRAILER;
 }
@@ -271,12 +270,10 @@ static int mv88e6060_probe(struct mdio_device *mdiodev)
 
 	dev_info(dev, "switch %s detected\n", name);
 
-	ds = devm_kzalloc(dev, sizeof(*ds), GFP_KERNEL);
+	ds = dsa_switch_alloc(dev, MV88E6060_PORTS);
 	if (!ds)
 		return -ENOMEM;
 
-	ds->dev = dev;
-	ds->num_ports = MV88E6060_PORTS;
 	ds->priv = priv;
 	ds->dev = dev;
 	ds->ops = &mv88e6060_switch_ops;

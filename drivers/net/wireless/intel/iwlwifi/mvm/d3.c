@@ -989,8 +989,6 @@ static int __iwl_mvm_suspend(struct ieee80211_hw *hw,
 
 	mutex_lock(&mvm->mutex);
 
-	set_bit(IWL_MVM_STATUS_IN_D3, &mvm->status);
-
 	vif = iwl_mvm_get_bss_vif(mvm);
 	if (IS_ERR_OR_NULL(vif)) {
 		ret = 1;
@@ -1085,8 +1083,6 @@ static int __iwl_mvm_suspend(struct ieee80211_hw *hw,
 				ieee80211_restart_hw(mvm->hw);
 			}
 		}
-
-		clear_bit(IWL_MVM_STATUS_IN_D3, &mvm->status);
 	}
  out_noreset:
 	mutex_unlock(&mvm->mutex);
@@ -1897,55 +1893,27 @@ static void iwl_mvm_d3_disconnect_iter(void *data, u8 *mac,
 		ieee80211_resume_disconnect(vif);
 }
 
-static bool iwl_mvm_rt_status(struct iwl_trans *trans, u32 base, u32 *err_id)
+static int iwl_mvm_check_rt_status(struct iwl_mvm *mvm,
+				   struct ieee80211_vif *vif)
 {
+	u32 base = mvm->trans->dbg.lmac_error_event_table[0];
 	struct error_table_start {
 		/* cf. struct iwl_error_event_table */
 		u32 valid;
-		__le32 err_id;
+		u32 error_id;
 	} err_info;
 
-	if (!base)
-		return false;
-
-	iwl_trans_read_mem_bytes(trans, base,
+	iwl_trans_read_mem_bytes(mvm->trans, base,
 				 &err_info, sizeof(err_info));
-	if (err_info.valid && err_id)
-		*err_id = le32_to_cpu(err_info.err_id);
 
-	return !!err_info.valid;
-}
-
-static bool iwl_mvm_check_rt_status(struct iwl_mvm *mvm,
-				   struct ieee80211_vif *vif)
-{
-	u32 err_id;
-
-	/* check for lmac1 error */
-	if (iwl_mvm_rt_status(mvm->trans,
-			      mvm->trans->dbg.lmac_error_event_table[0],
-			      &err_id)) {
-		if (err_id == RF_KILL_INDICATOR_FOR_WOWLAN) {
-			struct cfg80211_wowlan_wakeup wakeup = {
-				.rfkill_release = true,
-			};
-			ieee80211_report_wowlan_wakeup(vif, &wakeup,
-						       GFP_KERNEL);
-		}
-		return true;
+	if (err_info.valid &&
+	    err_info.error_id == RF_KILL_INDICATOR_FOR_WOWLAN) {
+		struct cfg80211_wowlan_wakeup wakeup = {
+			.rfkill_release = true,
+		};
+		ieee80211_report_wowlan_wakeup(vif, &wakeup, GFP_KERNEL);
 	}
-
-	/* check if we have lmac2 set and check for error */
-	if (iwl_mvm_rt_status(mvm->trans,
-			      mvm->trans->dbg.lmac_error_event_table[1], NULL))
-		return true;
-
-	/* check for umac error */
-	if (iwl_mvm_rt_status(mvm->trans,
-			      mvm->trans->dbg.umac_error_event_table, NULL))
-		return true;
-
-	return false;
+	return err_info.valid;
 }
 
 static int __iwl_mvm_resume(struct iwl_mvm *mvm, bool test)
@@ -1961,8 +1929,6 @@ static int __iwl_mvm_resume(struct iwl_mvm *mvm, bool test)
 
 	mutex_lock(&mvm->mutex);
 
-	clear_bit(IWL_MVM_STATUS_IN_D3, &mvm->status);
-
 	/* get the BSS vif pointer again */
 	vif = iwl_mvm_get_bss_vif(mvm);
 	if (IS_ERR_OR_NULL(vif))
@@ -1973,8 +1939,6 @@ static int __iwl_mvm_resume(struct iwl_mvm *mvm, bool test)
 	if (iwl_mvm_check_rt_status(mvm, vif)) {
 		set_bit(STATUS_FW_ERROR, &mvm->trans->status);
 		iwl_mvm_dump_nic_error_log(mvm);
-		iwl_dbg_tlv_time_point(&mvm->fwrt,
-				       IWL_FW_INI_TIME_POINT_FW_ASSERT, NULL);
 		iwl_fw_dbg_collect_desc(&mvm->fwrt, &iwl_dump_desc_assert,
 					false, 0);
 		ret = 1;
@@ -1991,38 +1955,11 @@ static int __iwl_mvm_resume(struct iwl_mvm *mvm, bool test)
 	}
 
 	if (d0i3_first) {
-		struct iwl_host_cmd cmd = {
-			.id = D0I3_END_CMD,
-			.flags = CMD_WANT_SKB,
-		};
-		int len;
-
-		ret = iwl_mvm_send_cmd(mvm, &cmd);
+		ret = iwl_mvm_send_cmd_pdu(mvm, D0I3_END_CMD, 0, 0, NULL);
 		if (ret < 0) {
 			IWL_ERR(mvm, "Failed to send D0I3_END_CMD first (%d)\n",
 				ret);
 			goto err;
-		}
-		switch (mvm->cmd_ver.d0i3_resp) {
-		case 0:
-			break;
-		case 1:
-			len = iwl_rx_packet_payload_len(cmd.resp_pkt);
-			if (len != sizeof(u32)) {
-				IWL_ERR(mvm,
-					"Error with D0I3_END_CMD response size (%d)\n",
-					len);
-				goto err;
-			}
-			if (IWL_D0I3_RESET_REQUIRE &
-			    le32_to_cpu(*(__le32 *)cmd.resp_pkt->data)) {
-				iwl_write32(mvm->trans, CSR_RESET,
-					    CSR_RESET_REG_FLAG_FORCE_NMI);
-				iwl_free_resp(&cmd);
-			}
-			break;
-		default:
-			WARN_ON(1);
 		}
 	}
 

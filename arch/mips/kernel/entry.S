@@ -19,7 +19,7 @@
 #include <asm/thread_info.h>
 #include <asm/war.h>
 
-#ifndef CONFIG_PREEMPTION
+#ifndef CONFIG_PREEMPT
 #define resume_kernel	restore_all
 #else
 #define __ret_from_irq	ret_from_exception
@@ -27,7 +27,7 @@
 
 	.text
 	.align	5
-#ifndef CONFIG_PREEMPTION
+#ifndef CONFIG_PREEMPT
 FEXPORT(ret_from_exception)
 	local_irq_disable			# preempt stop
 	b	__ret_from_irq
@@ -53,7 +53,7 @@ resume_userspace:
 	bnez	t0, work_pending
 	j	restore_all
 
-#ifdef CONFIG_PREEMPTION
+#ifdef CONFIG_PREEMPT
 resume_kernel:
 	local_irq_disable
 	lw	t0, TI_PRE_COUNT($28)

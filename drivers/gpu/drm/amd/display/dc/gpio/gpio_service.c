@@ -169,6 +169,7 @@ void dal_gpio_destroy_generic_mux(
 		return;
 	}
 
+	dal_gpio_close(*mux);
 	dal_gpio_destroy(mux);
 	kfree(*mux);
 
@@ -459,6 +460,7 @@ void dal_gpio_destroy_irq(
 		return;
 	}
 
+	dal_gpio_close(*irq);
 	dal_gpio_destroy(irq);
 	kfree(*irq);
 

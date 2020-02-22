@@ -6,7 +6,6 @@
 #include <linux/bitfield.h>
 #include <linux/kernel.h>
 #include <linux/init.h>
-#include <linux/pci.h>
 #include <linux/of_address.h>
 #include <linux/of_pci.h>
 #include <linux/pci-acpi.h>

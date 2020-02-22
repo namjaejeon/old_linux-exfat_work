@@ -5,11 +5,12 @@
 
 #include <linux/reboot.h>
 #include <linux/pm.h>
+#include <asm/sbi.h>
 
 static void default_power_off(void)
 {
-	while (1)
-		wait_for_interrupt();
+	sbi_shutdown();
+	while (1);
 }
 
 void (*pm_power_off)(void) = default_power_off;

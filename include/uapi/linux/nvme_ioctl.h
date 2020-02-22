@@ -63,7 +63,6 @@ struct nvme_passthru_cmd64 {
 	__u32	cdw14;
 	__u32	cdw15;
 	__u32	timeout_ms;
-	__u32   rsvd2;
 	__u64	result;
 };
 

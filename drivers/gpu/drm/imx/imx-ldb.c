@@ -20,7 +20,6 @@
 
 #include <drm/drm_atomic.h>
 #include <drm/drm_atomic_helper.h>
-#include <drm/drm_bridge.h>
 #include <drm/drm_fb_helper.h>
 #include <drm/drm_of.h>
 #include <drm/drm_panel.h>
@@ -127,7 +126,7 @@ static int imx_ldb_connector_get_modes(struct drm_connector *connector)
 	struct imx_ldb_channel *imx_ldb_ch = con_to_imx_ldb_ch(connector);
 	int num_modes;
 
-	num_modes = drm_panel_get_modes(imx_ldb_ch->panel, connector);
+	num_modes = drm_panel_get_modes(imx_ldb_ch->panel);
 	if (num_modes > 0)
 		return num_modes;
 

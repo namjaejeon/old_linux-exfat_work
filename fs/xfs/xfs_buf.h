@@ -192,40 +192,37 @@ struct xfs_buf *xfs_buf_incore(struct xfs_buftarg *target,
 			   xfs_daddr_t blkno, size_t numblks,
 			   xfs_buf_flags_t flags);
 
-int xfs_buf_get_map(struct xfs_buftarg *target, struct xfs_buf_map *map,
-		int nmaps, xfs_buf_flags_t flags, struct xfs_buf **bpp);
-int xfs_buf_read_map(struct xfs_buftarg *target, struct xfs_buf_map *map,
-		int nmaps, xfs_buf_flags_t flags, struct xfs_buf **bpp,
-		const struct xfs_buf_ops *ops, xfs_failaddr_t fa);
+struct xfs_buf *xfs_buf_get_map(struct xfs_buftarg *target,
+			       struct xfs_buf_map *map, int nmaps,
+			       xfs_buf_flags_t flags);
+struct xfs_buf *xfs_buf_read_map(struct xfs_buftarg *target,
+			       struct xfs_buf_map *map, int nmaps,
+			       xfs_buf_flags_t flags,
+			       const struct xfs_buf_ops *ops);
 void xfs_buf_readahead_map(struct xfs_buftarg *target,
 			       struct xfs_buf_map *map, int nmaps,
 			       const struct xfs_buf_ops *ops);
 
-static inline int
+static inline struct xfs_buf *
 xfs_buf_get(
 	struct xfs_buftarg	*target,
 	xfs_daddr_t		blkno,
-	size_t			numblks,
-	struct xfs_buf		**bpp)
+	size_t			numblks)
 {
 	DEFINE_SINGLE_BUF_MAP(map, blkno, numblks);
-
-	return xfs_buf_get_map(target, &map, 1, 0, bpp);
+	return xfs_buf_get_map(target, &map, 1, 0);
 }
 
-static inline int
+static inline struct xfs_buf *
 xfs_buf_read(
 	struct xfs_buftarg	*target,
 	xfs_daddr_t		blkno,
 	size_t			numblks,
 	xfs_buf_flags_t		flags,
-	struct xfs_buf		**bpp,
 	const struct xfs_buf_ops *ops)
 {
 	DEFINE_SINGLE_BUF_MAP(map, blkno, numblks);
-
-	return xfs_buf_read_map(target, &map, 1, flags, bpp, ops,
-			__builtin_return_address(0));
+	return xfs_buf_read_map(target, &map, 1, flags, ops);
 }
 
 static inline void
@@ -239,14 +236,15 @@ xfs_buf_readahead(
 	return xfs_buf_readahead_map(target, &map, 1, ops);
 }
 
-int xfs_buf_get_uncached(struct xfs_buftarg *target, size_t numblks, int flags,
-		struct xfs_buf **bpp);
+struct xfs_buf *xfs_buf_get_uncached(struct xfs_buftarg *target, size_t numblks,
+				int flags);
 int xfs_buf_read_uncached(struct xfs_buftarg *target, xfs_daddr_t daddr,
 			  size_t numblks, int flags, struct xfs_buf **bpp,
 			  const struct xfs_buf_ops *ops);
 void xfs_buf_hold(struct xfs_buf *bp);
 
 /* Releasing Buffers */
+extern void xfs_buf_free(xfs_buf_t *);
 extern void xfs_buf_rele(xfs_buf_t *);
 
 /* Locking and Unlocking Buffers */
@@ -262,7 +260,7 @@ extern void xfs_buf_ioend(struct xfs_buf *bp);
 extern void __xfs_buf_ioerror(struct xfs_buf *bp, int error,
 		xfs_failaddr_t failaddr);
 #define xfs_buf_ioerror(bp, err) __xfs_buf_ioerror((bp), (err), __this_address)
-extern void xfs_buf_ioerror_alert(struct xfs_buf *bp, xfs_failaddr_t fa);
+extern void xfs_buf_ioerror_alert(struct xfs_buf *, const char *func);
 
 extern int __xfs_buf_submit(struct xfs_buf *bp, bool);
 static inline int xfs_buf_submit(struct xfs_buf *bp)

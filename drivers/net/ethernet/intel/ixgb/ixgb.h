@@ -42,6 +42,7 @@
 
 #define BAR_0		0
 #define BAR_1		1
+#define BAR_5		5
 
 struct ixgb_adapter;
 #include "ixgb_hw.h"

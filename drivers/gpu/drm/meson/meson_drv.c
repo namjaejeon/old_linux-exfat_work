@@ -28,12 +28,10 @@
 #include "meson_drv.h"
 #include "meson_overlay.h"
 #include "meson_plane.h"
-#include "meson_osd_afbcd.h"
 #include "meson_registers.h"
 #include "meson_venc_cvbs.h"
 #include "meson_viu.h"
 #include "meson_vpp.h"
-#include "meson_rdma.h"
 
 #define DRIVER_NAME "meson"
 #define DRIVER_DESC "Amlogic Meson DRM driver"
@@ -186,7 +184,6 @@ static void meson_remove_framebuffers(void)
 static int meson_drv_bind_master(struct device *dev, bool has_components)
 {
 	struct platform_device *pdev = to_platform_device(dev);
-	const struct meson_drm_match_data *match;
 	struct meson_drm *priv;
 	struct drm_device *drm;
 	struct resource *res;
@@ -198,10 +195,6 @@ static int meson_drv_bind_master(struct device *dev, bool has_components)
 		dev_err(dev, "No output connector available\n");
 		return -ENODEV;
 	}
-
-	match = of_device_get_match_data(dev);
-	if (!match)
-		return -ENODEV;
 
 	drm = drm_dev_alloc(&meson_driver, dev);
 	if (IS_ERR(drm))
@@ -215,8 +208,8 @@ static int meson_drv_bind_master(struct device *dev, bool has_components)
 	drm->dev_private = priv;
 	priv->drm = drm;
 	priv->dev = dev;
-	priv->compat = match->compat;
-	priv->afbcd.ops = match->afbcd_ops;
+
+	priv->compat = (enum vpu_compatible)of_device_get_match_data(priv->dev);
 
 	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "vpu");
 	regs = devm_ioremap_resource(dev, res);
@@ -296,11 +289,6 @@ static int meson_drv_bind_master(struct device *dev, bool has_components)
 	meson_venc_init(priv);
 	meson_vpp_init(priv);
 	meson_viu_init(priv);
-	if (priv->afbcd.ops) {
-		ret = priv->afbcd.ops->init(priv);
-		if (ret)
-			return ret;
-	}
 
 	/* Encoder Initialization */
 
@@ -371,51 +359,18 @@ static void meson_drv_unbind(struct device *dev)
 		meson_canvas_free(priv->canvas, priv->canvas_id_vd1_2);
 	}
 
-	if (priv->afbcd.ops) {
-		priv->afbcd.ops->reset(priv);
-		meson_rdma_free(priv);
-	}
-
 	drm_dev_unregister(drm);
 	drm_irq_uninstall(drm);
 	drm_kms_helper_poll_fini(drm);
 	drm_mode_config_cleanup(drm);
 	drm_dev_put(drm);
+
 }
 
 static const struct component_master_ops meson_drv_master_ops = {
 	.bind	= meson_drv_bind,
 	.unbind	= meson_drv_unbind,
 };
-
-static int __maybe_unused meson_drv_pm_suspend(struct device *dev)
-{
-	struct meson_drm *priv = dev_get_drvdata(dev);
-
-	if (!priv)
-		return 0;
-
-	return drm_mode_config_helper_suspend(priv->drm);
-}
-
-static int __maybe_unused meson_drv_pm_resume(struct device *dev)
-{
-	struct meson_drm *priv = dev_get_drvdata(dev);
-
-	if (!priv)
-		return 0;
-
-	meson_vpu_init(priv);
-	meson_venc_init(priv);
-	meson_vpp_init(priv);
-	meson_viu_init(priv);
-	if (priv->afbcd.ops)
-		priv->afbcd.ops->init(priv);
-
-	drm_mode_config_helper_resume(priv->drm);
-
-	return 0;
-}
 
 static int compare_of(struct device *dev, void *data)
 {
@@ -499,47 +454,24 @@ static int meson_drv_probe(struct platform_device *pdev)
 	return 0;
 };
 
-static struct meson_drm_match_data meson_drm_gxbb_data = {
-	.compat = VPU_COMPATIBLE_GXBB,
-};
-
-static struct meson_drm_match_data meson_drm_gxl_data = {
-	.compat = VPU_COMPATIBLE_GXL,
-};
-
-static struct meson_drm_match_data meson_drm_gxm_data = {
-	.compat = VPU_COMPATIBLE_GXM,
-	.afbcd_ops = &meson_afbcd_gxm_ops,
-};
-
-static struct meson_drm_match_data meson_drm_g12a_data = {
-	.compat = VPU_COMPATIBLE_G12A,
-	.afbcd_ops = &meson_afbcd_g12a_ops,
-};
-
 static const struct of_device_id dt_match[] = {
 	{ .compatible = "amlogic,meson-gxbb-vpu",
-	  .data       = (void *)&meson_drm_gxbb_data },
+	  .data       = (void *)VPU_COMPATIBLE_GXBB },
 	{ .compatible = "amlogic,meson-gxl-vpu",
-	  .data       = (void *)&meson_drm_gxl_data },
+	  .data       = (void *)VPU_COMPATIBLE_GXL },
 	{ .compatible = "amlogic,meson-gxm-vpu",
-	  .data       = (void *)&meson_drm_gxm_data },
+	  .data       = (void *)VPU_COMPATIBLE_GXM },
 	{ .compatible = "amlogic,meson-g12a-vpu",
-	  .data       = (void *)&meson_drm_g12a_data },
+	  .data       = (void *)VPU_COMPATIBLE_G12A },
 	{}
 };
 MODULE_DEVICE_TABLE(of, dt_match);
-
-static const struct dev_pm_ops meson_drv_pm_ops = {
-	SET_SYSTEM_SLEEP_PM_OPS(meson_drv_pm_suspend, meson_drv_pm_resume)
-};
 
 static struct platform_driver meson_drm_platform_driver = {
 	.probe      = meson_drv_probe,
 	.driver     = {
 		.name	= "meson-drm",
 		.of_match_table = dt_match,
-		.pm = &meson_drv_pm_ops,
 	},
 };
 

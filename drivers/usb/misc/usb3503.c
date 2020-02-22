@@ -7,10 +7,11 @@
 
 #include <linux/clk.h>
 #include <linux/i2c.h>
-#include <linux/gpio/consumer.h>
+#include <linux/gpio.h>
 #include <linux/delay.h>
 #include <linux/slab.h>
 #include <linux/module.h>
+#include <linux/of_gpio.h>
 #include <linux/platform_device.h>
 #include <linux/platform_data/usb3503.h>
 #include <linux/regmap.h>
@@ -46,19 +47,19 @@ struct usb3503 {
 	struct device		*dev;
 	struct clk		*clk;
 	u8	port_off_mask;
-	struct gpio_desc	*intn;
-	struct gpio_desc 	*reset;
-	struct gpio_desc 	*connect;
+	int	gpio_intn;
+	int	gpio_reset;
+	int	gpio_connect;
 	bool	secondary_ref_clk;
 };
 
 static int usb3503_reset(struct usb3503 *hub, int state)
 {
-	if (!state && hub->connect)
-		gpiod_set_value_cansleep(hub->connect, 0);
+	if (!state && gpio_is_valid(hub->gpio_connect))
+		gpio_set_value_cansleep(hub->gpio_connect, 0);
 
-	if (hub->reset)
-		gpiod_set_value_cansleep(hub->reset, !state);
+	if (gpio_is_valid(hub->gpio_reset))
+		gpio_set_value_cansleep(hub->gpio_reset, state);
 
 	/* Wait T_HUBINIT == 4ms for hub logic to stabilize */
 	if (state)
@@ -114,8 +115,8 @@ static int usb3503_connect(struct usb3503 *hub)
 		}
 	}
 
-	if (hub->connect)
-		gpiod_set_value_cansleep(hub->connect, 1);
+	if (gpio_is_valid(hub->gpio_connect))
+		gpio_set_value_cansleep(hub->gpio_connect, 1);
 
 	hub->mode = USB3503_MODE_HUB;
 	dev_info(dev, "switched to HUB mode\n");
@@ -162,11 +163,13 @@ static int usb3503_probe(struct usb3503 *hub)
 	int err;
 	u32 mode = USB3503_MODE_HUB;
 	const u32 *property;
-	enum gpiod_flags flags;
 	int len;
 
 	if (pdata) {
 		hub->port_off_mask	= pdata->port_off_mask;
+		hub->gpio_intn		= pdata->gpio_intn;
+		hub->gpio_connect	= pdata->gpio_connect;
+		hub->gpio_reset		= pdata->gpio_reset;
 		hub->mode		= pdata->initial_mode;
 	} else if (np) {
 		u32 rate = 0;
@@ -227,37 +230,58 @@ static int usb3503_probe(struct usb3503 *hub)
 			}
 		}
 
+		hub->gpio_intn	= of_get_named_gpio(np, "intn-gpios", 0);
+		if (hub->gpio_intn == -EPROBE_DEFER)
+			return -EPROBE_DEFER;
+		hub->gpio_connect = of_get_named_gpio(np, "connect-gpios", 0);
+		if (hub->gpio_connect == -EPROBE_DEFER)
+			return -EPROBE_DEFER;
+		hub->gpio_reset = of_get_named_gpio(np, "reset-gpios", 0);
+		if (hub->gpio_reset == -EPROBE_DEFER)
+			return -EPROBE_DEFER;
 		of_property_read_u32(np, "initial-mode", &mode);
 		hub->mode = mode;
 	}
 
-	if (hub->secondary_ref_clk)
-		flags = GPIOD_OUT_LOW;
-	else
-		flags = GPIOD_OUT_HIGH;
-	hub->intn = devm_gpiod_get_optional(dev, "intn", flags);
-	if (IS_ERR(hub->intn))
-		return PTR_ERR(hub->intn);
-	if (hub->intn)
-		gpiod_set_consumer_name(hub->intn, "usb3503 intn");
-
-	hub->connect = devm_gpiod_get_optional(dev, "connect", GPIOD_OUT_LOW);
-	if (IS_ERR(hub->connect))
-		return PTR_ERR(hub->connect);
-	if (hub->connect)
-		gpiod_set_consumer_name(hub->connect, "usb3503 connect");
-
-	hub->reset = devm_gpiod_get_optional(dev, "reset", GPIOD_OUT_HIGH);
-	if (IS_ERR(hub->reset))
-		return PTR_ERR(hub->reset);
-	if (hub->reset) {
-		/* Datasheet defines a hardware reset to be at least 100us */
-		usleep_range(100, 10000);
-		gpiod_set_consumer_name(hub->reset, "usb3503 reset");
-	}
-
 	if (hub->port_off_mask && !hub->regmap)
 		dev_err(dev, "Ports disabled with no control interface\n");
+
+	if (gpio_is_valid(hub->gpio_intn)) {
+		int val = hub->secondary_ref_clk ? GPIOF_OUT_INIT_LOW :
+						   GPIOF_OUT_INIT_HIGH;
+		err = devm_gpio_request_one(dev, hub->gpio_intn, val,
+					    "usb3503 intn");
+		if (err) {
+			dev_err(dev,
+				"unable to request GPIO %d as interrupt pin (%d)\n",
+				hub->gpio_intn, err);
+			return err;
+		}
+	}
+
+	if (gpio_is_valid(hub->gpio_connect)) {
+		err = devm_gpio_request_one(dev, hub->gpio_connect,
+				GPIOF_OUT_INIT_LOW, "usb3503 connect");
+		if (err) {
+			dev_err(dev,
+				"unable to request GPIO %d as connect pin (%d)\n",
+				hub->gpio_connect, err);
+			return err;
+		}
+	}
+
+	if (gpio_is_valid(hub->gpio_reset)) {
+		err = devm_gpio_request_one(dev, hub->gpio_reset,
+				GPIOF_OUT_INIT_LOW, "usb3503 reset");
+		/* Datasheet defines a hardware reset to be at least 100us */
+		usleep_range(100, 10000);
+		if (err) {
+			dev_err(dev,
+				"unable to request GPIO %d as reset pin (%d)\n",
+				hub->gpio_reset, err);
+			return err;
+		}
+	}
 
 	usb3503_switch_mode(hub, hub->mode);
 

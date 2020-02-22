@@ -12,16 +12,6 @@
 
 #define QTNF_MAX_MAC		3
 
-#define HBM_FRAME_META_MAGIC_PATTERN_S	0xAB
-#define HBM_FRAME_META_MAGIC_PATTERN_E	0xBA
-
-struct qtnf_frame_meta_info {
-	u8 magic_s;
-	u8 ifidx;
-	u8 macid;
-	u8 magic_e;
-} __packed;
-
 enum qtnf_fw_state {
 	QTNF_FW_STATE_DETACHED,
 	QTNF_FW_STATE_BOOT_DONE,
@@ -41,10 +31,8 @@ struct qtnf_bus_ops {
 	int (*control_tx)(struct qtnf_bus *, struct sk_buff *);
 
 	/* data xfer methods */
-	int (*data_tx)(struct qtnf_bus *bus, struct sk_buff *skb,
-		       unsigned int macid, unsigned int vifid);
+	int (*data_tx)(struct qtnf_bus *, struct sk_buff *);
 	void (*data_tx_timeout)(struct qtnf_bus *, struct net_device *);
-	void (*data_tx_use_meta_set)(struct qtnf_bus *bus, bool use_meta);
 	void (*data_rx_start)(struct qtnf_bus *);
 	void (*data_rx_stop)(struct qtnf_bus *);
 };
@@ -54,7 +42,7 @@ struct qtnf_bus {
 	enum qtnf_fw_state fw_state;
 	u32 chip;
 	u32 chiprev;
-	struct qtnf_bus_ops *bus_ops;
+	const struct qtnf_bus_ops *bus_ops;
 	struct qtnf_wmac *mac[QTNF_MAX_MAC];
 	struct qtnf_qlink_transport trans;
 	struct qtnf_hw_info hw_info;
@@ -66,8 +54,6 @@ struct qtnf_bus {
 	struct work_struct event_work;
 	struct mutex bus_lock; /* lock during command/event processing */
 	struct dentry *dbg_dir;
-	struct notifier_block netdev_nb;
-	u8 hw_id[ETH_ALEN];
 	/* bus private data */
 	char bus_priv[0] __aligned(sizeof(void *));
 };
@@ -113,10 +99,9 @@ static inline void qtnf_bus_stop(struct qtnf_bus *bus)
 	bus->bus_ops->stop(bus);
 }
 
-static inline int qtnf_bus_data_tx(struct qtnf_bus *bus, struct sk_buff *skb,
-				   unsigned int macid, unsigned int vifid)
+static inline int qtnf_bus_data_tx(struct qtnf_bus *bus, struct sk_buff *skb)
 {
-	return bus->bus_ops->data_tx(bus, skb, macid, vifid);
+	return bus->bus_ops->data_tx(bus, skb);
 }
 
 static inline void

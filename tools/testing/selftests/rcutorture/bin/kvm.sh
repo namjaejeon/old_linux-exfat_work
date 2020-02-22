@@ -24,9 +24,7 @@ dur=$((30*60))
 dryrun=""
 KVM="`pwd`/tools/testing/selftests/rcutorture"; export KVM
 PATH=${KVM}/bin:$PATH; export PATH
-. functions.sh
-
-TORTURE_ALLOTED_CPUS="`identify_qemu_vcpus`"
+TORTURE_ALLOTED_CPUS=""
 TORTURE_DEFCONFIG=defconfig
 TORTURE_BOOT_IMAGE=""
 TORTURE_INITRD="$KVM/initrd"; export TORTURE_INITRD
@@ -41,6 +39,8 @@ configs=""
 cpus=0
 ds=`date +%Y.%m.%d-%H:%M:%S`
 jitter="-1"
+
+. functions.sh
 
 usage () {
 	echo "Usage: $scriptname optional arguments:"
@@ -93,11 +93,6 @@ do
 		checkarg --cpus "(number)" "$#" "$2" '^[0-9]*$' '^--'
 		cpus=$2
 		TORTURE_ALLOTED_CPUS="$2"
-		max_cpus="`identify_qemu_vcpus`"
-		if test "$TORTURE_ALLOTED_CPUS" -gt "$max_cpus"
-		then
-			TORTURE_ALLOTED_CPUS=$max_cpus
-		fi
 		shift
 		;;
 	--datestamp)
@@ -203,10 +198,9 @@ fi
 
 CONFIGFRAG=${KVM}/configs/${TORTURE_SUITE}; export CONFIGFRAG
 
-defaultconfigs="`tr '\012' ' ' < $CONFIGFRAG/CFLIST`"
 if test -z "$configs"
 then
-	configs=$defaultconfigs
+	configs="`cat $CONFIGFRAG/CFLIST`"
 fi
 
 if test -z "$resdir"
@@ -215,7 +209,7 @@ then
 fi
 
 # Create a file of test-name/#cpus pairs, sorted by decreasing #cpus.
-configs_derep=
+touch $T/cfgcpu
 for CF in $configs
 do
 	case $CF in
@@ -228,21 +222,15 @@ do
 		CF1=$CF
 		;;
 	esac
-	for ((cur_rep=0;cur_rep<$config_reps;cur_rep++))
-	do
-		configs_derep="$configs_derep $CF1"
-	done
-done
-touch $T/cfgcpu
-configs_derep="`echo $configs_derep | sed -e "s/\<CFLIST\>/$defaultconfigs/g"`"
-for CF1 in $configs_derep
-do
 	if test -f "$CONFIGFRAG/$CF1"
 	then
 		cpu_count=`configNR_CPUS.sh $CONFIGFRAG/$CF1`
 		cpu_count=`configfrag_boot_cpus "$TORTURE_BOOTARGS" "$CONFIGFRAG/$CF1" "$cpu_count"`
 		cpu_count=`configfrag_boot_maxcpus "$TORTURE_BOOTARGS" "$CONFIGFRAG/$CF1" "$cpu_count"`
-		echo $CF1 $cpu_count >> $T/cfgcpu
+		for ((cur_rep=0;cur_rep<$config_reps;cur_rep++))
+		do
+			echo $CF1 $cpu_count >> $T/cfgcpu
+		done
 	else
 		echo "The --configs file $CF1 does not exist, terminating."
 		exit 1

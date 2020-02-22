@@ -169,15 +169,14 @@ sched_clock_register(u64 (*read)(void), int bits, unsigned long rate)
 {
 	u64 res, wrap, new_mask, new_epoch, cyc, ns;
 	u32 new_mult, new_shift;
-	unsigned long r, flags;
+	unsigned long r;
 	char r_unit;
 	struct clock_read_data rd;
 
 	if (cd.rate > rate)
 		return;
 
-	/* Cannot register a sched_clock with interrupts on */
-	local_irq_save(flags);
+	WARN_ON(!irqs_disabled());
 
 	/* Calculate the mult/shift to convert counter ticks to ns. */
 	clocks_calc_mult_shift(&new_mult, &new_shift, rate, NSEC_PER_SEC, 3600);
@@ -233,8 +232,6 @@ sched_clock_register(u64 (*read)(void), int bits, unsigned long rate)
 	/* Enable IRQ time accounting if we have a fast enough sched_clock() */
 	if (irqtime > 0 || (irqtime == -1 && rate >= 1000000))
 		enable_sched_clock_irqtime();
-
-	local_irq_restore(flags);
 
 	pr_debug("Registered %pS as sched_clock source\n", read);
 }

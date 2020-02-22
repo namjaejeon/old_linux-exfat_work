@@ -19,6 +19,8 @@
 #include <linux/sunrpc/xdr.h>
 #include <linux/sunrpc/msg_prot.h>
 
+#ifdef __KERNEL__
+
 #define RPC_MIN_SLOT_TABLE	(2U)
 #define RPC_DEF_SLOT_TABLE	(16U)
 #define RPC_MAX_SLOT_TABLE_LIMIT	(65536U)
@@ -205,8 +207,7 @@ struct rpc_xprt {
 	unsigned int		min_reqs;	/* min number of slots */
 	unsigned int		num_reqs;	/* total slots */
 	unsigned long		state;		/* transport state */
-	unsigned char		resvport   : 1,	/* use a reserved port */
-				reuseport  : 1; /* reuse port on reconnect */
+	unsigned char		resvport   : 1; /* use a reserved port */
 	atomic_t		swapper;	/* we're swapping over this
 						   transport */
 	unsigned int		bind_index;	/* bind function index */
@@ -503,5 +504,7 @@ static inline void xprt_inject_disconnect(struct rpc_xprt *xprt)
 {
 }
 #endif
+
+#endif /* __KERNEL__*/
 
 #endif /* _LINUX_SUNRPC_XPRT_H */

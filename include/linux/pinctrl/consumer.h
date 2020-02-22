@@ -40,7 +40,6 @@ extern int pinctrl_select_state(struct pinctrl *p, struct pinctrl_state *s);
 
 extern struct pinctrl * __must_check devm_pinctrl_get(struct device *dev);
 extern void devm_pinctrl_put(struct pinctrl *p);
-extern int pinctrl_select_default_state(struct device *dev);
 
 #ifdef CONFIG_PM
 extern int pinctrl_pm_select_default_state(struct device *dev);
@@ -121,11 +120,6 @@ static inline struct pinctrl * __must_check devm_pinctrl_get(struct device *dev)
 
 static inline void devm_pinctrl_put(struct pinctrl *p)
 {
-}
-
-static inline int pinctrl_select_default_state(struct device *dev)
-{
-	return 0;
 }
 
 static inline int pinctrl_pm_select_default_state(struct device *dev)

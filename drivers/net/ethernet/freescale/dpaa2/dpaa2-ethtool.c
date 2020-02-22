@@ -85,10 +85,6 @@ dpaa2_eth_get_link_ksettings(struct net_device *net_dev,
 {
 	struct dpaa2_eth_priv *priv = netdev_priv(net_dev);
 
-	if (priv->mac)
-		return phylink_ethtool_ksettings_get(priv->mac->phylink,
-						     link_settings);
-
 	link_settings->base.autoneg = AUTONEG_DISABLE;
 	if (!(priv->link_state.options & DPNI_LINK_OPT_HALF_DUPLEX))
 		link_settings->base.duplex = DUPLEX_FULL;
@@ -97,28 +93,11 @@ dpaa2_eth_get_link_ksettings(struct net_device *net_dev,
 	return 0;
 }
 
-static int
-dpaa2_eth_set_link_ksettings(struct net_device *net_dev,
-			     const struct ethtool_link_ksettings *link_settings)
-{
-	struct dpaa2_eth_priv *priv = netdev_priv(net_dev);
-
-	if (!priv->mac)
-		return -ENOTSUPP;
-
-	return phylink_ethtool_ksettings_set(priv->mac->phylink, link_settings);
-}
-
 static void dpaa2_eth_get_pauseparam(struct net_device *net_dev,
 				     struct ethtool_pauseparam *pause)
 {
 	struct dpaa2_eth_priv *priv = netdev_priv(net_dev);
 	u64 link_options = priv->link_state.options;
-
-	if (priv->mac) {
-		phylink_ethtool_get_pauseparam(priv->mac->phylink, pause);
-		return;
-	}
 
 	pause->rx_pause = !!(link_options & DPNI_LINK_OPT_PAUSE);
 	pause->tx_pause = pause->rx_pause ^
@@ -139,9 +118,6 @@ static int dpaa2_eth_set_pauseparam(struct net_device *net_dev,
 		return -EOPNOTSUPP;
 	}
 
-	if (priv->mac)
-		return phylink_ethtool_set_pauseparam(priv->mac->phylink,
-						      pause);
 	if (pause->autoneg)
 		return -EOPNOTSUPP;
 
@@ -173,7 +149,6 @@ static int dpaa2_eth_set_pauseparam(struct net_device *net_dev,
 static void dpaa2_eth_get_strings(struct net_device *netdev, u32 stringset,
 				  u8 *data)
 {
-	struct dpaa2_eth_priv *priv = netdev_priv(netdev);
 	u8 *p = data;
 	int i;
 
@@ -187,22 +162,15 @@ static void dpaa2_eth_get_strings(struct net_device *netdev, u32 stringset,
 			strlcpy(p, dpaa2_ethtool_extras[i], ETH_GSTRING_LEN);
 			p += ETH_GSTRING_LEN;
 		}
-		if (priv->mac)
-			dpaa2_mac_get_strings(p);
 		break;
 	}
 }
 
 static int dpaa2_eth_get_sset_count(struct net_device *net_dev, int sset)
 {
-	int num_ss_stats = DPAA2_ETH_NUM_STATS + DPAA2_ETH_NUM_EXTRA_STATS;
-	struct dpaa2_eth_priv *priv = netdev_priv(net_dev);
-
 	switch (sset) {
 	case ETH_SS_STATS: /* ethtool_get_stats(), ethtool_get_drvinfo() */
-		if (priv->mac)
-			num_ss_stats += dpaa2_mac_get_sset_count();
-		return num_ss_stats;
+		return DPAA2_ETH_NUM_STATS + DPAA2_ETH_NUM_EXTRA_STATS;
 	default:
 		return -EOPNOTSUPP;
 	}
@@ -248,7 +216,7 @@ static void dpaa2_eth_get_ethtool_stats(struct net_device *net_dev,
 		if (err == -EINVAL)
 			/* Older firmware versions don't support all pages */
 			memset(&dpni_stats, 0, sizeof(dpni_stats));
-		else if (err)
+		else
 			netdev_warn(net_dev, "dpni_get_stats(%d) failed\n", j);
 
 		num_cnt = dpni_stats_page_size[j] / sizeof(u64);
@@ -301,9 +269,6 @@ static void dpaa2_eth_get_ethtool_stats(struct net_device *net_dev,
 		return;
 	}
 	*(data + i++) = buf_cnt;
-
-	if (priv->mac)
-		dpaa2_mac_get_ethtool_stats(priv->mac, data + i);
 }
 
 static int prep_eth_rule(struct ethhdr *eth_value, struct ethhdr *eth_mask,
@@ -763,7 +728,6 @@ const struct ethtool_ops dpaa2_ethtool_ops = {
 	.get_drvinfo = dpaa2_eth_get_drvinfo,
 	.get_link = ethtool_op_get_link,
 	.get_link_ksettings = dpaa2_eth_get_link_ksettings,
-	.set_link_ksettings = dpaa2_eth_set_link_ksettings,
 	.get_pauseparam = dpaa2_eth_get_pauseparam,
 	.set_pauseparam = dpaa2_eth_set_pauseparam,
 	.get_sset_count = dpaa2_eth_get_sset_count,

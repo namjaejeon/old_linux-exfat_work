@@ -1,10 +1,10 @@
 # SPDX-License-Identifier: GPL-2.0
-# Copyright (c) 2012-2019, Intel Corporation. All rights reserved.
+CC := $(CROSS_COMPILE)gcc
+CFLAGS := -I../../usr/include
 
-hostprogs := mei-amt-version
+PROGS := mei-amt-version
 
-HOSTCFLAGS_mei-amt-version.o += -I$(objtree)/usr/include
+all: $(PROGS)
 
-always-y := $(hostprogs)
-
-all: mei-amt-version
+clean:
+	rm -fr $(PROGS)

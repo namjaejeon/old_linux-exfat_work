@@ -97,10 +97,7 @@ static int tc3589x_gpio_get_direction(struct gpio_chip *chip,
 	if (ret < 0)
 		return ret;
 
-	if (ret & BIT(pos))
-		return GPIO_LINE_DIRECTION_OUT;
-
-	return GPIO_LINE_DIRECTION_IN;
+	return !(ret & BIT(pos));
 }
 
 static int tc3589x_gpio_set_config(struct gpio_chip *chip, unsigned int offset,

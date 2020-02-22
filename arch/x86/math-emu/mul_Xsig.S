@@ -25,7 +25,7 @@
 #include "fpu_emu.h"
 
 .text
-SYM_FUNC_START(mul32_Xsig)
+ENTRY(mul32_Xsig)
 	pushl %ebp
 	movl %esp,%ebp
 	subl $16,%esp
@@ -63,10 +63,10 @@ SYM_FUNC_START(mul32_Xsig)
 	popl %esi
 	leave
 	ret
-SYM_FUNC_END(mul32_Xsig)
+ENDPROC(mul32_Xsig)
 
 
-SYM_FUNC_START(mul64_Xsig)
+ENTRY(mul64_Xsig)
 	pushl %ebp
 	movl %esp,%ebp
 	subl $16,%esp
@@ -116,11 +116,11 @@ SYM_FUNC_START(mul64_Xsig)
 	popl %esi
 	leave
 	ret
-SYM_FUNC_END(mul64_Xsig)
+ENDPROC(mul64_Xsig)
 
 
 
-SYM_FUNC_START(mul_Xsig_Xsig)
+ENTRY(mul_Xsig_Xsig)
 	pushl %ebp
 	movl %esp,%ebp
 	subl $16,%esp
@@ -176,4 +176,4 @@ SYM_FUNC_START(mul_Xsig_Xsig)
 	popl %esi
 	leave
 	ret
-SYM_FUNC_END(mul_Xsig_Xsig)
+ENDPROC(mul_Xsig_Xsig)

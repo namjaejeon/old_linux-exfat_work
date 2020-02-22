@@ -338,7 +338,7 @@ static int pseries_remove_mem_node(struct device_node *np)
 static bool lmb_is_removable(struct drmem_lmb *lmb)
 {
 	int i, scns_per_block;
-	bool rc = true;
+	int rc = 1;
 	unsigned long pfn, block_sz;
 	u64 phys_addr;
 
@@ -360,16 +360,14 @@ static bool lmb_is_removable(struct drmem_lmb *lmb)
 
 	for (i = 0; i < scns_per_block; i++) {
 		pfn = PFN_DOWN(phys_addr);
-		if (!pfn_present(pfn)) {
-			phys_addr += MIN_MEMORY_BLOCK_SIZE;
+		if (!pfn_present(pfn))
 			continue;
-		}
 
-		rc = rc && is_mem_section_removable(pfn, PAGES_PER_SECTION);
+		rc &= is_mem_section_removable(pfn, PAGES_PER_SECTION);
 		phys_addr += MIN_MEMORY_BLOCK_SIZE;
 	}
 
-	return rc;
+	return rc ? true : false;
 }
 
 static int dlpar_add_lmb(struct drmem_lmb *);

@@ -84,6 +84,7 @@ static int listen_backlog_rcv(struct sock *sk, struct sk_buff *skb)
 static int chtls_start_listen(struct chtls_dev *cdev, struct sock *sk)
 {
 	struct chtls_listen *clisten;
+	int err;
 
 	if (sk->sk_protocol != IPPROTO_TCP)
 		return -EPROTONOSUPPORT;
@@ -99,10 +100,10 @@ static int chtls_start_listen(struct chtls_dev *cdev, struct sock *sk)
 	clisten->cdev = cdev;
 	clisten->sk = sk;
 	mutex_lock(&notify_mutex);
-	raw_notifier_call_chain(&listen_notify_list,
+	err = raw_notifier_call_chain(&listen_notify_list,
 				      CHTLS_LISTEN_START, clisten);
 	mutex_unlock(&notify_mutex);
-	return 0;
+	return err;
 }
 
 static void chtls_stop_listen(struct chtls_dev *cdev, struct sock *sk)
@@ -123,7 +124,7 @@ static void chtls_stop_listen(struct chtls_dev *cdev, struct sock *sk)
 	mutex_unlock(&notify_mutex);
 }
 
-static int chtls_inline_feature(struct tls_toe_device *dev)
+static int chtls_inline_feature(struct tls_device *dev)
 {
 	struct net_device *netdev;
 	struct chtls_dev *cdev;
@@ -139,7 +140,7 @@ static int chtls_inline_feature(struct tls_toe_device *dev)
 	return 0;
 }
 
-static int chtls_create_hash(struct tls_toe_device *dev, struct sock *sk)
+static int chtls_create_hash(struct tls_device *dev, struct sock *sk)
 {
 	struct chtls_dev *cdev = to_chtls_dev(dev);
 
@@ -148,7 +149,7 @@ static int chtls_create_hash(struct tls_toe_device *dev, struct sock *sk)
 	return 0;
 }
 
-static void chtls_destroy_hash(struct tls_toe_device *dev, struct sock *sk)
+static void chtls_destroy_hash(struct tls_device *dev, struct sock *sk)
 {
 	struct chtls_dev *cdev = to_chtls_dev(dev);
 
@@ -160,7 +161,7 @@ static void chtls_free_uld(struct chtls_dev *cdev)
 {
 	int i;
 
-	tls_toe_unregister_device(&cdev->tlsdev);
+	tls_unregister_device(&cdev->tlsdev);
 	kvfree(cdev->kmap.addr);
 	idr_destroy(&cdev->hwtid_idr);
 	for (i = 0; i < (1 << RSPQ_HASH_BITS); i++)
@@ -172,27 +173,27 @@ static void chtls_free_uld(struct chtls_dev *cdev)
 
 static inline void chtls_dev_release(struct kref *kref)
 {
-	struct tls_toe_device *dev;
 	struct chtls_dev *cdev;
+	struct tls_device *dev;
 
-	dev = container_of(kref, struct tls_toe_device, kref);
+	dev = container_of(kref, struct tls_device, kref);
 	cdev = to_chtls_dev(dev);
 	chtls_free_uld(cdev);
 }
 
 static void chtls_register_dev(struct chtls_dev *cdev)
 {
-	struct tls_toe_device *tlsdev = &cdev->tlsdev;
+	struct tls_device *tlsdev = &cdev->tlsdev;
 
-	strlcpy(tlsdev->name, "chtls", TLS_TOE_DEVICE_NAME_MAX);
+	strlcpy(tlsdev->name, "chtls", TLS_DEVICE_NAME_MAX);
 	strlcat(tlsdev->name, cdev->lldi->ports[0]->name,
-		TLS_TOE_DEVICE_NAME_MAX);
+		TLS_DEVICE_NAME_MAX);
 	tlsdev->feature = chtls_inline_feature;
 	tlsdev->hash = chtls_create_hash;
 	tlsdev->unhash = chtls_destroy_hash;
 	tlsdev->release = chtls_dev_release;
 	kref_init(&tlsdev->kref);
-	tls_toe_register_device(tlsdev);
+	tls_register_device(tlsdev);
 	cdev->cdev_state = CHTLS_CDEV_STATE_UP;
 }
 
@@ -485,7 +486,6 @@ static int do_chtls_setsockopt(struct sock *sk, int optname,
 	struct tls_crypto_info *crypto_info, tmp_crypto_info;
 	struct chtls_sock *csk;
 	int keylen;
-	int cipher_type;
 	int rc = 0;
 
 	csk = rcu_dereference_sk_user_data(sk);
@@ -509,9 +509,6 @@ static int do_chtls_setsockopt(struct sock *sk, int optname,
 
 	crypto_info = (struct tls_crypto_info *)&csk->tlshws.crypto_info;
 
-	/* GCM mode of AES supports 128 and 256 bit encryption, so
-	 * copy keys from user based on GCM cipher type.
-	 */
 	switch (tmp_crypto_info.cipher_type) {
 	case TLS_CIPHER_AES_GCM_128: {
 		/* Obtain version and type from previous copy */
@@ -528,30 +525,13 @@ static int do_chtls_setsockopt(struct sock *sk, int optname,
 		}
 
 		keylen = TLS_CIPHER_AES_GCM_128_KEY_SIZE;
-		cipher_type = TLS_CIPHER_AES_GCM_128;
-		break;
-	}
-	case TLS_CIPHER_AES_GCM_256: {
-		crypto_info[0] = tmp_crypto_info;
-		rc = copy_from_user((char *)crypto_info + sizeof(*crypto_info),
-				    optval + sizeof(*crypto_info),
-				sizeof(struct tls12_crypto_info_aes_gcm_256)
-				- sizeof(*crypto_info));
-
-		if (rc) {
-			rc = -EFAULT;
-			goto out;
-		}
-
-		keylen = TLS_CIPHER_AES_GCM_256_KEY_SIZE;
-		cipher_type = TLS_CIPHER_AES_GCM_256;
+		rc = chtls_setkey(csk, keylen, optname);
 		break;
 	}
 	default:
 		rc = -EINVAL;
 		goto out;
 	}
-	rc = chtls_setkey(csk, keylen, optname, cipher_type);
 out:
 	return rc;
 }

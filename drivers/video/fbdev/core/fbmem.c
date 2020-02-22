@@ -54,8 +54,7 @@ int num_registered_fb __read_mostly;
 EXPORT_SYMBOL(num_registered_fb);
 
 bool fb_center_logo __read_mostly;
-
-int fb_logo_count __read_mostly = -1;
+EXPORT_SYMBOL(fb_center_logo);
 
 static struct fb_info *get_fb_info(unsigned int idx)
 {
@@ -621,7 +620,7 @@ int fb_prepare_logo(struct fb_info *info, int rotate)
 	memset(&fb_logo, 0, sizeof(struct logo_data));
 
 	if (info->flags & FBINFO_MISC_TILEBLITTING ||
-	    info->fbops->owner || !fb_logo_count)
+	    info->fbops->owner)
 		return 0;
 
 	if (info->fix.visual == FB_VISUAL_DIRECTCOLOR) {
@@ -687,14 +686,10 @@ int fb_prepare_logo(struct fb_info *info, int rotate)
 
 int fb_show_logo(struct fb_info *info, int rotate)
 {
-	unsigned int count;
 	int y;
 
-	if (!fb_logo_count)
-		return 0;
-
-	count = fb_logo_count < 0 ? num_online_cpus() : fb_logo_count;
-	y = fb_show_logo_line(info, rotate, fb_logo.logo, 0, count);
+	y = fb_show_logo_line(info, rotate, fb_logo.logo, 0,
+			      num_online_cpus());
 	y = fb_show_extra_logos(info, y, rotate);
 
 	return y;
@@ -1084,7 +1079,7 @@ EXPORT_SYMBOL(fb_blank);
 static long do_fb_ioctl(struct fb_info *info, unsigned int cmd,
 			unsigned long arg)
 {
-	const struct fb_ops *fb;
+	struct fb_ops *fb;
 	struct fb_var_screeninfo var;
 	struct fb_fix_screeninfo fix;
 	struct fb_cmap cmap_from;
@@ -1297,7 +1292,7 @@ static long fb_compat_ioctl(struct file *file, unsigned int cmd,
 			    unsigned long arg)
 {
 	struct fb_info *info = file_fb_info(file);
-	const struct fb_ops *fb;
+	struct fb_ops *fb;
 	long ret = -ENOIOCTLCMD;
 
 	if (!info)
@@ -1337,23 +1332,16 @@ static int
 fb_mmap(struct file *file, struct vm_area_struct * vma)
 {
 	struct fb_info *info = file_fb_info(file);
-	int (*fb_mmap_fn)(struct fb_info *info, struct vm_area_struct *vma);
+	struct fb_ops *fb;
 	unsigned long mmio_pgoff;
 	unsigned long start;
 	u32 len;
 
 	if (!info)
 		return -ENODEV;
+	fb = info->fbops;
 	mutex_lock(&info->mm_lock);
-
-	fb_mmap_fn = info->fbops->fb_mmap;
-
-#if IS_ENABLED(CONFIG_FB_DEFERRED_IO)
-	if (info->fbdefio)
-		fb_mmap_fn = fb_deferred_io_mmap;
-#endif
-
-	if (fb_mmap_fn) {
+	if (fb->fb_mmap) {
 		int res;
 
 		/*
@@ -1361,7 +1349,7 @@ fb_mmap(struct file *file, struct vm_area_struct * vma)
 		 * SME protection is removed ahead of the call
 		 */
 		vma->vm_page_prot = pgprot_decrypted(vma->vm_page_prot);
-		res = fb_mmap_fn(info, vma);
+		res = fb->fb_mmap(info, vma);
 		mutex_unlock(&info->mm_lock);
 		return res;
 	}
@@ -1685,7 +1673,7 @@ static void unbind_console(struct fb_info *fb_info)
 	console_unlock();
 }
 
-static void unlink_framebuffer(struct fb_info *fb_info)
+void unlink_framebuffer(struct fb_info *fb_info)
 {
 	int i;
 
@@ -1704,6 +1692,7 @@ static void unlink_framebuffer(struct fb_info *fb_info)
 
 	fb_info->dev = NULL;
 }
+EXPORT_SYMBOL(unlink_framebuffer);
 
 static void do_unregister_framebuffer(struct fb_info *fb_info)
 {
@@ -1769,21 +1758,23 @@ EXPORT_SYMBOL(remove_conflicting_framebuffers);
 /**
  * remove_conflicting_pci_framebuffers - remove firmware-configured framebuffers for PCI devices
  * @pdev: PCI device
+ * @res_id: index of PCI BAR configuring framebuffer memory
  * @name: requesting driver name
  *
  * This function removes framebuffer devices (eg. initialized by firmware)
- * using memory range configured for any of @pdev's memory bars.
+ * using memory range configured for @pdev's BAR @res_id.
  *
  * The function assumes that PCI device with shadowed ROM drives a primary
  * display and so kicks out vga16fb.
  */
-int remove_conflicting_pci_framebuffers(struct pci_dev *pdev, const char *name)
+int remove_conflicting_pci_framebuffers(struct pci_dev *pdev, int res_id, const char *name)
 {
 	struct apertures_struct *ap;
 	bool primary = false;
 	int err, idx, bar;
+	bool res_id_found = false;
 
-	for (idx = 0, bar = 0; bar < PCI_STD_NUM_BARS; bar++) {
+	for (idx = 0, bar = 0; bar < PCI_ROM_RESOURCE; bar++) {
 		if (!(pci_resource_flags(pdev, bar) & IORESOURCE_MEM))
 			continue;
 		idx++;
@@ -1793,16 +1784,21 @@ int remove_conflicting_pci_framebuffers(struct pci_dev *pdev, const char *name)
 	if (!ap)
 		return -ENOMEM;
 
-	for (idx = 0, bar = 0; bar < PCI_STD_NUM_BARS; bar++) {
+	for (idx = 0, bar = 0; bar < PCI_ROM_RESOURCE; bar++) {
 		if (!(pci_resource_flags(pdev, bar) & IORESOURCE_MEM))
 			continue;
 		ap->ranges[idx].base = pci_resource_start(pdev, bar);
 		ap->ranges[idx].size = pci_resource_len(pdev, bar);
-		pci_dbg(pdev, "%s: bar %d: 0x%lx -> 0x%lx\n", __func__, bar,
-			(unsigned long)pci_resource_start(pdev, bar),
-			(unsigned long)pci_resource_end(pdev, bar));
+		pci_info(pdev, "%s: bar %d: 0x%lx -> 0x%lx\n", __func__, bar,
+			 (unsigned long)pci_resource_start(pdev, bar),
+			 (unsigned long)pci_resource_end(pdev, bar));
 		idx++;
+		if (res_id == bar)
+			res_id_found = true;
 	}
+	if (!res_id_found)
+		pci_warn(pdev, "%s: passed res_id (%d) is not a memory bar\n",
+			 __func__, res_id);
 
 #ifdef CONFIG_X86
 	primary = pdev->resource[PCI_ROM_RESOURCE].flags &

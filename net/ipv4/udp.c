@@ -1297,27 +1297,6 @@ out:
 
 #define UDP_SKB_IS_STATELESS 0x80000000
 
-/* all head states (dst, sk, nf conntrack) except skb extensions are
- * cleared by udp_rcv().
- *
- * We need to preserve secpath, if present, to eventually process
- * IP_CMSG_PASSSEC at recvmsg() time.
- *
- * Other extensions can be cleared.
- */
-static bool udp_try_make_stateless(struct sk_buff *skb)
-{
-	if (!skb_has_extensions(skb))
-		return true;
-
-	if (!secpath_exists(skb)) {
-		skb_ext_reset(skb);
-		return true;
-	}
-
-	return false;
-}
-
 static void udp_set_dev_scratch(struct sk_buff *skb)
 {
 	struct udp_dev_scratch *scratch = udp_skb_scratch(skb);
@@ -1329,7 +1308,11 @@ static void udp_set_dev_scratch(struct sk_buff *skb)
 	scratch->csum_unnecessary = !!skb_csum_unnecessary(skb);
 	scratch->is_linear = !skb_is_nonlinear(skb);
 #endif
-	if (udp_try_make_stateless(skb))
+	/* all head states execept sp (dst, sk, nf) are always cleared by
+	 * udp_rcv() and we need to preserve secpath, if present, to eventually
+	 * process IP_CMSG_PASSSEC at recvmsg() time
+	 */
+	if (likely(!skb_sec_path(skb)))
 		scratch->_tsize_state |= UDP_SKB_IS_STATELESS;
 }
 
@@ -1368,8 +1351,7 @@ static void udp_rmem_release(struct sock *sk, int size, int partial,
 	if (likely(partial)) {
 		up->forward_deficit += size;
 		size = up->forward_deficit;
-		if (size < (sk->sk_rcvbuf >> 2) &&
-		    !skb_queue_empty(&up->reader_queue))
+		if (size < (sk->sk_rcvbuf >> 2))
 			return;
 	} else {
 		size += up->forward_deficit;
@@ -1476,7 +1458,7 @@ int __udp_enqueue_schedule_skb(struct sock *sk, struct sk_buff *skb)
 	 * queue contains some other skb
 	 */
 	rmem = atomic_add_return(size, &sk->sk_rmem_alloc);
-	if (rmem > (size + (unsigned int)sk->sk_rcvbuf))
+	if (rmem > (size + sk->sk_rcvbuf))
 		goto uncharge_drop;
 
 	spin_lock(&list->lock);
@@ -1709,8 +1691,7 @@ busy_check:
 
 		/* sk_queue is empty, reader_queue may contain peeked packets */
 	} while (timeo &&
-		 !__skb_wait_for_more_packets(sk, &sk->sk_receive_queue,
-					      &error, &timeo,
+		 !__skb_wait_for_more_packets(sk, &error, &timeo,
 					      (struct sk_buff *)sk_queue));
 
 	*err = error;
@@ -2106,7 +2087,8 @@ static int udp_queue_rcv_skb(struct sock *sk, struct sk_buff *skb)
 	BUILD_BUG_ON(sizeof(struct udp_skb_cb) > SKB_SGO_CB_OFFSET);
 	__skb_push(skb, -skb_mac_offset(skb));
 	segs = udp_rcv_segment(sk, skb, true);
-	skb_list_walk_safe(segs, skb, next) {
+	for (skb = segs; skb; skb = next) {
+		next = skb->next;
 		__skb_pull(skb, skb_transport_offset(skb));
 		ret = udp_queue_rcv_one_skb(sk, skb);
 		if (ret > 0)
@@ -2552,11 +2534,9 @@ int udp_lib_setsockopt(struct sock *sk, int level, int optname,
 	case UDP_ENCAP:
 		switch (val) {
 		case 0:
-#ifdef CONFIG_XFRM
 		case UDP_ENCAP_ESPINUDP:
 		case UDP_ENCAP_ESPINUDP_NON_IKE:
 			up->encap_rcv = xfrm4_udp_encap_rcv;
-#endif
 			/* FALLTHROUGH */
 		case UDP_ENCAP_L2TPINUDP:
 			up->encap_type = val;

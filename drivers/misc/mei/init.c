@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (c) 2012-2019, Intel Corporation. All rights reserved.
+ * Copyright (c) 2012-2018, Intel Corporation. All rights reserved.
  * Intel Management Engine Interface (Intel MEI) Linux driver
  */
 
@@ -190,9 +190,7 @@ int mei_start(struct mei_device *dev)
 	/* acknowledge interrupt and stop interrupts */
 	mei_clear_interrupts(dev);
 
-	ret = mei_hw_config(dev);
-	if (ret)
-		goto err;
+	mei_hw_config(dev);
 
 	dev_dbg(dev->dev, "reset in start the mei device.\n");
 

@@ -74,7 +74,7 @@
 # unsigned int crc_pcl(u8 *buffer, int len, unsigned int crc_init);
 
 .text
-SYM_FUNC_START(crc_pcl)
+ENTRY(crc_pcl)
 #define    bufp		%rdi
 #define    bufp_dw	%edi
 #define    bufp_w	%di
@@ -311,7 +311,7 @@ do_return:
 	popq    %rdi
 	popq    %rbx
         ret
-SYM_FUNC_END(crc_pcl)
+ENDPROC(crc_pcl)
 
 .section	.rodata, "a", @progbits
         ################################################################

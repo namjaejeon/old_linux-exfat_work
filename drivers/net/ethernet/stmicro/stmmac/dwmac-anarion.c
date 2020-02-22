@@ -61,10 +61,9 @@ static void anarion_gmac_exit(struct platform_device *pdev, void *priv)
 
 static struct anarion_gmac *anarion_config_dt(struct platform_device *pdev)
 {
-	struct anarion_gmac *gmac;
-	phy_interface_t phy_mode;
+	int phy_mode;
 	void __iomem *ctl_block;
-	int err;
+	struct anarion_gmac *gmac;
 
 	ctl_block = devm_platform_ioremap_resource(pdev, 1);
 	if (IS_ERR(ctl_block)) {
@@ -79,10 +78,7 @@ static struct anarion_gmac *anarion_config_dt(struct platform_device *pdev)
 
 	gmac->ctl_block = (uintptr_t)ctl_block;
 
-	err = of_get_phy_mode(pdev->dev.of_node, &phy_mode);
-	if (err)
-		return ERR_PTR(err);
-
+	phy_mode = of_get_phy_mode(pdev->dev.of_node);
 	switch (phy_mode) {
 	case PHY_INTERFACE_MODE_RGMII:		/* Fall through */
 	case PHY_INTERFACE_MODE_RGMII_ID	/* Fall through */:

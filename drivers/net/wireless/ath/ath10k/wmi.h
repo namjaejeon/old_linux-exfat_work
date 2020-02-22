@@ -202,7 +202,6 @@ enum wmi_service {
 	WMI_SERVICE_REPORT_AIRTIME,
 	WMI_SERVICE_SYNC_DELETE_CMDS,
 	WMI_SERVICE_TX_PWR_PER_PEER,
-	WMI_SERVICE_SUPPORT_EXTEND_ADDRESS,
 
 	/* Remember to add the new value to wmi_service_name()! */
 
@@ -497,7 +496,6 @@ static inline char *wmi_service_name(enum wmi_service service_id)
 	SVCSTR(WMI_SERVICE_REPORT_AIRTIME);
 	SVCSTR(WMI_SERVICE_SYNC_DELETE_CMDS);
 	SVCSTR(WMI_SERVICE_TX_PWR_PER_PEER);
-	SVCSTR(WMI_SERVICE_SUPPORT_EXTEND_ADDRESS);
 
 	case WMI_SERVICE_MAX:
 		return NULL;
@@ -3788,8 +3786,6 @@ struct wmi_pdev_param_map {
 	u32 arp_srcaddr;
 	u32 arp_dstaddr;
 	u32 enable_btcoex;
-	u32 rfkill_config;
-	u32 rfkill_enable;
 };
 
 #define WMI_PDEV_PARAM_UNSUPPORTED 0
@@ -5074,25 +5070,6 @@ enum wmi_rate_preamble {
 
 /* Value to disable fixed rate setting */
 #define WMI_FIXED_RATE_NONE    (0xff)
-
-struct wmi_peer_param_map {
-	u32 smps_state;
-	u32 ampdu;
-	u32 authorize;
-	u32 chan_width;
-	u32 nss;
-	u32 use_4addr;
-	u32 membership;
-	u32 use_fixed_power;
-	u32 user_pos;
-	u32 crit_proto_hint_enabled;
-	u32 tx_fail_cnt_thr;
-	u32 set_hw_retry_cts2s;
-	u32 ibss_atim_win_len;
-	u32 debug;
-	u32 phymode;
-	u32 dummy_var;
-};
 
 struct wmi_vdev_param_map {
 	u32 rts_threshold;
@@ -6786,7 +6763,6 @@ struct wmi_peer_delete_resp_ev_arg {
 	struct wmi_mac_addr peer_addr;
 };
 
-#define WMI_MGMT_RX_NUM_RSSI 4
 struct wmi_mgmt_rx_ev_arg {
 	__le32 channel;
 	__le32 snr;
@@ -6795,7 +6771,6 @@ struct wmi_mgmt_rx_ev_arg {
 	__le32 buf_len;
 	__le32 status; /* %WMI_RX_STATUS_ */
 	struct wmi_mgmt_rx_ext_info ext_info;
-	__le32 rssi[WMI_MGMT_RX_NUM_RSSI];
 };
 
 struct wmi_ch_info_ev_arg {
@@ -6867,7 +6842,6 @@ struct wmi_svc_rdy_ev_arg {
 	__le32 max_tx_power;
 	__le32 ht_cap;
 	__le32 vht_cap;
-	__le32 vht_supp_mcs;
 	__le32 sw_ver0;
 	__le32 sw_ver1;
 	__le32 fw_build;
@@ -6875,11 +6849,8 @@ struct wmi_svc_rdy_ev_arg {
 	__le32 num_rf_chains;
 	__le32 eeprom_rd;
 	__le32 num_mem_reqs;
-	__le32 low_2ghz_chan;
-	__le32 high_2ghz_chan;
 	__le32 low_5ghz_chan;
 	__le32 high_5ghz_chan;
-	__le32 sys_cap_info;
 	const __le32 *service_map;
 	size_t service_map_len;
 	const struct wlan_host_mem_req *mem_reqs[WMI_MAX_MEM_REQS];

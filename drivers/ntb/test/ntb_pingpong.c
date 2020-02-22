@@ -354,10 +354,13 @@ static void pp_clear_ctx(struct pp_ctx *pp)
 static void pp_setup_dbgfs(struct pp_ctx *pp)
 {
 	struct pci_dev *pdev = pp->ntb->pdev;
+	void *ret;
 
 	pp->dbgfs_dir = debugfs_create_dir(pci_name(pdev), pp_dbgfs_topdir);
 
-	debugfs_create_atomic_t("count", 0600, pp->dbgfs_dir, &pp->count);
+	ret = debugfs_create_atomic_t("count", 0600, pp->dbgfs_dir, &pp->count);
+	if (!ret)
+		dev_warn(&pp->ntb->dev, "DebugFS unsupported\n");
 }
 
 static void pp_clear_dbgfs(struct pp_ctx *pp)

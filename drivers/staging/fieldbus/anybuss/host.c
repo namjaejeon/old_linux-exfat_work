@@ -1022,13 +1022,13 @@ int anybuss_start_init(struct anybuss_client *client,
 	};
 
 	switch (cfg->offl_mode) {
-	case FIELDBUS_DEV_OFFL_MODE_CLEAR:
+	case AB_OFFL_MODE_CLEAR:
 		op_mode = 0;
 		break;
-	case FIELDBUS_DEV_OFFL_MODE_FREEZE:
+	case AB_OFFL_MODE_FREEZE:
 		op_mode = OP_MODE_FBFC;
 		break;
-	case FIELDBUS_DEV_OFFL_MODE_SET:
+	case AB_OFFL_MODE_SET:
 		op_mode = OP_MODE_FBS;
 		break;
 	default:

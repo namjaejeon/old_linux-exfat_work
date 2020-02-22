@@ -568,7 +568,7 @@ vc4_unlock_bo_reservations(struct drm_device *dev,
 	for (i = 0; i < exec->bo_count; i++) {
 		struct drm_gem_object *bo = &exec->bo[i]->base;
 
-		dma_resv_unlock(bo->resv);
+		ww_mutex_unlock(&bo->resv->lock);
 	}
 
 	ww_acquire_fini(acquire_ctx);
@@ -595,7 +595,8 @@ vc4_lock_bo_reservations(struct drm_device *dev,
 retry:
 	if (contended_lock != -1) {
 		bo = &exec->bo[contended_lock]->base;
-		ret = dma_resv_lock_slow_interruptible(bo->resv, acquire_ctx);
+		ret = ww_mutex_lock_slow_interruptible(&bo->resv->lock,
+						       acquire_ctx);
 		if (ret) {
 			ww_acquire_done(acquire_ctx);
 			return ret;
@@ -608,19 +609,19 @@ retry:
 
 		bo = &exec->bo[i]->base;
 
-		ret = dma_resv_lock_interruptible(bo->resv, acquire_ctx);
+		ret = ww_mutex_lock_interruptible(&bo->resv->lock, acquire_ctx);
 		if (ret) {
 			int j;
 
 			for (j = 0; j < i; j++) {
 				bo = &exec->bo[j]->base;
-				dma_resv_unlock(bo->resv);
+				ww_mutex_unlock(&bo->resv->lock);
 			}
 
 			if (contended_lock != -1 && contended_lock >= i) {
 				bo = &exec->bo[contended_lock]->base;
 
-				dma_resv_unlock(bo->resv);
+				ww_mutex_unlock(&bo->resv->lock);
 			}
 
 			if (ret == -EDEADLK) {

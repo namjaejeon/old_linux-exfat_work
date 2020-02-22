@@ -5,21 +5,19 @@
  * Copyright (C) Purism SPC 2019
  */
 
-#include <linux/debugfs.h>
-#include <linux/delay.h>
-#include <linux/gpio/consumer.h>
-#include <linux/media-bus-format.h>
-#include <linux/mod_devicetable.h>
-#include <linux/module.h>
-#include <linux/regulator/consumer.h>
-
-#include <video/display_timing.h>
-#include <video/mipi_display.h>
-
 #include <drm/drm_mipi_dsi.h>
 #include <drm/drm_modes.h>
 #include <drm/drm_panel.h>
 #include <drm/drm_print.h>
+#include <linux/backlight.h>
+#include <linux/debugfs.h>
+#include <linux/delay.h>
+#include <linux/gpio/consumer.h>
+#include <linux/media-bus-format.h>
+#include <linux/module.h>
+#include <linux/regulator/consumer.h>
+#include <video/display_timing.h>
+#include <video/mipi_display.h>
 
 #define DRV_NAME "panel-rocktech-jh057n00900"
 
@@ -49,6 +47,7 @@ struct jh057n {
 	struct device *dev;
 	struct drm_panel panel;
 	struct gpio_desc *reset_gpio;
+	struct backlight_device *backlight;
 	struct regulator *vcc;
 	struct regulator *iovcc;
 	bool prepared;
@@ -153,7 +152,7 @@ static int jh057n_enable(struct drm_panel *panel)
 		return ret;
 	}
 
-	return 0;
+	return backlight_enable(ctx->backlight);
 }
 
 static int jh057n_disable(struct drm_panel *panel)
@@ -161,6 +160,7 @@ static int jh057n_disable(struct drm_panel *panel)
 	struct jh057n *ctx = panel_to_jh057n(panel);
 	struct mipi_dsi_device *dsi = to_mipi_dsi_device(ctx->dev);
 
+	backlight_disable(ctx->backlight);
 	return mipi_dsi_dcs_set_display_off(dsi);
 }
 
@@ -230,13 +230,12 @@ static const struct drm_display_mode default_mode = {
 	.height_mm   = 130,
 };
 
-static int jh057n_get_modes(struct drm_panel *panel,
-			    struct drm_connector *connector)
+static int jh057n_get_modes(struct drm_panel *panel)
 {
 	struct jh057n *ctx = panel_to_jh057n(panel);
 	struct drm_display_mode *mode;
 
-	mode = drm_mode_duplicate(connector->dev, &default_mode);
+	mode = drm_mode_duplicate(panel->drm, &default_mode);
 	if (!mode) {
 		DRM_DEV_ERROR(ctx->dev, "Failed to add mode %ux%u@%u\n",
 			      default_mode.hdisplay, default_mode.vdisplay,
@@ -247,9 +246,9 @@ static int jh057n_get_modes(struct drm_panel *panel,
 	drm_mode_set_name(mode);
 
 	mode->type = DRM_MODE_TYPE_DRIVER | DRM_MODE_TYPE_PREFERRED;
-	connector->display_info.width_mm = mode->width_mm;
-	connector->display_info.height_mm = mode->height_mm;
-	drm_mode_probed_add(connector, mode);
+	panel->connector->display_info.width_mm = mode->width_mm;
+	panel->connector->display_info.height_mm = mode->height_mm;
+	drm_mode_probed_add(panel->connector, mode);
 
 	return 1;
 }
@@ -321,6 +320,10 @@ static int jh057n_probe(struct mipi_dsi_device *dsi)
 	dsi->mode_flags = MIPI_DSI_MODE_VIDEO |
 		MIPI_DSI_MODE_VIDEO_BURST | MIPI_DSI_MODE_VIDEO_SYNC_PULSE;
 
+	ctx->backlight = devm_of_find_backlight(dev);
+	if (IS_ERR(ctx->backlight))
+		return PTR_ERR(ctx->backlight);
+
 	ctx->vcc = devm_regulator_get(dev, "vcc");
 	if (IS_ERR(ctx->vcc)) {
 		ret = PTR_ERR(ctx->vcc);
@@ -340,12 +343,9 @@ static int jh057n_probe(struct mipi_dsi_device *dsi)
 		return ret;
 	}
 
-	drm_panel_init(&ctx->panel, dev, &jh057n_drm_funcs,
-		       DRM_MODE_CONNECTOR_DSI);
-
-	ret = drm_panel_of_backlight(&ctx->panel);
-	if (ret)
-		return ret;
+	drm_panel_init(&ctx->panel);
+	ctx->panel.dev = dev;
+	ctx->panel.funcs = &jh057n_drm_funcs;
 
 	drm_panel_add(&ctx->panel);
 

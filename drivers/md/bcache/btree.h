@@ -121,6 +121,8 @@ struct btree {
 	/* Key/pointer for this btree node */
 	BKEY_PADDED(key);
 
+	/* Single bit - set when accessed, cleared by shrinker */
+	unsigned long		accessed;
 	unsigned long		seq;
 	struct rw_semaphore	lock;
 	struct cache_set	*c;

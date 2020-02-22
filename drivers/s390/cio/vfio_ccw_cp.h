@@ -15,7 +15,6 @@
 #include <asm/scsw.h>
 
 #include "orb.h"
-#include "vfio_ccw_trace.h"
 
 /*
  * Max length for ccw chain.

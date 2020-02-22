@@ -132,8 +132,13 @@ static int skcipher_aes_setkey(struct crypto_skcipher *tfm, const u8 *in_key,
 			       unsigned int key_len)
 {
 	struct crypto_aes_ctx *ctx = crypto_skcipher_ctx(tfm);
+	int ret;
 
-	return aes_expandkey(ctx, in_key, key_len);
+	ret = aes_expandkey(ctx, in_key, key_len);
+	if (ret)
+		crypto_skcipher_set_flags(tfm, CRYPTO_TFM_RES_BAD_KEY_LEN);
+
+	return ret;
 }
 
 static int __maybe_unused xts_set_key(struct crypto_skcipher *tfm,
@@ -150,7 +155,11 @@ static int __maybe_unused xts_set_key(struct crypto_skcipher *tfm,
 	if (!ret)
 		ret = aes_expandkey(&ctx->key2, &in_key[key_len / 2],
 				    key_len / 2);
-	return ret;
+	if (!ret)
+		return 0;
+
+	crypto_skcipher_set_flags(tfm, CRYPTO_TFM_RES_BAD_KEY_LEN);
+	return -EINVAL;
 }
 
 static int __maybe_unused essiv_cbc_set_key(struct crypto_skcipher *tfm,
@@ -164,12 +173,19 @@ static int __maybe_unused essiv_cbc_set_key(struct crypto_skcipher *tfm,
 
 	ret = aes_expandkey(&ctx->key1, in_key, key_len);
 	if (ret)
-		return ret;
+		goto out;
 
 	desc->tfm = ctx->hash;
 	crypto_shash_digest(desc, in_key, key_len, digest);
 
-	return aes_expandkey(&ctx->key2, digest, sizeof(digest));
+	ret = aes_expandkey(&ctx->key2, digest, sizeof(digest));
+	if (ret)
+		goto out;
+
+	return 0;
+out:
+	crypto_skcipher_set_flags(tfm, CRYPTO_TFM_RES_BAD_KEY_LEN);
+	return -EINVAL;
 }
 
 static int __maybe_unused ecb_encrypt(struct skcipher_request *req)
@@ -775,8 +791,13 @@ static int cbcmac_setkey(struct crypto_shash *tfm, const u8 *in_key,
 			 unsigned int key_len)
 {
 	struct mac_tfm_ctx *ctx = crypto_shash_ctx(tfm);
+	int err;
 
-	return aes_expandkey(&ctx->key, in_key, key_len);
+	err = aes_expandkey(&ctx->key, in_key, key_len);
+	if (err)
+		crypto_shash_set_flags(tfm, CRYPTO_TFM_RES_BAD_KEY_LEN);
+
+	return err;
 }
 
 static void cmac_gf128_mul_by_x(be128 *y, const be128 *x)

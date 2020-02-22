@@ -31,9 +31,9 @@ SECTIONS
 
   _sdata = .;			/* Start of data section */
 
-  RO_DATA(4096)
+  RODATA
 
-  RW_DATA(16, PAGE_SIZE, THREAD_SIZE)
+  RW_DATA_SECTION(16, PAGE_SIZE, THREAD_SIZE)
 
   BSS_SECTION(0, 0, 0)
 

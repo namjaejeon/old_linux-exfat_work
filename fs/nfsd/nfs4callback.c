@@ -823,41 +823,7 @@ static const struct rpc_program cb_program = {
 static int max_cb_time(struct net *net)
 {
 	struct nfsd_net *nn = net_generic(net, nfsd_net_id);
-
-	/*
-	 * nfsd4_lease is set to at most one hour in __nfsd4_write_time,
-	 * so we can use 32-bit math on it. Warn if that assumption
-	 * ever stops being true.
-	 */
-	if (WARN_ON_ONCE(nn->nfsd4_lease > 3600))
-		return 360 * HZ;
-
-	return max(((u32)nn->nfsd4_lease)/10, 1u) * HZ;
-}
-
-static struct workqueue_struct *callback_wq;
-
-static bool nfsd4_queue_cb(struct nfsd4_callback *cb)
-{
-	return queue_work(callback_wq, &cb->cb_work);
-}
-
-static void nfsd41_cb_inflight_begin(struct nfs4_client *clp)
-{
-	atomic_inc(&clp->cl_cb_inflight);
-}
-
-static void nfsd41_cb_inflight_end(struct nfs4_client *clp)
-{
-
-	if (atomic_dec_and_test(&clp->cl_cb_inflight))
-		wake_up_var(&clp->cl_cb_inflight);
-}
-
-static void nfsd41_cb_inflight_wait_complete(struct nfs4_client *clp)
-{
-	wait_var_event(&clp->cl_cb_inflight,
-			!atomic_read(&clp->cl_cb_inflight));
+	return max(nn->nfsd4_lease/10, (time_t)1) * HZ;
 }
 
 static const struct cred *get_backchannel_cred(struct nfs4_client *clp, struct rpc_clnt *client, struct nfsd4_session *ses)
@@ -971,20 +937,13 @@ static void nfsd4_cb_probe_done(struct rpc_task *task, void *calldata)
 		clp->cl_cb_state = NFSD4_CB_UP;
 }
 
-static void nfsd4_cb_probe_release(void *calldata)
-{
-	struct nfs4_client *clp = container_of(calldata, struct nfs4_client, cl_cb_null);
-
-	nfsd41_cb_inflight_end(clp);
-
-}
-
 static const struct rpc_call_ops nfsd4_cb_probe_ops = {
 	/* XXX: release method to ensure we set the cb channel down if
 	 * necessary on early failure? */
 	.rpc_call_done = nfsd4_cb_probe_done,
-	.rpc_release = nfsd4_cb_probe_release,
 };
+
+static struct workqueue_struct *callback_wq;
 
 /*
  * Poke the callback thread to process any updates to the callback
@@ -1016,12 +975,9 @@ void nfsd4_change_callback(struct nfs4_client *clp, struct nfs4_cb_conn *conn)
  * If the slot is available, then mark it busy.  Otherwise, set the
  * thread for sleeping on the callback RPC wait queue.
  */
-static bool nfsd41_cb_get_slot(struct nfsd4_callback *cb, struct rpc_task *task)
+static bool nfsd41_cb_get_slot(struct nfs4_client *clp, struct rpc_task *task)
 {
-	struct nfs4_client *clp = cb->cb_clp;
-
-	if (!cb->cb_holds_slot &&
-	    test_and_set_bit(0, &clp->cl_cb_slot_busy) != 0) {
+	if (test_and_set_bit(0, &clp->cl_cb_slot_busy) != 0) {
 		rpc_sleep_on(&clp->cl_cb_waitq, task, NULL);
 		/* Race breaker */
 		if (test_and_set_bit(0, &clp->cl_cb_slot_busy) != 0) {
@@ -1030,29 +986,7 @@ static bool nfsd41_cb_get_slot(struct nfsd4_callback *cb, struct rpc_task *task)
 		}
 		rpc_wake_up_queued_task(&clp->cl_cb_waitq, task);
 	}
-	cb->cb_holds_slot = true;
 	return true;
-}
-
-static void nfsd41_cb_release_slot(struct nfsd4_callback *cb)
-{
-	struct nfs4_client *clp = cb->cb_clp;
-
-	if (cb->cb_holds_slot) {
-		cb->cb_holds_slot = false;
-		clear_bit(0, &clp->cl_cb_slot_busy);
-		rpc_wake_up_next(&clp->cl_cb_waitq);
-	}
-}
-
-static void nfsd41_destroy_cb(struct nfsd4_callback *cb)
-{
-	struct nfs4_client *clp = cb->cb_clp;
-
-	nfsd41_cb_release_slot(cb);
-	if (cb->cb_ops && cb->cb_ops->release)
-		cb->cb_ops->release(cb);
-	nfsd41_cb_inflight_end(clp);
 }
 
 /*
@@ -1071,8 +1005,11 @@ static void nfsd4_cb_prepare(struct rpc_task *task, void *calldata)
 	 */
 	cb->cb_seq_status = 1;
 	cb->cb_status = 0;
-	if (minorversion && !nfsd41_cb_get_slot(cb, task))
-		return;
+	if (minorversion) {
+		if (!cb->cb_holds_slot && !nfsd41_cb_get_slot(clp, task))
+			return;
+		cb->cb_holds_slot = true;
+	}
 	rpc_call_start(task);
 }
 
@@ -1135,12 +1072,13 @@ static bool nfsd4_cb_sequence_done(struct rpc_task *task, struct nfsd4_callback 
 		}
 		break;
 	default:
-		nfsd4_mark_cb_fault(cb->cb_clp, cb->cb_seq_status);
 		dprintk("%s: unprocessed error %d\n", __func__,
 			cb->cb_seq_status);
 	}
 
-	nfsd41_cb_release_slot(cb);
+	cb->cb_holds_slot = false;
+	clear_bit(0, &clp->cl_cb_slot_busy);
+	rpc_wake_up_next(&clp->cl_cb_waitq);
 	dprintk("%s: freed slot, new seqid=%d\n", __func__,
 		clp->cl_cb_session->se_cb_seq_nr);
 
@@ -1153,10 +1091,8 @@ retry_nowait:
 		ret = false;
 	goto out;
 need_restart:
-	if (!test_bit(NFSD4_CLIENT_CB_KILL, &clp->cl_flags)) {
-		task->tk_status = 0;
-		cb->cb_need_restart = true;
-	}
+	task->tk_status = 0;
+	cb->cb_need_restart = true;
 	return false;
 }
 
@@ -1198,9 +1134,9 @@ static void nfsd4_cb_release(void *calldata)
 	struct nfsd4_callback *cb = calldata;
 
 	if (cb->cb_need_restart)
-		nfsd4_queue_cb(cb);
+		nfsd4_run_cb(cb);
 	else
-		nfsd41_destroy_cb(cb);
+		cb->cb_ops->release(cb);
 
 }
 
@@ -1234,7 +1170,6 @@ void nfsd4_shutdown_callback(struct nfs4_client *clp)
 	 */
 	nfsd4_run_cb(&clp->cl_cb_null);
 	flush_workqueue(callback_wq);
-	nfsd41_cb_inflight_wait_complete(clp);
 }
 
 /* requires cl_lock: */
@@ -1252,12 +1187,6 @@ static struct nfsd4_conn * __nfsd4_find_backchannel(struct nfs4_client *clp)
 	return NULL;
 }
 
-/*
- * Note there isn't a lot of locking in this code; instead we depend on
- * the fact that it is run from the callback_wq, which won't run two
- * work items at once.  So, for example, callback_wq handles all access
- * of cl_cb_client and all calls to rpc_create or rpc_shutdown_client.
- */
 static void nfsd4_process_cb_update(struct nfsd4_callback *cb)
 {
 	struct nfs4_cb_conn conn;
@@ -1326,7 +1255,8 @@ nfsd4_run_cb_work(struct work_struct *work)
 	clnt = clp->cl_cb_client;
 	if (!clnt) {
 		/* Callback channel broken, or client killed; give up: */
-		nfsd41_destroy_cb(cb);
+		if (cb->cb_ops && cb->cb_ops->release)
+			cb->cb_ops->release(cb);
 		return;
 	}
 
@@ -1335,7 +1265,6 @@ nfsd4_run_cb_work(struct work_struct *work)
 	 */
 	if (!cb->cb_ops && clp->cl_minorversion) {
 		clp->cl_cb_state = NFSD4_CB_UP;
-		nfsd41_destroy_cb(cb);
 		return;
 	}
 
@@ -1361,9 +1290,5 @@ void nfsd4_init_cb(struct nfsd4_callback *cb, struct nfs4_client *clp,
 
 void nfsd4_run_cb(struct nfsd4_callback *cb)
 {
-	struct nfs4_client *clp = cb->cb_clp;
-
-	nfsd41_cb_inflight_begin(clp);
-	if (!nfsd4_queue_cb(cb))
-		nfsd41_cb_inflight_end(clp);
+	queue_work(callback_wq, &cb->cb_work);
 }

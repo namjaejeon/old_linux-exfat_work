@@ -7,7 +7,7 @@
 #include <linux/stddef.h>
 #include <linux/bpf.h>
 
-#include <bpf/bpf_helpers.h>
+#include "bpf_helpers.h"
 
 #ifndef ARRAY_SIZE
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
@@ -44,10 +44,7 @@ int sysctl_tcp_mem(struct bpf_sysctl *ctx)
 	unsigned long tcp_mem[TCP_MEM_LOOPS] = {};
 	char value[MAX_VALUE_STR_LEN];
 	unsigned char i, off = 0;
-	/* a workaround to prevent compiler from generating
-	 * codes verifier cannot handle yet.
-	 */
-	volatile int ret;
+	int ret;
 
 	if (ctx->write)
 		return 0;

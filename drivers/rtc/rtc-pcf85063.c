@@ -289,9 +289,21 @@ static int pcf85063_ioctl(struct device *dev, unsigned int cmd,
 		if (ret < 0)
 			return ret;
 
-		status = status & PCF85063_REG_SC_OS ? RTC_VL_DATA_INVALID : 0;
+		if (status & PCF85063_REG_SC_OS)
+			dev_warn(&pcf85063->rtc->dev, "Voltage low, data loss detected.\n");
 
-		return put_user(status, (unsigned int __user *)arg);
+		status &= PCF85063_REG_SC_OS;
+
+		if (copy_to_user((void __user *)arg, &status, sizeof(int)))
+			return -EFAULT;
+
+		return 0;
+
+	case RTC_VL_CLR:
+		ret = regmap_update_bits(pcf85063->regmap, PCF85063_REG_SC,
+					 PCF85063_REG_SC_OS, 0);
+
+		return ret;
 
 	default:
 		return -ENOIOCTLCMD;

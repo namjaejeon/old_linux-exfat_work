@@ -83,6 +83,8 @@ struct crypto_engine_ctx {
 	struct crypto_engine_op op;
 };
 
+int crypto_transfer_ablkcipher_request_to_engine(struct crypto_engine *engine,
+						 struct ablkcipher_request *req);
 int crypto_transfer_aead_request_to_engine(struct crypto_engine *engine,
 					   struct aead_request *req);
 int crypto_transfer_akcipher_request_to_engine(struct crypto_engine *engine,
@@ -91,6 +93,8 @@ int crypto_transfer_hash_request_to_engine(struct crypto_engine *engine,
 					       struct ahash_request *req);
 int crypto_transfer_skcipher_request_to_engine(struct crypto_engine *engine,
 					       struct skcipher_request *req);
+void crypto_finalize_ablkcipher_request(struct crypto_engine *engine,
+					struct ablkcipher_request *req, int err);
 void crypto_finalize_aead_request(struct crypto_engine *engine,
 				  struct aead_request *req, int err);
 void crypto_finalize_akcipher_request(struct crypto_engine *engine,

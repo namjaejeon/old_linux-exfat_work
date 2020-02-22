@@ -99,14 +99,8 @@ static int imx_sc_wdt_set_pretimeout(struct watchdog_device *wdog,
 {
 	struct arm_smccc_res res;
 
-	/*
-	 * SCU firmware calculates pretimeout based on current time
-	 * stamp instead of watchdog timeout stamp, need to convert
-	 * the pretimeout to SCU firmware's timeout value.
-	 */
 	arm_smccc_smc(IMX_SIP_TIMER, IMX_SIP_TIMER_SET_PRETIME_WDOG,
-		      (wdog->timeout - pretimeout) * 1000, 0, 0, 0,
-		      0, 0, &res);
+		      pretimeout * 1000, 0, 0, 0, 0, 0, &res);
 	if (res.a0)
 		return -EACCES;
 

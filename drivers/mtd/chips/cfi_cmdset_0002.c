@@ -123,22 +123,18 @@ static int cfi_use_status_reg(struct cfi_private *cfi)
 		(extp->SoftwareFeatures & poll_mask) == CFI_POLL_STATUS_REG;
 }
 
-static int cfi_check_err_status(struct map_info *map, struct flchip *chip,
-				unsigned long adr)
+static void cfi_check_err_status(struct map_info *map, struct flchip *chip,
+				 unsigned long adr)
 {
 	struct cfi_private *cfi = map->fldrv_priv;
 	map_word status;
 
 	if (!cfi_use_status_reg(cfi))
-		return 0;
+		return;
 
 	cfi_send_gen_cmd(0x70, cfi->addr_unlock1, chip->start, map, cfi,
 			 cfi->device_type, NULL);
 	status = map_read(map, adr);
-
-	/* The error bits are invalid while the chip's busy */
-	if (!map_word_bitsset(map, status, CMD(CFI_SR_DRB)))
-		return 0;
 
 	if (map_word_bitsset(map, status, CMD(0x3a))) {
 		unsigned long chipstatus = MERGESTATUS(status);
@@ -155,12 +151,7 @@ static int cfi_check_err_status(struct map_info *map, struct flchip *chip,
 		if (chipstatus & CFI_SR_SLSB)
 			pr_err("%s sector write protected, status %lx\n",
 			       map->name, chipstatus);
-
-		/* Erase/Program status bits are set on the operation failure */
-		if (chipstatus & (CFI_SR_ESB | CFI_SR_PSB))
-			return 1;
 	}
-	return 0;
 }
 
 /* #define DEBUG_CFI_FEATURES */
@@ -794,6 +785,7 @@ static struct mtd_info *cfi_amdstd_setup(struct mtd_info *mtd)
 	kfree(mtd->eraseregions);
 	kfree(mtd);
 	kfree(cfi->cmdset_priv);
+	kfree(cfi->cfiq);
 	return NULL;
 }
 
@@ -856,16 +848,20 @@ static int __xipram chip_good(struct map_info *map, struct flchip *chip,
 
 	if (cfi_use_status_reg(cfi)) {
 		map_word ready = CMD(CFI_SR_DRB);
-
+		map_word err = CMD(CFI_SR_PSB | CFI_SR_ESB);
 		/*
 		 * For chips that support status register, check device
-		 * ready bit
+		 * ready bit and Erase/Program status bit to know if
+		 * operation succeeded.
 		 */
 		cfi_send_gen_cmd(0x70, cfi->addr_unlock1, chip->start, map, cfi,
 				 cfi->device_type, NULL);
 		curd = map_read(map, addr);
 
-		return map_word_andequal(map, curd, ready, ready);
+		if (map_word_andequal(map, curd, ready, ready))
+			return !map_word_bitsset(map, curd, err);
+
+		return 0;
 	}
 
 	oldd = map_read(map, addr);
@@ -1703,11 +1699,8 @@ static int __xipram do_write_oneword_once(struct map_info *map,
 			break;
 		}
 
-		if (chip_good(map, chip, adr, datum)) {
-			if (cfi_check_err_status(map, chip, adr))
-				ret = -EIO;
+		if (chip_good(map, chip, adr, datum))
 			break;
-		}
 
 		/* Latency issues. Drop the lock, wait a while and retry */
 		UDELAY(map, chip, adr, 1);
@@ -1720,7 +1713,7 @@ static int __xipram do_write_oneword_start(struct map_info *map,
 					   struct flchip *chip,
 					   unsigned long adr, int mode)
 {
-	int ret;
+	int ret = 0;
 
 	mutex_lock(&chip->mutex);
 
@@ -1780,6 +1773,7 @@ static int __xipram do_write_oneword_retry(struct map_info *map,
 	ret = do_write_oneword_once(map, chip, adr, datum, mode, cfi);
 	if (ret) {
 		/* reset on all failures. */
+		cfi_check_err_status(map, chip, adr);
 		map_write(map, CMD(0xF0), chip->start);
 		/* FIXME - should have reset delay before continuing */
 
@@ -1797,7 +1791,7 @@ static int __xipram do_write_oneword(struct map_info *map, struct flchip *chip,
 				     unsigned long adr, map_word datum,
 				     int mode)
 {
-	int ret;
+	int ret = 0;
 
 	adr += chip->start;
 
@@ -1821,7 +1815,7 @@ static int cfi_amdstd_write_words(struct mtd_info *mtd, loff_t to, size_t len,
 {
 	struct map_info *map = mtd->priv;
 	struct cfi_private *cfi = map->fldrv_priv;
-	int ret;
+	int ret = 0;
 	int chipnum;
 	unsigned long ofs, chipstart;
 	DECLARE_WAITQUEUE(wait, current);
@@ -1976,17 +1970,12 @@ static int __xipram do_write_buffer_wait(struct map_info *map,
 		 */
 		if (time_after(jiffies, timeo) &&
 		    !chip_good(map, chip, adr, datum)) {
-			pr_err("MTD %s(): software timeout, address:0x%.8lx.\n",
-			       __func__, adr);
 			ret = -EIO;
 			break;
 		}
 
-		if (chip_good(map, chip, adr, datum)) {
-			if (cfi_check_err_status(map, chip, adr))
-				ret = -EIO;
+		if (chip_good(map, chip, adr, datum))
 			break;
-		}
 
 		/* Latency issues. Drop the lock, wait a while and retry */
 		UDELAY(map, chip, adr, 1);
@@ -2025,7 +2014,7 @@ static int __xipram do_write_buffer(struct map_info *map, struct flchip *chip,
 				    int len)
 {
 	struct cfi_private *cfi = map->fldrv_priv;
-	int ret;
+	int ret = -EIO;
 	unsigned long cmd_adr;
 	int z, words;
 	map_word datum;
@@ -2082,8 +2071,12 @@ static int __xipram do_write_buffer(struct map_info *map, struct flchip *chip,
 				chip->word_write_time);
 
 	ret = do_write_buffer_wait(map, chip, adr, datum);
-	if (ret)
+	if (ret) {
+		cfi_check_err_status(map, chip, adr);
 		do_write_buffer_reset(map, chip, cfi);
+		pr_err("MTD %s(): software timeout, address:0x%.8lx.\n",
+		       __func__, adr);
+	}
 
 	xip_enable(map, chip, adr);
 
@@ -2102,7 +2095,7 @@ static int cfi_amdstd_write_buffers(struct mtd_info *mtd, loff_t to, size_t len,
 	struct map_info *map = mtd->priv;
 	struct cfi_private *cfi = map->fldrv_priv;
 	int wbufsize = cfi_interleave(cfi) << cfi->cfiq->MaxBufWriteSize;
-	int ret;
+	int ret = 0;
 	int chipnum;
 	unsigned long ofs;
 
@@ -2239,7 +2232,7 @@ static int do_panic_write_oneword(struct map_info *map, struct flchip *chip,
 	struct cfi_private *cfi = map->fldrv_priv;
 	int retry_cnt = 0;
 	map_word oldd;
-	int ret;
+	int ret = 0;
 	int i;
 
 	adr += chip->start;
@@ -2278,9 +2271,9 @@ retry:
 		udelay(1);
 	}
 
-	if (!chip_good(map, chip, adr, datum) ||
-	    cfi_check_err_status(map, chip, adr)) {
+	if (!chip_good(map, chip, adr, datum)) {
 		/* reset on all failures. */
+		cfi_check_err_status(map, chip, adr);
 		map_write(map, CMD(0xF0), chip->start);
 		/* FIXME - should have reset delay before continuing */
 
@@ -2314,7 +2307,7 @@ static int cfi_amdstd_panic_write(struct mtd_info *mtd, loff_t to, size_t len,
 	struct map_info *map = mtd->priv;
 	struct cfi_private *cfi = map->fldrv_priv;
 	unsigned long ofs, chipstart;
-	int ret;
+	int ret = 0;
 	int chipnum;
 
 	chipnum = to >> cfi->chipshift;
@@ -2418,7 +2411,7 @@ static int __xipram do_erase_chip(struct map_info *map, struct flchip *chip)
 	unsigned long timeo = jiffies + HZ;
 	unsigned long int adr;
 	DECLARE_WAITQUEUE(wait, current);
-	int ret;
+	int ret = 0;
 	int retry_cnt = 0;
 
 	adr = cfi->addr_unlock1;
@@ -2474,11 +2467,8 @@ static int __xipram do_erase_chip(struct map_info *map, struct flchip *chip)
 			chip->erase_suspended = 0;
 		}
 
-		if (chip_good(map, chip, adr, map_word_ff(map))) {
-			if (cfi_check_err_status(map, chip, adr))
-				ret = -EIO;
+		if (chip_good(map, chip, adr, map_word_ff(map)))
 			break;
-		}
 
 		if (time_after(jiffies, timeo)) {
 			printk(KERN_WARNING "MTD %s(): software timeout\n",
@@ -2493,6 +2483,7 @@ static int __xipram do_erase_chip(struct map_info *map, struct flchip *chip)
 	/* Did we succeed? */
 	if (ret) {
 		/* reset on all failures. */
+		cfi_check_err_status(map, chip, adr);
 		map_write(map, CMD(0xF0), chip->start);
 		/* FIXME - should have reset delay before continuing */
 
@@ -2517,7 +2508,7 @@ static int __xipram do_erase_oneblock(struct map_info *map, struct flchip *chip,
 	struct cfi_private *cfi = map->fldrv_priv;
 	unsigned long timeo = jiffies + HZ;
 	DECLARE_WAITQUEUE(wait, current);
-	int ret;
+	int ret = 0;
 	int retry_cnt = 0;
 
 	adr += chip->start;
@@ -2573,11 +2564,8 @@ static int __xipram do_erase_oneblock(struct map_info *map, struct flchip *chip,
 			chip->erase_suspended = 0;
 		}
 
-		if (chip_good(map, chip, adr, map_word_ff(map))) {
-			if (cfi_check_err_status(map, chip, adr))
-				ret = -EIO;
+		if (chip_good(map, chip, adr, map_word_ff(map)))
 			break;
-		}
 
 		if (time_after(jiffies, timeo)) {
 			printk(KERN_WARNING "MTD %s(): software timeout\n",
@@ -2592,6 +2580,7 @@ static int __xipram do_erase_oneblock(struct map_info *map, struct flchip *chip,
 	/* Did we succeed? */
 	if (ret) {
 		/* reset on all failures. */
+		cfi_check_err_status(map, chip, adr);
 		map_write(map, CMD(0xF0), chip->start);
 		/* FIXME - should have reset delay before continuing */
 

@@ -189,15 +189,9 @@ static inline int unix_may_send(struct sock *sk, struct sock *osk)
 	return unix_peer(osk) == NULL || unix_our_peer(sk, osk);
 }
 
-static inline int unix_recvq_full(const struct sock *sk)
+static inline int unix_recvq_full(struct sock const *sk)
 {
 	return skb_queue_len(&sk->sk_receive_queue) > sk->sk_max_ack_backlog;
-}
-
-static inline int unix_recvq_full_lockless(const struct sock *sk)
-{
-	return skb_queue_len_lockless(&sk->sk_receive_queue) >
-		READ_ONCE(sk->sk_max_ack_backlog);
 }
 
 struct sock *unix_peer_get(struct sock *s)
@@ -290,9 +284,11 @@ static struct sock *__unix_find_socket_byname(struct net *net,
 
 		if (u->addr->len == len &&
 		    !memcmp(u->addr->name, sunname, len))
-			return s;
+			goto found;
 	}
-	return NULL;
+	s = NULL;
+found:
+	return s;
 }
 
 static inline struct sock *unix_find_socket_byname(struct net *net,
@@ -650,9 +646,6 @@ static __poll_t unix_poll(struct file *, struct socket *, poll_table *);
 static __poll_t unix_dgram_poll(struct file *, struct socket *,
 				    poll_table *);
 static int unix_ioctl(struct socket *, unsigned int, unsigned long);
-#ifdef CONFIG_COMPAT
-static int unix_compat_ioctl(struct socket *sock, unsigned int cmd, unsigned long arg);
-#endif
 static int unix_shutdown(struct socket *, int);
 static int unix_stream_sendmsg(struct socket *, struct msghdr *, size_t);
 static int unix_stream_recvmsg(struct socket *, struct msghdr *, size_t, int);
@@ -682,16 +675,6 @@ static int unix_set_peek_off(struct sock *sk, int val)
 	return 0;
 }
 
-static void unix_show_fdinfo(struct seq_file *m, struct socket *sock)
-{
-	struct sock *sk = sock->sk;
-	struct unix_sock *u;
-
-	if (sk) {
-		u = unix_sk(sock->sk);
-		seq_printf(m, "scm_fds: %u\n", READ_ONCE(u->scm_stat.nr_fds));
-	}
-}
 
 static const struct proto_ops unix_stream_ops = {
 	.family =	PF_UNIX,
@@ -704,9 +687,6 @@ static const struct proto_ops unix_stream_ops = {
 	.getname =	unix_getname,
 	.poll =		unix_poll,
 	.ioctl =	unix_ioctl,
-#ifdef CONFIG_COMPAT
-	.compat_ioctl =	unix_compat_ioctl,
-#endif
 	.listen =	unix_listen,
 	.shutdown =	unix_shutdown,
 	.setsockopt =	sock_no_setsockopt,
@@ -717,7 +697,6 @@ static const struct proto_ops unix_stream_ops = {
 	.sendpage =	unix_stream_sendpage,
 	.splice_read =	unix_stream_splice_read,
 	.set_peek_off =	unix_set_peek_off,
-	.show_fdinfo =	unix_show_fdinfo,
 };
 
 static const struct proto_ops unix_dgram_ops = {
@@ -731,9 +710,6 @@ static const struct proto_ops unix_dgram_ops = {
 	.getname =	unix_getname,
 	.poll =		unix_dgram_poll,
 	.ioctl =	unix_ioctl,
-#ifdef CONFIG_COMPAT
-	.compat_ioctl =	unix_compat_ioctl,
-#endif
 	.listen =	sock_no_listen,
 	.shutdown =	unix_shutdown,
 	.setsockopt =	sock_no_setsockopt,
@@ -743,7 +719,6 @@ static const struct proto_ops unix_dgram_ops = {
 	.mmap =		sock_no_mmap,
 	.sendpage =	sock_no_sendpage,
 	.set_peek_off =	unix_set_peek_off,
-	.show_fdinfo =	unix_show_fdinfo,
 };
 
 static const struct proto_ops unix_seqpacket_ops = {
@@ -757,9 +732,6 @@ static const struct proto_ops unix_seqpacket_ops = {
 	.getname =	unix_getname,
 	.poll =		unix_dgram_poll,
 	.ioctl =	unix_ioctl,
-#ifdef CONFIG_COMPAT
-	.compat_ioctl =	unix_compat_ioctl,
-#endif
 	.listen =	unix_listen,
 	.shutdown =	unix_shutdown,
 	.setsockopt =	sock_no_setsockopt,
@@ -769,7 +741,6 @@ static const struct proto_ops unix_seqpacket_ops = {
 	.mmap =		sock_no_mmap,
 	.sendpage =	sock_no_sendpage,
 	.set_peek_off =	unix_set_peek_off,
-	.show_fdinfo =	unix_show_fdinfo,
 };
 
 static struct proto unix_proto = {
@@ -807,7 +778,6 @@ static struct sock *unix_create1(struct net *net, struct socket *sock, int kern)
 	mutex_init(&u->bindlock); /* single task binding lock */
 	init_waitqueue_head(&u->peer_wait);
 	init_waitqueue_func_entry(&u->peer_wake, unix_dgram_peer_wake_relay);
-	memset(&u->scm_stat, 0, sizeof(struct scm_stat));
 	unix_insert_socket(unix_sockets_unbound(sk), sk);
 out:
 	if (sk == NULL)
@@ -1592,28 +1562,6 @@ static bool unix_skb_scm_eq(struct sk_buff *skb,
 	       unix_secdata_eq(scm, skb);
 }
 
-static void scm_stat_add(struct sock *sk, struct sk_buff *skb)
-{
-	struct scm_fp_list *fp = UNIXCB(skb).fp;
-	struct unix_sock *u = unix_sk(sk);
-
-	lockdep_assert_held(&sk->sk_receive_queue.lock);
-
-	if (unlikely(fp && fp->count))
-		u->scm_stat.nr_fds += fp->count;
-}
-
-static void scm_stat_del(struct sock *sk, struct sk_buff *skb)
-{
-	struct scm_fp_list *fp = UNIXCB(skb).fp;
-	struct unix_sock *u = unix_sk(sk);
-
-	lockdep_assert_held(&sk->sk_receive_queue.lock);
-
-	if (unlikely(fp && fp->count))
-		u->scm_stat.nr_fds -= fp->count;
-}
-
 /*
  *	Send AF_UNIX data.
  */
@@ -1764,8 +1712,7 @@ restart_locked:
 	 * - unix_peer(sk) == sk by time of get but disconnected before lock
 	 */
 	if (other != sk &&
-	    unlikely(unix_peer(other) != sk &&
-	    unix_recvq_full_lockless(other))) {
+	    unlikely(unix_peer(other) != sk && unix_recvq_full(other))) {
 		if (timeo) {
 			timeo = unix_wait_for_peer(other, timeo);
 
@@ -1800,10 +1747,7 @@ restart_locked:
 	if (sock_flag(other, SOCK_RCVTSTAMP))
 		__net_timestamp(skb);
 	maybe_add_creds(skb, sock, other);
-	spin_lock(&other->sk_receive_queue.lock);
-	scm_stat_add(other, skb);
-	__skb_queue_tail(&other->sk_receive_queue, skb);
-	spin_unlock(&other->sk_receive_queue.lock);
+	skb_queue_tail(&other->sk_receive_queue, skb);
 	unix_state_unlock(other);
 	other->sk_data_ready(other);
 	sock_put(other);
@@ -1905,10 +1849,7 @@ static int unix_stream_sendmsg(struct socket *sock, struct msghdr *msg,
 			goto pipe_err_free;
 
 		maybe_add_creds(skb, sock, other);
-		spin_lock(&other->sk_receive_queue.lock);
-		scm_stat_add(other, skb);
-		__skb_queue_tail(&other->sk_receive_queue, skb);
-		spin_unlock(&other->sk_receive_queue.lock);
+		skb_queue_tail(&other->sk_receive_queue, skb);
 		unix_state_unlock(other);
 		other->sk_data_ready(other);
 		sent += size;
@@ -2107,8 +2048,8 @@ static int unix_dgram_recvmsg(struct socket *sock, struct msghdr *msg,
 		mutex_lock(&u->iolock);
 
 		skip = sk_peek_offset(sk, flags);
-		skb = __skb_try_recv_datagram(sk, &sk->sk_receive_queue, flags,
-					      scm_stat_del, &skip, &err, &last);
+		skb = __skb_try_recv_datagram(sk, flags, NULL, &skip, &err,
+					      &last);
 		if (skb)
 			break;
 
@@ -2117,8 +2058,7 @@ static int unix_dgram_recvmsg(struct socket *sock, struct msghdr *msg,
 		if (err != -EAGAIN)
 			break;
 	} while (timeo &&
-		 !__skb_wait_for_more_packets(sk, &sk->sk_receive_queue,
-					      &err, &timeo, last));
+		 !__skb_wait_for_more_packets(sk, &err, &timeo, last));
 
 	if (!skb) { /* implies iolock unlocked */
 		unix_state_lock(sk);
@@ -2403,12 +2343,8 @@ unlock:
 
 			sk_peek_offset_bwd(sk, chunk);
 
-			if (UNIXCB(skb).fp) {
-				spin_lock(&sk->sk_receive_queue.lock);
-				scm_stat_del(sk, skb);
-				spin_unlock(&sk->sk_receive_queue.lock);
+			if (UNIXCB(skb).fp)
 				unix_detach_fds(&scm, skb);
-			}
 
 			if (unix_skb_len(skb))
 				break;
@@ -2645,13 +2581,6 @@ static int unix_ioctl(struct socket *sock, unsigned int cmd, unsigned long arg)
 	}
 	return err;
 }
-
-#ifdef CONFIG_COMPAT
-static int unix_compat_ioctl(struct socket *sock, unsigned int cmd, unsigned long arg)
-{
-	return unix_ioctl(sock, cmd, (unsigned long)compat_ptr(arg));
-}
-#endif
 
 static __poll_t unix_poll(struct file *file, struct socket *sock, poll_table *wait)
 {
@@ -2919,7 +2848,7 @@ static int __init af_unix_init(void)
 {
 	int rc = -1;
 
-	BUILD_BUG_ON(sizeof(struct unix_skb_parms) > sizeof_field(struct sk_buff, cb));
+	BUILD_BUG_ON(sizeof(struct unix_skb_parms) > FIELD_SIZEOF(struct sk_buff, cb));
 
 	rc = proto_register(&unix_proto, 1);
 	if (rc != 0) {

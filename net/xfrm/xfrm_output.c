@@ -533,7 +533,7 @@ static int xfrm_output2(struct net *net, struct sock *sk, struct sk_buff *skb)
 
 static int xfrm_output_gso(struct net *net, struct sock *sk, struct sk_buff *skb)
 {
-	struct sk_buff *segs, *nskb;
+	struct sk_buff *segs;
 
 	BUILD_BUG_ON(sizeof(*IPCB(skb)) > SKB_SGO_CB_OFFSET);
 	BUILD_BUG_ON(sizeof(*IP6CB(skb)) > SKB_SGO_CB_OFFSET);
@@ -544,7 +544,8 @@ static int xfrm_output_gso(struct net *net, struct sock *sk, struct sk_buff *skb
 	if (segs == NULL)
 		return -EINVAL;
 
-	skb_list_walk_safe(segs, segs, nskb) {
+	do {
+		struct sk_buff *nskb = segs->next;
 		int err;
 
 		skb_mark_not_on_list(segs);
@@ -554,7 +555,9 @@ static int xfrm_output_gso(struct net *net, struct sock *sk, struct sk_buff *skb
 			kfree_skb_list(nskb);
 			return err;
 		}
-	}
+
+		segs = nskb;
+	} while (segs);
 
 	return 0;
 }

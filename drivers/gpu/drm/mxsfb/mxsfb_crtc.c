@@ -95,11 +95,8 @@ static void mxsfb_set_bus_fmt(struct mxsfb_drm_private *mxsfb)
 
 	reg = readl(mxsfb->base + LCDC_CTRL);
 
-	if (mxsfb->connector->display_info.num_bus_formats)
-		bus_format = mxsfb->connector->display_info.bus_formats[0];
-
-	DRM_DEV_DEBUG_DRIVER(drm->dev, "Using bus_format: 0x%08X\n",
-			     bus_format);
+	if (mxsfb->connector.display_info.num_bus_formats)
+		bus_format = mxsfb->connector.display_info.bus_formats[0];
 
 	reg &= ~CTRL_BUS_WIDTH_MASK;
 	switch (bus_format) {
@@ -207,9 +204,8 @@ static dma_addr_t mxsfb_get_fb_paddr(struct mxsfb_drm_private *mxsfb)
 
 static void mxsfb_crtc_mode_set_nofb(struct mxsfb_drm_private *mxsfb)
 {
-	struct drm_device *drm = mxsfb->pipe.crtc.dev;
 	struct drm_display_mode *m = &mxsfb->pipe.crtc.state->adjusted_mode;
-	u32 bus_flags = mxsfb->connector->display_info.bus_flags;
+	const u32 bus_flags = mxsfb->connector.display_info.bus_flags;
 	u32 vdctrl0, vsync_pulse_len, hsync_pulse_len;
 	int err;
 
@@ -232,16 +228,6 @@ static void mxsfb_crtc_mode_set_nofb(struct mxsfb_drm_private *mxsfb)
 		return;
 
 	clk_set_rate(mxsfb->clk, m->crtc_clock * 1000);
-
-	if (mxsfb->bridge && mxsfb->bridge->timings)
-		bus_flags = mxsfb->bridge->timings->input_bus_flags;
-
-	DRM_DEV_DEBUG_DRIVER(drm->dev, "Pixel clock: %dkHz (actual: %dkHz)\n",
-			     m->crtc_clock,
-			     (int)(clk_get_rate(mxsfb->clk) / 1000));
-	DRM_DEV_DEBUG_DRIVER(drm->dev, "Connector bus_flags: 0x%08X\n",
-			     bus_flags);
-	DRM_DEV_DEBUG_DRIVER(drm->dev, "Mode flags: 0x%08X\n", m->flags);
 
 	writel(TRANSFER_COUNT_SET_VCOUNT(m->crtc_vdisplay) |
 	       TRANSFER_COUNT_SET_HCOUNT(m->crtc_hdisplay),

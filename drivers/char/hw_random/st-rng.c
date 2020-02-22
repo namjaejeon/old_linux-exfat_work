@@ -72,6 +72,7 @@ static int st_rng_read(struct hwrng *rng, void *data, size_t max, bool wait)
 static int st_rng_probe(struct platform_device *pdev)
 {
 	struct st_rng_data *ddata;
+	struct resource *res;
 	struct clk *clk;
 	void __iomem *base;
 	int ret;
@@ -80,7 +81,8 @@ static int st_rng_probe(struct platform_device *pdev)
 	if (!ddata)
 		return -ENOMEM;
 
-	base = devm_platform_ioremap_resource(pdev, 0);
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	base = devm_ioremap_resource(&pdev->dev, res);
 	if (IS_ERR(base))
 		return PTR_ERR(base);
 

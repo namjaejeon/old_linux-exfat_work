@@ -6,6 +6,8 @@
  * Copyright (C) 2019 Renesas Electronics Corporation
  */
 
+#include <linux/gpio.h>
+#include <linux/of_gpio.h>
 #include <linux/phy/phy.h>
 #include "common.h"
 #include "rcar2.h"
@@ -32,7 +34,7 @@ static int usbhs_rcar2_hardware_exit(struct platform_device *pdev)
 	struct usbhs_priv *priv = usbhs_pdev_to_priv(pdev);
 
 	if (priv->phy) {
-		phy_put(&pdev->dev, priv->phy);
+		phy_put(priv->phy);
 		priv->phy = NULL;
 	}
 

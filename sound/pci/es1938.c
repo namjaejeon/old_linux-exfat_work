@@ -863,6 +863,25 @@ static int snd_es1938_capture_copy_kernel(struct snd_pcm_substream *substream,
 	return 0;
 }
 
+/*
+ * buffer management
+ */
+static int snd_es1938_pcm_hw_params(struct snd_pcm_substream *substream,
+				    struct snd_pcm_hw_params *hw_params)
+
+{
+	int err;
+
+	if ((err = snd_pcm_lib_malloc_pages(substream, params_buffer_bytes(hw_params))) < 0)
+		return err;
+	return 0;
+}
+
+static int snd_es1938_pcm_hw_free(struct snd_pcm_substream *substream)
+{
+	return snd_pcm_lib_free_pages(substream);
+}
+
 /* ----------------------------------------------------------------------
  * Audio1 Capture (ADC)
  * ----------------------------------------------------------------------*/
@@ -977,6 +996,9 @@ static int snd_es1938_playback_close(struct snd_pcm_substream *substream)
 static const struct snd_pcm_ops snd_es1938_playback_ops = {
 	.open =		snd_es1938_playback_open,
 	.close =	snd_es1938_playback_close,
+	.ioctl =	snd_pcm_lib_ioctl,
+	.hw_params =	snd_es1938_pcm_hw_params,
+	.hw_free =	snd_es1938_pcm_hw_free,
 	.prepare =	snd_es1938_playback_prepare,
 	.trigger =	snd_es1938_playback_trigger,
 	.pointer =	snd_es1938_playback_pointer,
@@ -985,6 +1007,9 @@ static const struct snd_pcm_ops snd_es1938_playback_ops = {
 static const struct snd_pcm_ops snd_es1938_capture_ops = {
 	.open =		snd_es1938_capture_open,
 	.close =	snd_es1938_capture_close,
+	.ioctl =	snd_pcm_lib_ioctl,
+	.hw_params =	snd_es1938_pcm_hw_params,
+	.hw_free =	snd_es1938_pcm_hw_free,
 	.prepare =	snd_es1938_capture_prepare,
 	.trigger =	snd_es1938_capture_trigger,
 	.pointer =	snd_es1938_capture_pointer,
@@ -1006,8 +1031,8 @@ static int snd_es1938_new_pcm(struct es1938 *chip, int device)
 	pcm->info_flags = 0;
 	strcpy(pcm->name, "ESS Solo-1");
 
-	snd_pcm_set_managed_buffer_all(pcm, SNDRV_DMA_TYPE_DEV,
-				       &chip->pci->dev, 64*1024, 64*1024);
+	snd_pcm_lib_preallocate_pages_for_all(pcm, SNDRV_DMA_TYPE_DEV,
+					      snd_dma_pci_data(chip->pci), 64*1024, 64*1024);
 
 	chip->pcm = pcm;
 	return 0;
@@ -1307,7 +1332,7 @@ static const DECLARE_TLV_DB_RANGE(db_scale_line,
 
 static const DECLARE_TLV_DB_SCALE(db_scale_capture, 0, 150, 0);
 
-static const struct snd_kcontrol_new snd_es1938_controls[] = {
+static struct snd_kcontrol_new snd_es1938_controls[] = {
 ES1938_DOUBLE_TLV("Master Playback Volume", 0, 0x60, 0x62, 0, 0, 63, 0,
 		  db_scale_master),
 ES1938_DOUBLE("Master Playback Switch", 0, 0x60, 0x62, 6, 6, 1, 1),
@@ -1420,7 +1445,7 @@ static void snd_es1938_chip_init(struct es1938 *chip)
  * PM support
  */
 
-static const unsigned char saved_regs[SAVED_REG_SIZE+1] = {
+static unsigned char saved_regs[SAVED_REG_SIZE+1] = {
 	0x14, 0x1a, 0x1c, 0x3a, 0x3c, 0x3e, 0x36, 0x38,
 	0x50, 0x52, 0x60, 0x61, 0x62, 0x63, 0x64, 0x68,
 	0x69, 0x6a, 0x6b, 0x6d, 0x6e, 0x6f, 0x7c, 0x7d,
@@ -1432,8 +1457,7 @@ static int es1938_suspend(struct device *dev)
 {
 	struct snd_card *card = dev_get_drvdata(dev);
 	struct es1938 *chip = card->private_data;
-	const unsigned char *s;
-	unsigned char *d;
+	unsigned char *s, *d;
 
 	snd_power_change_state(card, SNDRV_CTL_POWER_D3hot);
 
@@ -1445,7 +1469,6 @@ static int es1938_suspend(struct device *dev)
 	if (chip->irq >= 0) {
 		free_irq(chip->irq, chip);
 		chip->irq = -1;
-		card->sync_irq = -1;
 	}
 	return 0;
 }
@@ -1455,8 +1478,7 @@ static int es1938_resume(struct device *dev)
 	struct pci_dev *pci = to_pci_dev(dev);
 	struct snd_card *card = dev_get_drvdata(dev);
 	struct es1938 *chip = card->private_data;
-	const unsigned char *s;
-	unsigned char *d;
+	unsigned char *s, *d;
 
 	if (request_irq(pci->irq, snd_es1938_interrupt,
 			IRQF_SHARED, KBUILD_MODNAME, chip)) {
@@ -1466,7 +1488,6 @@ static int es1938_resume(struct device *dev)
 		return -EIO;
 	}
 	chip->irq = pci->irq;
-	card->sync_irq = chip->irq;
 	snd_es1938_chip_init(chip);
 
 	/* restore mixer-related registers */
@@ -1550,7 +1571,7 @@ static int snd_es1938_create(struct snd_card *card,
 {
 	struct es1938 *chip;
 	int err;
-	static const struct snd_device_ops ops = {
+	static struct snd_device_ops ops = {
 		.dev_free =	snd_es1938_dev_free,
 	};
 
@@ -1595,7 +1616,6 @@ static int snd_es1938_create(struct snd_card *card,
 		return -EBUSY;
 	}
 	chip->irq = pci->irq;
-	card->sync_irq = chip->irq;
 	dev_dbg(card->dev,
 		"create: io: 0x%lx, sb: 0x%lx, vc: 0x%lx, mpu: 0x%lx, game: 0x%lx\n",
 		   chip->io_port, chip->sb_port, chip->vc_port, chip->mpu_port, chip->game_port);

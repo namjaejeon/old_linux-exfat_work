@@ -170,6 +170,8 @@ struct renesas_usbhs_driver_param {
 	 */
 	int pio_dma_border; /* default is 64byte */
 
+	u32 enable_gpio;
+
 	/*
 	 * option:
 	 */

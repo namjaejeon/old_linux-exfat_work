@@ -312,6 +312,7 @@ void afs_break_callbacks(struct afs_server *server, size_t count,
 	_enter("%p,%zu,", server, count);
 
 	ASSERT(server != NULL);
+	ASSERTCMP(count, <=, AFSCBMAX);
 
 	/* TODO: Sort the callback break list by volume ID */
 

@@ -34,7 +34,7 @@ static struct snd_pcm_hardware axg_fifo_hw = {
 	.rate_max = 192000,
 	.channels_min = 1,
 	.channels_max = AXG_FIFO_CH_MAX,
-	.period_bytes_min = AXG_FIFO_BURST,
+	.period_bytes_min = AXG_FIFO_MIN_DEPTH,
 	.period_bytes_max = UINT_MAX,
 	.periods_min = 2,
 	.periods_max = UINT_MAX,
@@ -70,8 +70,7 @@ static void __dma_enable(struct axg_fifo *fifo,  bool enable)
 			   enable ? CTRL0_DMA_EN : 0);
 }
 
-int axg_fifo_pcm_trigger(struct snd_soc_component *component,
-			 struct snd_pcm_substream *ss, int cmd)
+static int axg_fifo_pcm_trigger(struct snd_pcm_substream *ss, int cmd)
 {
 	struct axg_fifo *fifo = axg_fifo_data(ss);
 
@@ -92,10 +91,8 @@ int axg_fifo_pcm_trigger(struct snd_soc_component *component,
 
 	return 0;
 }
-EXPORT_SYMBOL_GPL(axg_fifo_pcm_trigger);
 
-snd_pcm_uframes_t axg_fifo_pcm_pointer(struct snd_soc_component *component,
-				       struct snd_pcm_substream *ss)
+static snd_pcm_uframes_t axg_fifo_pcm_pointer(struct snd_pcm_substream *ss)
 {
 	struct axg_fifo *fifo = axg_fifo_data(ss);
 	struct snd_pcm_runtime *runtime = ss->runtime;
@@ -105,18 +102,19 @@ snd_pcm_uframes_t axg_fifo_pcm_pointer(struct snd_soc_component *component,
 
 	return bytes_to_frames(runtime, addr - (unsigned int)runtime->dma_addr);
 }
-EXPORT_SYMBOL_GPL(axg_fifo_pcm_pointer);
 
-int axg_fifo_pcm_hw_params(struct snd_soc_component *component,
-			   struct snd_pcm_substream *ss,
-			   struct snd_pcm_hw_params *params)
+static int axg_fifo_pcm_hw_params(struct snd_pcm_substream *ss,
+				  struct snd_pcm_hw_params *params)
 {
 	struct snd_pcm_runtime *runtime = ss->runtime;
 	struct axg_fifo *fifo = axg_fifo_data(ss);
-	unsigned int burst_num, period, threshold;
 	dma_addr_t end_ptr;
+	unsigned int burst_num;
+	int ret;
 
-	period = params_period_bytes(params);
+	ret = snd_pcm_lib_malloc_pages(ss, params_buffer_bytes(params));
+	if (ret < 0)
+		return ret;
 
 	/* Setup dma memory pointers */
 	end_ptr = runtime->dma_addr + runtime->dma_bytes - AXG_FIFO_BURST;
@@ -124,23 +122,8 @@ int axg_fifo_pcm_hw_params(struct snd_soc_component *component,
 	regmap_write(fifo->map, FIFO_FINISH_ADDR, end_ptr);
 
 	/* Setup interrupt periodicity */
-	burst_num = period / AXG_FIFO_BURST;
+	burst_num = params_period_bytes(params) / AXG_FIFO_BURST;
 	regmap_write(fifo->map, FIFO_INT_ADDR, burst_num);
-
-	/*
-	 * Start the fifo request on the smallest of the following:
-	 * - Half the fifo size
-	 * - Half the period size
-	 */
-	threshold = min(period / 2, fifo->depth / 2);
-
-	/*
-	 * With the threshold in bytes, register value is:
-	 * V = (threshold / burst) - 1
-	 */
-	threshold /= AXG_FIFO_BURST;
-	regmap_field_write(fifo->field_threshold,
-			   threshold ? threshold - 1 : 0);
 
 	/* Enable block count irq */
 	regmap_update_bits(fifo->map, FIFO_CTRL0,
@@ -149,17 +132,15 @@ int axg_fifo_pcm_hw_params(struct snd_soc_component *component,
 
 	return 0;
 }
-EXPORT_SYMBOL_GPL(axg_fifo_pcm_hw_params);
 
-int g12a_fifo_pcm_hw_params(struct snd_soc_component *component,
-			    struct snd_pcm_substream *ss,
-			    struct snd_pcm_hw_params *params)
+static int g12a_fifo_pcm_hw_params(struct snd_pcm_substream *ss,
+				   struct snd_pcm_hw_params *params)
 {
 	struct axg_fifo *fifo = axg_fifo_data(ss);
 	struct snd_pcm_runtime *runtime = ss->runtime;
 	int ret;
 
-	ret = axg_fifo_pcm_hw_params(component, ss, params);
+	ret = axg_fifo_pcm_hw_params(ss, params);
 	if (ret)
 		return ret;
 
@@ -168,10 +149,8 @@ int g12a_fifo_pcm_hw_params(struct snd_soc_component *component,
 
 	return 0;
 }
-EXPORT_SYMBOL_GPL(g12a_fifo_pcm_hw_params);
 
-int axg_fifo_pcm_hw_free(struct snd_soc_component *component,
-			 struct snd_pcm_substream *ss)
+static int axg_fifo_pcm_hw_free(struct snd_pcm_substream *ss)
 {
 	struct axg_fifo *fifo = axg_fifo_data(ss);
 
@@ -179,9 +158,8 @@ int axg_fifo_pcm_hw_free(struct snd_soc_component *component,
 	regmap_update_bits(fifo->map, FIFO_CTRL0,
 			   CTRL0_INT_EN(FIFO_INT_COUNT_REPEAT), 0);
 
-	return 0;
+	return snd_pcm_lib_free_pages(ss);
 }
-EXPORT_SYMBOL_GPL(axg_fifo_pcm_hw_free);
 
 static void axg_fifo_ack_irq(struct axg_fifo *fifo, u8 mask)
 {
@@ -216,8 +194,7 @@ static irqreturn_t axg_fifo_pcm_irq_block(int irq, void *dev_id)
 	return IRQ_RETVAL(status);
 }
 
-int axg_fifo_pcm_open(struct snd_soc_component *component,
-		      struct snd_pcm_substream *ss)
+static int axg_fifo_pcm_open(struct snd_pcm_substream *ss)
 {
 	struct axg_fifo *fifo = axg_fifo_data(ss);
 	struct device *dev = axg_fifo_dev(ss);
@@ -227,17 +204,17 @@ int axg_fifo_pcm_open(struct snd_soc_component *component,
 
 	/*
 	 * Make sure the buffer and period size are multiple of the FIFO
-	 * burst
+	 * minimum depth size
 	 */
 	ret = snd_pcm_hw_constraint_step(ss->runtime, 0,
 					 SNDRV_PCM_HW_PARAM_BUFFER_BYTES,
-					 AXG_FIFO_BURST);
+					 AXG_FIFO_MIN_DEPTH);
 	if (ret)
 		return ret;
 
 	ret = snd_pcm_hw_constraint_step(ss->runtime, 0,
 					 SNDRV_PCM_HW_PARAM_PERIOD_BYTES,
-					 AXG_FIFO_BURST);
+					 AXG_FIFO_MIN_DEPTH);
 	if (ret)
 		return ret;
 
@@ -273,10 +250,8 @@ int axg_fifo_pcm_open(struct snd_soc_component *component,
 
 	return ret;
 }
-EXPORT_SYMBOL_GPL(axg_fifo_pcm_open);
 
-int axg_fifo_pcm_close(struct snd_soc_component *component,
-		       struct snd_pcm_substream *ss)
+static int axg_fifo_pcm_close(struct snd_pcm_substream *ss)
 {
 	struct axg_fifo *fifo = axg_fifo_data(ss);
 	int ret;
@@ -292,16 +267,37 @@ int axg_fifo_pcm_close(struct snd_soc_component *component,
 
 	return ret;
 }
-EXPORT_SYMBOL_GPL(axg_fifo_pcm_close);
+
+const struct snd_pcm_ops axg_fifo_pcm_ops = {
+	.open =		axg_fifo_pcm_open,
+	.close =        axg_fifo_pcm_close,
+	.ioctl =	snd_pcm_lib_ioctl,
+	.hw_params =	axg_fifo_pcm_hw_params,
+	.hw_free =      axg_fifo_pcm_hw_free,
+	.pointer =	axg_fifo_pcm_pointer,
+	.trigger =	axg_fifo_pcm_trigger,
+};
+EXPORT_SYMBOL_GPL(axg_fifo_pcm_ops);
+
+const struct snd_pcm_ops g12a_fifo_pcm_ops = {
+	.open =		axg_fifo_pcm_open,
+	.close =        axg_fifo_pcm_close,
+	.ioctl =	snd_pcm_lib_ioctl,
+	.hw_params =	g12a_fifo_pcm_hw_params,
+	.hw_free =      axg_fifo_pcm_hw_free,
+	.pointer =	axg_fifo_pcm_pointer,
+	.trigger =	axg_fifo_pcm_trigger,
+};
+EXPORT_SYMBOL_GPL(g12a_fifo_pcm_ops);
 
 int axg_fifo_pcm_new(struct snd_soc_pcm_runtime *rtd, unsigned int type)
 {
 	struct snd_card *card = rtd->card->snd_card;
 	size_t size = axg_fifo_hw.buffer_bytes_max;
 
-	snd_pcm_set_managed_buffer(rtd->pcm->streams[type].substream,
-				   SNDRV_DMA_TYPE_DEV, card->dev,
-				   size, size);
+	snd_pcm_lib_preallocate_pages(rtd->pcm->streams[type].substream,
+				      SNDRV_DMA_TYPE_DEV, card->dev,
+				      size, size);
 	return 0;
 }
 EXPORT_SYMBOL_GPL(axg_fifo_pcm_new);
@@ -319,7 +315,6 @@ int axg_fifo_probe(struct platform_device *pdev)
 	const struct axg_fifo_match_data *data;
 	struct axg_fifo *fifo;
 	void __iomem *regs;
-	int ret;
 
 	data = of_device_get_match_data(dev);
 	if (!data) {
@@ -363,26 +358,6 @@ int axg_fifo_probe(struct platform_device *pdev)
 	if (fifo->irq <= 0) {
 		dev_err(dev, "failed to get irq: %d\n", fifo->irq);
 		return fifo->irq;
-	}
-
-	fifo->field_threshold =
-		devm_regmap_field_alloc(dev, fifo->map, data->field_threshold);
-	if (IS_ERR(fifo->field_threshold))
-		return PTR_ERR(fifo->field_threshold);
-
-	ret = of_property_read_u32(dev->of_node, "amlogic,fifo-depth",
-				   &fifo->depth);
-	if (ret) {
-		/* Error out for anything but a missing property */
-		if (ret != -EINVAL)
-			return ret;
-		/*
-		 * If the property is missing, it might be because of an old
-		 * DT. In such case, assume the smallest known fifo depth
-		 */
-		fifo->depth = 256;
-		dev_warn(dev, "fifo depth not found, assume %u bytes\n",
-			 fifo->depth);
 	}
 
 	return devm_snd_soc_register_component(dev, data->component_drv,

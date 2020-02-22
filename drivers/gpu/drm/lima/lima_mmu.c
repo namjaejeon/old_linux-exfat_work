@@ -8,6 +8,7 @@
 #include "lima_device.h"
 #include "lima_mmu.h"
 #include "lima_vm.h"
+#include "lima_object.h"
 #include "lima_regs.h"
 
 #define mmu_write(reg, data) writel(data, ip->iomem + reg)

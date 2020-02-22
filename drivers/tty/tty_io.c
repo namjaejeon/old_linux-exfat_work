@@ -87,7 +87,6 @@
 #include <linux/string.h>
 #include <linux/slab.h>
 #include <linux/poll.h>
-#include <linux/ppp-ioctl.h>
 #include <linux/proc_fs.h>
 #include <linux/init.h>
 #include <linux/module.h>
@@ -1345,12 +1344,9 @@ struct tty_struct *tty_init_dev(struct tty_driver *driver, int idx)
 	if (!tty->port)
 		tty->port = driver->ports[idx];
 
-	if (WARN_RATELIMIT(!tty->port,
-			"%s: %s driver does not set tty->port. This would crash the kernel. Fix the driver!\n",
-			__func__, tty->driver->name)) {
-		retval = -EINVAL;
-		goto err_release_lock;
-	}
+	WARN_RATELIMIT(!tty->port,
+			"%s: %s driver does not set tty->port. This will crash the kernel later. Fix the driver!\n",
+			__func__, tty->driver->name);
 
 	retval = tty_ldisc_lock(tty, 5 * HZ);
 	if (retval)
@@ -1893,7 +1889,7 @@ static struct tty_driver *tty_lookup_driver(dev_t device, struct file *filp,
 struct tty_struct *tty_kopen(dev_t device)
 {
 	struct tty_struct *tty;
-	struct tty_driver *driver;
+	struct tty_driver *driver = NULL;
 	int index = -1;
 
 	mutex_lock(&tty_mutex);
@@ -1928,6 +1924,7 @@ EXPORT_SYMBOL_GPL(tty_kopen);
 /**
  *	tty_open_by_driver	-	open a tty device
  *	@device: dev_t of device to open
+ *	@inode: inode of device file
  *	@filp: file pointer to tty
  *
  *	Performs the driver lookup, checks for a reopen, or otherwise
@@ -1940,7 +1937,7 @@ EXPORT_SYMBOL_GPL(tty_kopen);
  *	  - concurrent tty driver removal w/ lookup
  *	  - concurrent tty removal from driver table
  */
-static struct tty_struct *tty_open_by_driver(dev_t device,
+static struct tty_struct *tty_open_by_driver(dev_t device, struct inode *inode,
 					     struct file *filp)
 {
 	struct tty_struct *tty;
@@ -2032,7 +2029,7 @@ retry_open:
 
 	tty = tty_open_current_tty(device, filp);
 	if (!tty)
-		tty = tty_open_by_driver(device, filp);
+		tty = tty_open_by_driver(device, inode, filp);
 
 	if (IS_ERR(tty)) {
 		tty_free_file(filp);
@@ -2758,7 +2755,6 @@ static long tty_compat_ioctl(struct file *file, unsigned int cmd,
 	int retval = -ENOIOCTLCMD;
 
 	switch (cmd) {
-	case TIOCOUTQ:
 	case TIOCSTI:
 	case TIOCGWINSZ:
 	case TIOCSWINSZ:
@@ -2814,9 +2810,6 @@ static long tty_compat_ioctl(struct file *file, unsigned int cmd,
 #endif
 	case TIOCGSOFTCAR:
 	case TIOCSSOFTCAR:
-
-	case PPPIOCGCHAN:
-	case PPPIOCGUNIT:
 		return tty_ioctl(file, cmd, (unsigned long)compat_ptr(arg));
 	case TIOCCONS:
 	case TIOCEXCL:

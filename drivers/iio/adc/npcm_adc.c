@@ -183,6 +183,7 @@ static int npcm_adc_probe(struct platform_device *pdev)
 	int irq;
 	u32 div;
 	u32 reg_con;
+	struct resource *res;
 	struct npcm_adc *info;
 	struct iio_dev *indio_dev;
 	struct device *dev = &pdev->dev;
@@ -195,7 +196,8 @@ static int npcm_adc_probe(struct platform_device *pdev)
 
 	info->dev = &pdev->dev;
 
-	info->regs = devm_platform_ioremap_resource(pdev, 0);
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	info->regs = devm_ioremap_resource(&pdev->dev, res);
 	if (IS_ERR(info->regs))
 		return PTR_ERR(info->regs);
 

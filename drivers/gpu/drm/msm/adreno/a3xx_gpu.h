@@ -19,7 +19,8 @@ struct a3xx_gpu {
 	struct adreno_gpu base;
 
 	/* if OCMEM is used for GMEM: */
-	struct adreno_ocmem ocmem;
+	uint32_t ocmem_base;
+	void *ocmem_hdl;
 };
 #define to_a3xx_gpu(x) container_of(x, struct a3xx_gpu, base)
 

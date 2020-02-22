@@ -228,10 +228,7 @@ static int sch311x_gpio_get_direction(struct gpio_chip *chip, unsigned offset)
 	data = inb(block->runtime_reg + block->config_regs[offset]);
 	spin_unlock(&block->lock);
 
-	if (data & SCH311X_GPIO_CONF_DIR)
-		return GPIO_LINE_DIRECTION_IN;
-
-	return GPIO_LINE_DIRECTION_OUT;
+	return !!(data & SCH311X_GPIO_CONF_DIR);
 }
 
 static int sch311x_gpio_set_config(struct gpio_chip *chip, unsigned offset,

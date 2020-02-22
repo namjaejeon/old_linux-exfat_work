@@ -533,6 +533,7 @@ static void disable_msp_tx(struct ux500_msp *msp)
 static int disable_msp(struct ux500_msp *msp, unsigned int dir)
 {
 	u32 reg_val_GCR;
+	int status = 0;
 	unsigned int disable_tx, disable_rx;
 
 	reg_val_GCR = readl(msp->registers + MSP_GCR);
@@ -565,7 +566,7 @@ static int disable_msp(struct ux500_msp *msp, unsigned int dir)
 	else if (disable_rx)
 		disable_msp_rx(msp);
 
-	return 0;
+	return status;
 }
 
 int ux500_msp_i2s_trigger(struct ux500_msp *msp, int cmd, int direction)

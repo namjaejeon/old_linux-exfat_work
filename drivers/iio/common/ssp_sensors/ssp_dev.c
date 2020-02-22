@@ -9,6 +9,7 @@
 #include <linux/mfd/core.h>
 #include <linux/module.h>
 #include <linux/of.h>
+#include <linux/of_gpio.h>
 #include <linux/of_platform.h>
 #include "ssp.h"
 
@@ -60,9 +61,9 @@ static const struct mfd_cell sensorhub_sensor_devs[] = {
 
 static void ssp_toggle_mcu_reset_gpio(struct ssp_data *data)
 {
-	gpiod_set_value(data->mcu_reset_gpiod, 0);
+	gpio_set_value(data->mcu_reset_gpio, 0);
 	usleep_range(1000, 1200);
-	gpiod_set_value(data->mcu_reset_gpiod, 1);
+	gpio_set_value(data->mcu_reset_gpio, 1);
 	msleep(50);
 }
 
@@ -440,6 +441,7 @@ MODULE_DEVICE_TABLE(of, ssp_of_match);
 
 static struct ssp_data *ssp_parse_dt(struct device *dev)
 {
+	int ret;
 	struct ssp_data *data;
 	struct device_node *node = dev->of_node;
 	const struct of_device_id *match;
@@ -448,17 +450,26 @@ static struct ssp_data *ssp_parse_dt(struct device *dev)
 	if (!data)
 		return NULL;
 
-	data->mcu_ap_gpiod = devm_gpiod_get(dev, "mcu-ap", GPIOD_IN);
-	if (IS_ERR(data->mcu_ap_gpiod))
+	data->mcu_ap_gpio = of_get_named_gpio(node, "mcu-ap-gpios", 0);
+	if (data->mcu_ap_gpio < 0)
 		return NULL;
 
-	data->ap_mcu_gpiod = devm_gpiod_get(dev, "ap-mcu", GPIOD_OUT_HIGH);
-	if (IS_ERR(data->ap_mcu_gpiod))
+	data->ap_mcu_gpio = of_get_named_gpio(node, "ap-mcu-gpios", 0);
+	if (data->ap_mcu_gpio < 0)
 		return NULL;
 
-	data->mcu_reset_gpiod = devm_gpiod_get(dev, "mcu-reset",
-					       GPIOD_OUT_HIGH);
-	if (IS_ERR(data->mcu_reset_gpiod))
+	data->mcu_reset_gpio = of_get_named_gpio(node, "mcu-reset-gpios", 0);
+	if (data->mcu_reset_gpio < 0)
+		return NULL;
+
+	ret = devm_gpio_request_one(dev, data->ap_mcu_gpio, GPIOF_OUT_INIT_HIGH,
+				    "ap-mcu-gpios");
+	if (ret)
+		return NULL;
+
+	ret = devm_gpio_request_one(dev, data->mcu_reset_gpio,
+				    GPIOF_OUT_INIT_HIGH, "mcu-reset-gpios");
+	if (ret)
 		return NULL;
 
 	match = of_match_node(ssp_of_match, node);

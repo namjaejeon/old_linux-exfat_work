@@ -375,11 +375,12 @@ static int faraday_pci_setup_cascaded_irq(struct faraday_pci *p)
 	return 0;
 }
 
-static int faraday_pci_parse_map_dma_ranges(struct faraday_pci *p)
+static int faraday_pci_parse_map_dma_ranges(struct faraday_pci *p,
+					    struct device_node *np)
 {
+	struct of_pci_range range;
+	struct of_pci_range_parser parser;
 	struct device *dev = p->dev;
-	struct pci_host_bridge *bridge = pci_host_bridge_from_priv(p);
-	struct resource_entry *entry;
 	u32 confreg[3] = {
 		FARADAY_PCI_MEM1_BASE_SIZE,
 		FARADAY_PCI_MEM2_BASE_SIZE,
@@ -388,13 +389,19 @@ static int faraday_pci_parse_map_dma_ranges(struct faraday_pci *p)
 	int i = 0;
 	u32 val;
 
-	resource_list_for_each_entry(entry, &bridge->dma_ranges) {
-		u64 pci_addr = entry->res->start - entry->offset;
-		u64 end = entry->res->end - entry->offset;
+	if (of_pci_dma_range_parser_init(&parser, np)) {
+		dev_err(dev, "missing dma-ranges property\n");
+		return -EINVAL;
+	}
+
+	/*
+	 * Get the dma-ranges from the device tree
+	 */
+	for_each_of_pci_range(&parser, &range) {
+		u64 end = range.pci_addr + range.size - 1;
 		int ret;
 
-		ret = faraday_res_to_memcfg(pci_addr,
-					    resource_size(entry->res), &val);
+		ret = faraday_res_to_memcfg(range.pci_addr, range.size, &val);
 		if (ret) {
 			dev_err(dev,
 				"DMA range %d: illegal MEM resource size\n", i);
@@ -402,7 +409,7 @@ static int faraday_pci_parse_map_dma_ranges(struct faraday_pci *p)
 		}
 
 		dev_info(dev, "DMA MEM%d BASE: 0x%016llx -> 0x%016llx config %08x\n",
-			 i + 1, pci_addr, end, val);
+			 i + 1, range.pci_addr, end, val);
 		if (i <= 2) {
 			faraday_raw_pci_write_config(p, 0, 0, confreg[i],
 						     4, val);
@@ -423,8 +430,10 @@ static int faraday_pci_probe(struct platform_device *pdev)
 	const struct faraday_pci_variant *variant =
 		of_device_get_match_data(dev);
 	struct resource *regs;
+	resource_size_t io_base;
 	struct resource_entry *win;
 	struct faraday_pci *p;
+	struct resource *mem;
 	struct resource *io;
 	struct pci_host_bridge *host;
 	struct clk *clk;
@@ -432,6 +441,7 @@ static int faraday_pci_probe(struct platform_device *pdev)
 	unsigned char cur_bus_speed = PCI_SPEED_33MHz;
 	int ret;
 	u32 val;
+	LIST_HEAD(res);
 
 	host = devm_pci_alloc_host_bridge(dev, sizeof(*p));
 	if (!host)
@@ -470,21 +480,44 @@ static int faraday_pci_probe(struct platform_device *pdev)
 	if (IS_ERR(p->base))
 		return PTR_ERR(p->base);
 
-	ret = pci_parse_request_of_pci_ranges(dev, &host->windows,
-					      &host->dma_ranges, NULL);
+	ret = devm_of_pci_get_host_bridge_resources(dev, 0, 0xff,
+						    &res, &io_base);
 	if (ret)
 		return ret;
 
-	win = resource_list_first_type(&host->windows, IORESOURCE_IO);
-	if (win) {
-		io = win->res;
-		if (!faraday_res_to_memcfg(io->start - win->offset,
-					   resource_size(io), &val)) {
-			/* setup I/O space size */
-			writel(val, p->base + PCI_IOSIZE);
-		} else {
-			dev_err(dev, "illegal IO mem size\n");
-			return -EINVAL;
+	ret = devm_request_pci_bus_resources(dev, &res);
+	if (ret)
+		return ret;
+
+	/* Get the I/O and memory ranges from DT */
+	resource_list_for_each_entry(win, &res) {
+		switch (resource_type(win->res)) {
+		case IORESOURCE_IO:
+			io = win->res;
+			io->name = "Gemini PCI I/O";
+			if (!faraday_res_to_memcfg(io->start - win->offset,
+						   resource_size(io), &val)) {
+				/* setup I/O space size */
+				writel(val, p->base + PCI_IOSIZE);
+			} else {
+				dev_err(dev, "illegal IO mem size\n");
+				return -EINVAL;
+			}
+			ret = devm_pci_remap_iospace(dev, io, io_base);
+			if (ret) {
+				dev_warn(dev, "error %d: failed to map resource %pR\n",
+					 ret, io);
+				continue;
+			}
+			break;
+		case IORESOURCE_MEM:
+			mem = win->res;
+			mem->name = "Gemini PCI MEM";
+			break;
+		case IORESOURCE_BUS:
+			break;
+		default:
+			break;
 		}
 	}
 
@@ -532,10 +565,11 @@ static int faraday_pci_probe(struct platform_device *pdev)
 			cur_bus_speed = PCI_SPEED_66MHz;
 	}
 
-	ret = faraday_pci_parse_map_dma_ranges(p);
+	ret = faraday_pci_parse_map_dma_ranges(p, dev->of_node);
 	if (ret)
 		return ret;
 
+	list_splice_init(&res, &host->windows);
 	ret = pci_scan_root_bus_bridge(host);
 	if (ret) {
 		dev_err(dev, "failed to scan host: %d\n", ret);
@@ -547,6 +581,7 @@ static int faraday_pci_probe(struct platform_device *pdev)
 
 	pci_bus_assign_resources(p->bus);
 	pci_bus_add_devices(p->bus);
+	pci_free_resource_list(&res);
 
 	return 0;
 }

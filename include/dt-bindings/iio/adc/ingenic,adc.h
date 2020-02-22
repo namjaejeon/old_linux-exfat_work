@@ -6,6 +6,5 @@
 /* ADC channel idx. */
 #define INGENIC_ADC_AUX		0
 #define INGENIC_ADC_BATTERY	1
-#define INGENIC_ADC_AUX2	2
 
 #endif

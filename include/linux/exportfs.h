@@ -105,11 +105,6 @@ enum fid_type {
 	FILEID_LUSTRE = 0x97,
 
 	/*
-	 * 64 bit unique kernfs id
-	 */
-	FILEID_KERNFS = 0xfe,
-
-	/*
 	 * Filesystems must not use 0xff file ID.
 	 */
 	FILEID_INVALID = 0xff,

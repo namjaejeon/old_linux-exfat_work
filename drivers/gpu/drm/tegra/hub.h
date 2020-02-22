@@ -17,7 +17,7 @@ struct tegra_windowgroup {
 	struct mutex lock;
 
 	unsigned int index;
-	struct host1x_client *parent;
+	struct device *parent;
 	struct reset_control *rst;
 };
 

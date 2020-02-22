@@ -8,7 +8,6 @@
 #include <linux/interrupt.h>
 #include <linux/delay.h>
 #include <crypto/internal/hash.h>
-#include <crypto/internal/skcipher.h>
 
 #include <crypto/md5.h>
 #include <crypto/sha.h>
@@ -257,7 +256,7 @@ enum alg_type {
 struct rk_crypto_tmp {
 	struct rk_crypto_info		*dev;
 	union {
-		struct skcipher_alg	skcipher;
+		struct crypto_alg	crypto;
 		struct ahash_alg	hash;
 	} alg;
 	enum alg_type			type;

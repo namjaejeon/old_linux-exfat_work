@@ -123,7 +123,7 @@ qemu_args=$5
 boot_args=$6
 
 cd $KVM
-kstarttime=`gawk 'BEGIN { print systime() }' < /dev/null`
+kstarttime=`awk 'BEGIN { print systime() }' < /dev/null`
 if test -z "$TORTURE_BUILDONLY"
 then
 	echo ' ---' `date`: Starting kernel
@@ -133,10 +133,11 @@ fi
 qemu_args="-enable-kvm -nographic $qemu_args"
 cpu_count=`configNR_CPUS.sh $resdir/ConfigFragment`
 cpu_count=`configfrag_boot_cpus "$boot_args" "$config_template" "$cpu_count"`
-if test "$cpu_count" -gt "$TORTURE_ALLOTED_CPUS"
+vcpus=`identify_qemu_vcpus`
+if test $cpu_count -gt $vcpus
 then
-	echo CPU count limited from $cpu_count to $TORTURE_ALLOTED_CPUS | tee -a $resdir/Warnings
-	cpu_count=$TORTURE_ALLOTED_CPUS
+	echo CPU count limited from $cpu_count to $vcpus | tee -a $resdir/Warnings
+	cpu_count=$vcpus
 fi
 qemu_args="`specify_qemu_cpus "$QEMU" "$qemu_args" "$cpu_count"`"
 
@@ -176,7 +177,7 @@ do
 	then
 		qemu_pid=`cat "$resdir/qemu_pid"`
 	fi
-	kruntime=`gawk 'BEGIN { print systime() - '"$kstarttime"' }' < /dev/null`
+	kruntime=`awk 'BEGIN { print systime() - '"$kstarttime"' }' < /dev/null`
 	if test -z "$qemu_pid" || kill -0 "$qemu_pid" > /dev/null 2>&1
 	then
 		if test $kruntime -ge $seconds
@@ -212,7 +213,7 @@ then
 	oldline="`tail $resdir/console.log`"
 	while :
 	do
-		kruntime=`gawk 'BEGIN { print systime() - '"$kstarttime"' }' < /dev/null`
+		kruntime=`awk 'BEGIN { print systime() - '"$kstarttime"' }' < /dev/null`
 		if kill -0 $qemu_pid > /dev/null 2>&1
 		then
 			:

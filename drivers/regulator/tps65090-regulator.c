@@ -346,20 +346,16 @@ static struct tps65090_platform_data *tps65090_parse_dt_reg_data(
 	for (idx = 0; idx < ARRAY_SIZE(tps65090_matches); idx++) {
 		struct regulator_init_data *ri_data;
 		struct tps65090_regulator_plat_data *rpdata;
-		struct device_node *np;
 
 		rpdata = &reg_pdata[idx];
 		ri_data = tps65090_matches[idx].init_data;
-		if (!ri_data)
-			continue;
-
-		np = tps65090_matches[idx].of_node;
-		if (!np)
+		if (!ri_data || !tps65090_matches[idx].of_node)
 			continue;
 
 		rpdata->reg_init_data = ri_data;
-		rpdata->enable_ext_control = of_property_read_bool(np,
-						"ti,enable-ext-control");
+		rpdata->enable_ext_control = of_property_read_bool(
+					tps65090_matches[idx].of_node,
+					"ti,enable-ext-control");
 		if (rpdata->enable_ext_control) {
 			enum gpiod_flags gflags;
 
@@ -370,12 +366,11 @@ static struct tps65090_platform_data *tps65090_parse_dt_reg_data(
 				gflags = GPIOD_OUT_LOW;
 			gflags |= GPIOD_FLAGS_BIT_NONEXCLUSIVE;
 
-			rpdata->gpiod = devm_fwnode_gpiod_get(
-							&pdev->dev,
-							of_fwnode_handle(np),
-							"dcdc-ext-control",
-							gflags,
-							"tps65090");
+			rpdata->gpiod = devm_gpiod_get_from_of_node(&pdev->dev,
+								    tps65090_matches[idx].of_node,
+								    "dcdc-ext-control-gpios", 0,
+								    gflags,
+								    "tps65090");
 			if (PTR_ERR(rpdata->gpiod) == -ENOENT) {
 				dev_err(&pdev->dev,
 					"could not find DCDC external control GPIO\n");
@@ -384,7 +379,8 @@ static struct tps65090_platform_data *tps65090_parse_dt_reg_data(
 				return ERR_CAST(rpdata->gpiod);
 		}
 
-		if (of_property_read_u32(np, "ti,overcurrent-wait",
+		if (of_property_read_u32(tps65090_matches[idx].of_node,
+					 "ti,overcurrent-wait",
 					 &rpdata->overcurrent_wait) == 0)
 			rpdata->overcurrent_wait_valid = true;
 

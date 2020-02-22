@@ -18,7 +18,6 @@
 #include <linux/types.h>
 #include <linux/bitops.h>
 #include <linux/if_vlan.h>
-#include <linux/reset.h>
 
 #include <net/dsa.h>
 
@@ -64,8 +63,6 @@ struct bcm_sf2_priv {
 	void __iomem			*intrl2_1;
 	void __iomem			*fcb;
 	void __iomem			*acb;
-
-	struct reset_control		*rcdev;
 
 	/* Register offsets indirection tables */
 	u32 				type;

@@ -18,7 +18,7 @@
 
 #include <linux/tracepoint.h>
 
-TRACE_EVENT(cros_ec_request_start,
+DECLARE_EVENT_CLASS(cros_ec_cmd_class,
 	TP_PROTO(struct cros_ec_command *cmd),
 	TP_ARGS(cmd),
 	TP_STRUCT__entry(
@@ -33,26 +33,10 @@ TRACE_EVENT(cros_ec_request_start,
 		  __print_symbolic(__entry->command, EC_CMDS))
 );
 
-TRACE_EVENT(cros_ec_request_done,
-	TP_PROTO(struct cros_ec_command *cmd, int retval),
-	TP_ARGS(cmd, retval),
-	TP_STRUCT__entry(
-		__field(uint32_t, version)
-		__field(uint32_t, command)
-		__field(uint32_t, result)
-		__field(int, retval)
-	),
-	TP_fast_assign(
-		__entry->version = cmd->version;
-		__entry->command = cmd->command;
-		__entry->result = cmd->result;
-		__entry->retval = retval;
-	),
-	TP_printk("version: %u, command: %s, ec result: %s, retval: %d",
-		  __entry->version,
-		  __print_symbolic(__entry->command, EC_CMDS),
-		  __print_symbolic(__entry->result, EC_RESULT),
-		  __entry->retval)
+
+DEFINE_EVENT(cros_ec_cmd_class, cros_ec_cmd,
+	TP_PROTO(struct cros_ec_command *cmd),
+	TP_ARGS(cmd)
 );
 
 

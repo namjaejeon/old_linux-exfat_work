@@ -449,9 +449,8 @@ int serpent_setkey(struct crypto_tfm *tfm, const u8 *key, unsigned int keylen)
 }
 EXPORT_SYMBOL_GPL(serpent_setkey);
 
-void __serpent_encrypt(const void *c, u8 *dst, const u8 *src)
+void __serpent_encrypt(struct serpent_ctx *ctx, u8 *dst, const u8 *src)
 {
-	const struct serpent_ctx *ctx = c;
 	const u32 *k = ctx->expkey;
 	const __le32 *s = (const __le32 *)src;
 	__le32	*d = (__le32 *)dst;
@@ -515,9 +514,8 @@ static void serpent_encrypt(struct crypto_tfm *tfm, u8 *dst, const u8 *src)
 	__serpent_encrypt(ctx, dst, src);
 }
 
-void __serpent_decrypt(const void *c, u8 *dst, const u8 *src)
+void __serpent_decrypt(struct serpent_ctx *ctx, u8 *dst, const u8 *src)
 {
-	const struct serpent_ctx *ctx = c;
 	const u32 *k = ctx->expkey;
 	const __le32 *s = (const __le32 *)src;
 	__le32	*d = (__le32 *)dst;

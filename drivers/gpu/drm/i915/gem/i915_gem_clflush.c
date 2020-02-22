@@ -20,31 +20,33 @@ static void __do_clflush(struct drm_i915_gem_object *obj)
 {
 	GEM_BUG_ON(!i915_gem_object_has_pages(obj));
 	drm_clflush_sg(obj->mm.pages);
-
-	i915_gem_object_flush_frontbuffer(obj, ORIGIN_CPU);
+	intel_frontbuffer_flush(obj->frontbuffer, ORIGIN_CPU);
 }
 
 static int clflush_work(struct dma_fence_work *base)
 {
 	struct clflush *clflush = container_of(base, typeof(*clflush), base);
-	struct drm_i915_gem_object *obj = clflush->obj;
+	struct drm_i915_gem_object *obj = fetch_and_zero(&clflush->obj);
 	int err;
 
 	err = i915_gem_object_pin_pages(obj);
 	if (err)
-		return err;
+		goto put;
 
 	__do_clflush(obj);
 	i915_gem_object_unpin_pages(obj);
 
-	return 0;
+put:
+	i915_gem_object_put(obj);
+	return err;
 }
 
 static void clflush_release(struct dma_fence_work *base)
 {
 	struct clflush *clflush = container_of(base, typeof(*clflush), base);
 
-	i915_gem_object_put(clflush->obj);
+	if (clflush->obj)
+		i915_gem_object_put(clflush->obj);
 }
 
 static const struct dma_fence_work_ops clflush_ops = {

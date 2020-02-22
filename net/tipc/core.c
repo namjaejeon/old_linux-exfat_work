@@ -34,6 +34,8 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
+#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
+
 #include "core.h"
 #include "name_table.h"
 #include "subscr.h"
@@ -42,7 +44,6 @@
 #include "socket.h"
 #include "bcast.h"
 #include "node.h"
-#include "crypto.h"
 
 #include <linux/module.h>
 
@@ -67,11 +68,6 @@ static int __net_init tipc_init_net(struct net *net)
 	INIT_LIST_HEAD(&tn->node_list);
 	spin_lock_init(&tn->node_list_lock);
 
-#ifdef CONFIG_TIPC_CRYPTO
-	err = tipc_crypto_start(&tn->crypto_tx, net, NULL);
-	if (err)
-		goto out_crypto;
-#endif
 	err = tipc_sk_rht_init(net);
 	if (err)
 		goto out_sk_rht;
@@ -97,11 +93,6 @@ out_bclink:
 out_nametbl:
 	tipc_sk_rht_destroy(net);
 out_sk_rht:
-
-#ifdef CONFIG_TIPC_CRYPTO
-	tipc_crypto_stop(&tn->crypto_tx);
-out_crypto:
-#endif
 	return err;
 }
 
@@ -112,19 +103,7 @@ static void __net_exit tipc_exit_net(struct net *net)
 	tipc_bcast_stop(net);
 	tipc_nametbl_stop(net);
 	tipc_sk_rht_destroy(net);
-#ifdef CONFIG_TIPC_CRYPTO
-	tipc_crypto_stop(&tipc_net(net)->crypto_tx);
-#endif
 }
-
-static void __net_exit tipc_pernet_pre_exit(struct net *net)
-{
-	tipc_node_pre_cleanup_net(net);
-}
-
-static struct pernet_operations tipc_pernet_pre_exit_ops = {
-	.pre_exit = tipc_pernet_pre_exit,
-};
 
 static struct pernet_operations tipc_net_ops = {
 	.init = tipc_init_net,
@@ -148,6 +127,14 @@ static int __init tipc_init(void)
 	sysctl_tipc_rmem[1] = RCVBUF_DEF;
 	sysctl_tipc_rmem[2] = RCVBUF_MAX;
 
+	err = tipc_netlink_start();
+	if (err)
+		goto out_netlink;
+
+	err = tipc_netlink_compat_start();
+	if (err)
+		goto out_netlink_compat;
+
 	err = tipc_register_sysctl();
 	if (err)
 		goto out_sysctl;
@@ -164,32 +151,13 @@ static int __init tipc_init(void)
 	if (err)
 		goto out_pernet_topsrv;
 
-	err = register_pernet_subsys(&tipc_pernet_pre_exit_ops);
-	if (err)
-		goto out_register_pernet_subsys;
-
 	err = tipc_bearer_setup();
 	if (err)
 		goto out_bearer;
 
-	err = tipc_netlink_start();
-	if (err)
-		goto out_netlink;
-
-	err = tipc_netlink_compat_start();
-	if (err)
-		goto out_netlink_compat;
-
 	pr_info("Started in single node mode\n");
 	return 0;
-
-out_netlink_compat:
-	tipc_netlink_stop();
-out_netlink:
-	tipc_bearer_cleanup();
 out_bearer:
-	unregister_pernet_subsys(&tipc_pernet_pre_exit_ops);
-out_register_pernet_subsys:
 	unregister_pernet_device(&tipc_topsrv_net_ops);
 out_pernet_topsrv:
 	tipc_socket_stop();
@@ -198,19 +166,22 @@ out_socket:
 out_pernet:
 	tipc_unregister_sysctl();
 out_sysctl:
+	tipc_netlink_compat_stop();
+out_netlink_compat:
+	tipc_netlink_stop();
+out_netlink:
 	pr_err("Unable to start in single node mode\n");
 	return err;
 }
 
 static void __exit tipc_exit(void)
 {
-	tipc_netlink_compat_stop();
-	tipc_netlink_stop();
 	tipc_bearer_cleanup();
-	unregister_pernet_subsys(&tipc_pernet_pre_exit_ops);
 	unregister_pernet_device(&tipc_topsrv_net_ops);
 	tipc_socket_stop();
 	unregister_pernet_device(&tipc_net_ops);
+	tipc_netlink_stop();
+	tipc_netlink_compat_stop();
 	tipc_unregister_sysctl();
 
 	pr_info("Deactivated\n");

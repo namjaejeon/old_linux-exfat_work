@@ -142,6 +142,7 @@ static int bcm2835_rng_probe(struct platform_device *pdev)
 	struct device_node *np = dev->of_node;
 	const struct of_device_id *rng_id;
 	struct bcm2835_rng_priv *priv;
+	struct resource *r;
 	int err;
 
 	priv = devm_kzalloc(dev, sizeof(*priv), GFP_KERNEL);
@@ -150,14 +151,16 @@ static int bcm2835_rng_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, priv);
 
+	r = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+
 	/* map peripheral */
-	priv->base = devm_platform_ioremap_resource(pdev, 0);
+	priv->base = devm_ioremap_resource(dev, r);
 	if (IS_ERR(priv->base))
 		return PTR_ERR(priv->base);
 
 	/* Clock is optional on most platforms */
 	priv->clk = devm_clk_get(dev, NULL);
-	if (PTR_ERR(priv->clk) == -EPROBE_DEFER)
+	if (IS_ERR(priv->clk) && PTR_ERR(priv->clk) == -EPROBE_DEFER)
 		return -EPROBE_DEFER;
 
 	priv->rng.name = pdev->name;

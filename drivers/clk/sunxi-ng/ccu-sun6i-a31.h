@@ -32,9 +32,7 @@
 /* The PLL_VIDEO1_2X clock is exported */
 
 #define CLK_PLL_GPU		14
-
-/* The PLL_VIDEO1_2X clock is exported */
-
+#define CLK_PLL_MIPI		15
 #define CLK_PLL9		16
 #define CLK_PLL10		17
 

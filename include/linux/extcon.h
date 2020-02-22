@@ -170,7 +170,7 @@ struct extcon_dev;
  * Following APIs get the connected state of each external connector.
  * The 'id' argument indicates the defined external connector.
  */
-int extcon_get_state(struct extcon_dev *edev, unsigned int id);
+extern int extcon_get_state(struct extcon_dev *edev, unsigned int id);
 
 /*
  * Following APIs get the property of each external connector.
@@ -181,10 +181,10 @@ int extcon_get_state(struct extcon_dev *edev, unsigned int id);
  * for each external connector. They are used to get the capability of the
  * property of each external connector based on the id and property.
  */
-int extcon_get_property(struct extcon_dev *edev, unsigned int id,
+extern int extcon_get_property(struct extcon_dev *edev, unsigned int id,
 				unsigned int prop,
 				union extcon_property_value *prop_val);
-int extcon_get_property_capability(struct extcon_dev *edev,
+extern int extcon_get_property_capability(struct extcon_dev *edev,
 				unsigned int id, unsigned int prop);
 
 /*
@@ -196,38 +196,38 @@ int extcon_get_property_capability(struct extcon_dev *edev,
  * extcon_register_notifier_all(*edev, *nb) : Register a notifier block
  *			for all supported external connectors of the extcon.
  */
-int extcon_register_notifier(struct extcon_dev *edev, unsigned int id,
+extern int extcon_register_notifier(struct extcon_dev *edev, unsigned int id,
 				struct notifier_block *nb);
-int extcon_unregister_notifier(struct extcon_dev *edev, unsigned int id,
+extern int extcon_unregister_notifier(struct extcon_dev *edev, unsigned int id,
 				struct notifier_block *nb);
-int devm_extcon_register_notifier(struct device *dev,
+extern int devm_extcon_register_notifier(struct device *dev,
 				struct extcon_dev *edev, unsigned int id,
 				struct notifier_block *nb);
-void devm_extcon_unregister_notifier(struct device *dev,
+extern void devm_extcon_unregister_notifier(struct device *dev,
 				struct extcon_dev *edev, unsigned int id,
 				struct notifier_block *nb);
 
-int extcon_register_notifier_all(struct extcon_dev *edev,
+extern int extcon_register_notifier_all(struct extcon_dev *edev,
 				struct notifier_block *nb);
-int extcon_unregister_notifier_all(struct extcon_dev *edev,
+extern int extcon_unregister_notifier_all(struct extcon_dev *edev,
 				struct notifier_block *nb);
-int devm_extcon_register_notifier_all(struct device *dev,
+extern int devm_extcon_register_notifier_all(struct device *dev,
 				struct extcon_dev *edev,
 				struct notifier_block *nb);
-void devm_extcon_unregister_notifier_all(struct device *dev,
+extern void devm_extcon_unregister_notifier_all(struct device *dev,
 				struct extcon_dev *edev,
 				struct notifier_block *nb);
 
 /*
  * Following APIs get the extcon_dev from devicetree or by through extcon name.
  */
-struct extcon_dev *extcon_get_extcon_dev(const char *extcon_name);
-struct extcon_dev *extcon_find_edev_by_node(struct device_node *node);
-struct extcon_dev *extcon_get_edev_by_phandle(struct device *dev,
+extern struct extcon_dev *extcon_get_extcon_dev(const char *extcon_name);
+extern struct extcon_dev *extcon_find_edev_by_node(struct device_node *node);
+extern struct extcon_dev *extcon_get_edev_by_phandle(struct device *dev,
 						     int index);
 
 /* Following API get the name of extcon device. */
-const char *extcon_get_edev_name(struct extcon_dev *edev);
+extern const char *extcon_get_edev_name(struct extcon_dev *edev);
 
 #else /* CONFIG_EXTCON */
 static inline int extcon_get_state(struct extcon_dev *edev, unsigned int id)

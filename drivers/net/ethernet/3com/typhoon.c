@@ -2013,7 +2013,7 @@ typhoon_stop_runtime(struct typhoon *tp, int wait_type)
 }
 
 static void
-typhoon_tx_timeout(struct net_device *dev, unsigned int txqueue)
+typhoon_tx_timeout(struct net_device *dev)
 {
 	struct typhoon *tp = netdev_priv(dev);
 

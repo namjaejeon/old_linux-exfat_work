@@ -31,7 +31,6 @@
  */
 
 #include <linux/bitmap.h>
-#include <linux/bitops.h>
 #include <linux/crc8.h>
 #include <linux/gpio/consumer.h>
 #include <linux/gpio/driver.h>
@@ -95,7 +94,7 @@ DECLARE_CRC8_TABLE(max3191x_crc8);
 
 static int max3191x_get_direction(struct gpio_chip *gpio, unsigned int offset)
 {
-	return GPIO_LINE_DIRECTION_IN; /* always in */
+	return 1; /* always in */
 }
 
 static int max3191x_direction_input(struct gpio_chip *gpio, unsigned int offset)
@@ -233,20 +232,16 @@ static int max3191x_get_multiple(struct gpio_chip *gpio, unsigned long *mask,
 				 unsigned long *bits)
 {
 	struct max3191x_chip *max3191x = gpiochip_get_data(gpio);
-	const unsigned int wordlen = max3191x_wordlen(max3191x);
-	int ret;
-	unsigned long bit;
-	unsigned long gpio_mask;
-	unsigned long in;
+	int ret, bit = 0, wordlen = max3191x_wordlen(max3191x);
 
 	mutex_lock(&max3191x->lock);
 	ret = max3191x_readout_locked(max3191x);
 	if (ret)
 		goto out_unlock;
 
-	bitmap_zero(bits, gpio->ngpio);
-	for_each_set_clump8(bit, gpio_mask, mask, gpio->ngpio) {
+	while ((bit = find_next_bit(mask, gpio->ngpio, bit)) != gpio->ngpio) {
 		unsigned int chipnum = bit / MAX3191X_NGPIO;
+		unsigned long in, shift, index;
 
 		if (max3191x_chip_is_faulting(max3191x, chipnum)) {
 			ret = -EIO;
@@ -254,8 +249,12 @@ static int max3191x_get_multiple(struct gpio_chip *gpio, unsigned long *mask,
 		}
 
 		in = ((u8 *)max3191x->xfer.rx_buf)[chipnum * wordlen];
-		in &= gpio_mask;
-		bitmap_set_value8(bits, in, bit);
+		shift = round_down(bit % BITS_PER_LONG, MAX3191X_NGPIO);
+		index = bit / BITS_PER_LONG;
+		bits[index] &= ~(mask[index] & (0xff << shift));
+		bits[index] |= mask[index] & (in << shift); /* copy bits */
+
+		bit = (chipnum + 1) * MAX3191X_NGPIO; /* go to next chip */
 	}
 
 out_unlock:

@@ -142,21 +142,18 @@ EXPORT_SYMBOL_GPL(debugfs_file_put);
  * We also need to exclude any file that has ways to write or alter it as root
  * can bypass the permissions check.
  */
-static int debugfs_locked_down(struct inode *inode,
-			       struct file *filp,
-			       const struct file_operations *real_fops)
+static bool debugfs_is_locked_down(struct inode *inode,
+				   struct file *filp,
+				   const struct file_operations *real_fops)
 {
 	if ((inode->i_mode & 07777) == 0444 &&
 	    !(filp->f_mode & FMODE_WRITE) &&
 	    !real_fops->unlocked_ioctl &&
 	    !real_fops->compat_ioctl &&
 	    !real_fops->mmap)
-		return 0;
+		return false;
 
-	if (security_locked_down(LOCKDOWN_DEBUGFS))
-		return -EPERM;
-
-	return 0;
+	return security_locked_down(LOCKDOWN_DEBUGFS);
 }
 
 static int open_proxy_open(struct inode *inode, struct file *filp)
@@ -171,7 +168,7 @@ static int open_proxy_open(struct inode *inode, struct file *filp)
 
 	real_fops = debugfs_real_fops(filp);
 
-	r = debugfs_locked_down(inode, filp, real_fops);
+	r = debugfs_is_locked_down(inode, filp, real_fops);
 	if (r)
 		goto out;
 
@@ -301,7 +298,7 @@ static int full_proxy_open(struct inode *inode, struct file *filp)
 
 	real_fops = debugfs_real_fops(filp);
 
-	r = debugfs_locked_down(inode, filp, real_fops);
+	r = debugfs_is_locked_down(inode, filp, real_fops);
 	if (r)
 		goto out;
 
@@ -423,11 +420,20 @@ DEFINE_DEBUGFS_ATTRIBUTE(fops_u8_wo, NULL, debugfs_u8_set, "%llu\n");
  * This function creates a file in debugfs with the given name that
  * contains the value of the variable @value.  If the @mode variable is so
  * set, it can be read from, and written to.
+ *
+ * This function will return a pointer to a dentry if it succeeds.  This
+ * pointer must be passed to the debugfs_remove() function when the file is
+ * to be removed (no automatic cleanup happens if your module is unloaded,
+ * you are responsible here.)  If an error occurs, %ERR_PTR(-ERROR) will be
+ * returned.
+ *
+ * If debugfs is not enabled in the kernel, the value %ERR_PTR(-ENODEV) will
+ * be returned.
  */
-void debugfs_create_u8(const char *name, umode_t mode, struct dentry *parent,
-		       u8 *value)
+struct dentry *debugfs_create_u8(const char *name, umode_t mode,
+				 struct dentry *parent, u8 *value)
 {
-	debugfs_create_mode_unsafe(name, mode, parent, value, &fops_u8,
+	return debugfs_create_mode_unsafe(name, mode, parent, value, &fops_u8,
 				   &fops_u8_ro, &fops_u8_wo);
 }
 EXPORT_SYMBOL_GPL(debugfs_create_u8);
@@ -459,11 +465,20 @@ DEFINE_DEBUGFS_ATTRIBUTE(fops_u16_wo, NULL, debugfs_u16_set, "%llu\n");
  * This function creates a file in debugfs with the given name that
  * contains the value of the variable @value.  If the @mode variable is so
  * set, it can be read from, and written to.
+ *
+ * This function will return a pointer to a dentry if it succeeds.  This
+ * pointer must be passed to the debugfs_remove() function when the file is
+ * to be removed (no automatic cleanup happens if your module is unloaded,
+ * you are responsible here.)  If an error occurs, %ERR_PTR(-ERROR) will be
+ * returned.
+ *
+ * If debugfs is not enabled in the kernel, the value %ERR_PTR(-ENODEV) will
+ * be returned.
  */
-void debugfs_create_u16(const char *name, umode_t mode, struct dentry *parent,
-			u16 *value)
+struct dentry *debugfs_create_u16(const char *name, umode_t mode,
+				  struct dentry *parent, u16 *value)
 {
-	debugfs_create_mode_unsafe(name, mode, parent, value, &fops_u16,
+	return debugfs_create_mode_unsafe(name, mode, parent, value, &fops_u16,
 				   &fops_u16_ro, &fops_u16_wo);
 }
 EXPORT_SYMBOL_GPL(debugfs_create_u16);
@@ -499,10 +514,10 @@ DEFINE_DEBUGFS_ATTRIBUTE(fops_u32_wo, NULL, debugfs_u32_set, "%llu\n");
  * This function will return a pointer to a dentry if it succeeds.  This
  * pointer must be passed to the debugfs_remove() function when the file is
  * to be removed (no automatic cleanup happens if your module is unloaded,
- * you are responsible here.)  If an error occurs, ERR_PTR(-ERROR) will be
+ * you are responsible here.)  If an error occurs, %ERR_PTR(-ERROR) will be
  * returned.
  *
- * If debugfs is not enabled in the kernel, the value ERR_PTR(-ENODEV) will
+ * If debugfs is not enabled in the kernel, the value %ERR_PTR(-ENODEV) will
  * be returned.
  */
 struct dentry *debugfs_create_u32(const char *name, umode_t mode,
@@ -541,11 +556,20 @@ DEFINE_DEBUGFS_ATTRIBUTE(fops_u64_wo, NULL, debugfs_u64_set, "%llu\n");
  * This function creates a file in debugfs with the given name that
  * contains the value of the variable @value.  If the @mode variable is so
  * set, it can be read from, and written to.
+ *
+ * This function will return a pointer to a dentry if it succeeds.  This
+ * pointer must be passed to the debugfs_remove() function when the file is
+ * to be removed (no automatic cleanup happens if your module is unloaded,
+ * you are responsible here.)  If an error occurs, %ERR_PTR(-ERROR) will be
+ * returned.
+ *
+ * If debugfs is not enabled in the kernel, the value %ERR_PTR(-ENODEV) will
+ * be returned.
  */
-void debugfs_create_u64(const char *name, umode_t mode, struct dentry *parent,
-			u64 *value)
+struct dentry *debugfs_create_u64(const char *name, umode_t mode,
+				 struct dentry *parent, u64 *value)
 {
-	debugfs_create_mode_unsafe(name, mode, parent, value, &fops_u64,
+	return debugfs_create_mode_unsafe(name, mode, parent, value, &fops_u64,
 				   &fops_u64_ro, &fops_u64_wo);
 }
 EXPORT_SYMBOL_GPL(debugfs_create_u64);
@@ -584,10 +608,10 @@ DEFINE_DEBUGFS_ATTRIBUTE(fops_ulong_wo, NULL, debugfs_ulong_set, "%llu\n");
  * This function will return a pointer to a dentry if it succeeds.  This
  * pointer must be passed to the debugfs_remove() function when the file is
  * to be removed (no automatic cleanup happens if your module is unloaded,
- * you are responsible here.)  If an error occurs, ERR_PTR(-ERROR) will be
+ * you are responsible here.)  If an error occurs, %ERR_PTR(-ERROR) will be
  * returned.
  *
- * If debugfs is not enabled in the kernel, the value ERR_PTR(-ENODEV) will
+ * If debugfs is not enabled in the kernel, the value %ERR_PTR(-ENODEV) will
  * be returned.
  */
 struct dentry *debugfs_create_ulong(const char *name, umode_t mode,
@@ -636,10 +660,10 @@ DEFINE_DEBUGFS_ATTRIBUTE(fops_x64_wo, NULL, debugfs_u64_set, "0x%016llx\n");
  * @value: a pointer to the variable that the file should read to and write
  *         from.
  */
-void debugfs_create_x8(const char *name, umode_t mode, struct dentry *parent,
-		       u8 *value)
+struct dentry *debugfs_create_x8(const char *name, umode_t mode,
+				 struct dentry *parent, u8 *value)
 {
-	debugfs_create_mode_unsafe(name, mode, parent, value, &fops_x8,
+	return debugfs_create_mode_unsafe(name, mode, parent, value, &fops_x8,
 				   &fops_x8_ro, &fops_x8_wo);
 }
 EXPORT_SYMBOL_GPL(debugfs_create_x8);
@@ -654,10 +678,10 @@ EXPORT_SYMBOL_GPL(debugfs_create_x8);
  * @value: a pointer to the variable that the file should read to and write
  *         from.
  */
-void debugfs_create_x16(const char *name, umode_t mode, struct dentry *parent,
-			u16 *value)
+struct dentry *debugfs_create_x16(const char *name, umode_t mode,
+				 struct dentry *parent, u16 *value)
 {
-	debugfs_create_mode_unsafe(name, mode, parent, value, &fops_x16,
+	return debugfs_create_mode_unsafe(name, mode, parent, value, &fops_x16,
 				   &fops_x16_ro, &fops_x16_wo);
 }
 EXPORT_SYMBOL_GPL(debugfs_create_x16);
@@ -672,10 +696,10 @@ EXPORT_SYMBOL_GPL(debugfs_create_x16);
  * @value: a pointer to the variable that the file should read to and write
  *         from.
  */
-void debugfs_create_x32(const char *name, umode_t mode, struct dentry *parent,
-			u32 *value)
+struct dentry *debugfs_create_x32(const char *name, umode_t mode,
+				 struct dentry *parent, u32 *value)
 {
-	debugfs_create_mode_unsafe(name, mode, parent, value, &fops_x32,
+	return debugfs_create_mode_unsafe(name, mode, parent, value, &fops_x32,
 				   &fops_x32_ro, &fops_x32_wo);
 }
 EXPORT_SYMBOL_GPL(debugfs_create_x32);
@@ -690,10 +714,10 @@ EXPORT_SYMBOL_GPL(debugfs_create_x32);
  * @value: a pointer to the variable that the file should read to and write
  *         from.
  */
-void debugfs_create_x64(const char *name, umode_t mode, struct dentry *parent,
-			u64 *value)
+struct dentry *debugfs_create_x64(const char *name, umode_t mode,
+				 struct dentry *parent, u64 *value)
 {
-	debugfs_create_mode_unsafe(name, mode, parent, value, &fops_x64,
+	return debugfs_create_mode_unsafe(name, mode, parent, value, &fops_x64,
 				   &fops_x64_ro, &fops_x64_wo);
 }
 EXPORT_SYMBOL_GPL(debugfs_create_x64);
@@ -724,11 +748,12 @@ DEFINE_DEBUGFS_ATTRIBUTE(fops_size_t_wo, NULL, debugfs_size_t_set, "%llu\n");
  * @value: a pointer to the variable that the file should read to and write
  *         from.
  */
-void debugfs_create_size_t(const char *name, umode_t mode,
-			   struct dentry *parent, size_t *value)
+struct dentry *debugfs_create_size_t(const char *name, umode_t mode,
+				     struct dentry *parent, size_t *value)
 {
-	debugfs_create_mode_unsafe(name, mode, parent, value, &fops_size_t,
-				   &fops_size_t_ro, &fops_size_t_wo);
+	return debugfs_create_mode_unsafe(name, mode, parent, value,
+					&fops_size_t, &fops_size_t_ro,
+					&fops_size_t_wo);
 }
 EXPORT_SYMBOL_GPL(debugfs_create_size_t);
 
@@ -760,11 +785,12 @@ DEFINE_DEBUGFS_ATTRIBUTE(fops_atomic_t_wo, NULL, debugfs_atomic_t_set,
  * @value: a pointer to the variable that the file should read to and write
  *         from.
  */
-void debugfs_create_atomic_t(const char *name, umode_t mode,
-			     struct dentry *parent, atomic_t *value)
+struct dentry *debugfs_create_atomic_t(const char *name, umode_t mode,
+				 struct dentry *parent, atomic_t *value)
 {
-	debugfs_create_mode_unsafe(name, mode, parent, value, &fops_atomic_t,
-				   &fops_atomic_t_ro, &fops_atomic_t_wo);
+	return debugfs_create_mode_unsafe(name, mode, parent, value,
+					&fops_atomic_t, &fops_atomic_t_ro,
+					&fops_atomic_t_wo);
 }
 EXPORT_SYMBOL_GPL(debugfs_create_atomic_t);
 
@@ -849,10 +875,10 @@ static const struct file_operations fops_bool_wo = {
  * This function will return a pointer to a dentry if it succeeds.  This
  * pointer must be passed to the debugfs_remove() function when the file is
  * to be removed (no automatic cleanup happens if your module is unloaded,
- * you are responsible here.)  If an error occurs, ERR_PTR(-ERROR) will be
+ * you are responsible here.)  If an error occurs, %ERR_PTR(-ERROR) will be
  * returned.
  *
- * If debugfs is not enabled in the kernel, the value ERR_PTR(-ENODEV) will
+ * If debugfs is not enabled in the kernel, the value %ERR_PTR(-ENODEV) will
  * be returned.
  */
 struct dentry *debugfs_create_bool(const char *name, umode_t mode,
@@ -902,10 +928,10 @@ static const struct file_operations fops_blob = {
  * This function will return a pointer to a dentry if it succeeds.  This
  * pointer must be passed to the debugfs_remove() function when the file is
  * to be removed (no automatic cleanup happens if your module is unloaded,
- * you are responsible here.)  If an error occurs, ERR_PTR(-ERROR) will be
+ * you are responsible here.)  If an error occurs, %ERR_PTR(-ERROR) will be
  * returned.
  *
- * If debugfs is not enabled in the kernel, the value ERR_PTR(-ENODEV) will
+ * If debugfs is not enabled in the kernel, the value %ERR_PTR(-ENODEV) will
  * be returned.
  */
 struct dentry *debugfs_create_blob(const char *name, umode_t mode,
@@ -1094,10 +1120,10 @@ static const struct file_operations fops_regset32 = {
  * This function will return a pointer to a dentry if it succeeds.  This
  * pointer must be passed to the debugfs_remove() function when the file is
  * to be removed (no automatic cleanup happens if your module is unloaded,
- * you are responsible here.)  If an error occurs, ERR_PTR(-ERROR) will be
+ * you are responsible here.)  If an error occurs, %ERR_PTR(-ERROR) will be
  * returned.
  *
- * If debugfs is not enabled in the kernel, the value ERR_PTR(-ENODEV) will
+ * If debugfs is not enabled in the kernel, the value %ERR_PTR(-ENODEV) will
  * be returned.
  */
 struct dentry *debugfs_create_regset32(const char *name, umode_t mode,
@@ -1161,3 +1187,4 @@ struct dentry *debugfs_create_devm_seqfile(struct device *dev, const char *name,
 				   &debugfs_devm_entry_ops);
 }
 EXPORT_SYMBOL_GPL(debugfs_create_devm_seqfile);
+

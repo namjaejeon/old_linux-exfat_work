@@ -63,7 +63,7 @@
 	.endm
 
 	.macro	local_irq_disable reg=t0
-#ifdef CONFIG_PREEMPTION
+#ifdef CONFIG_PREEMPT
 	lw      \reg, TI_PRE_COUNT($28)
 	addi    \reg, \reg, 1
 	sw      \reg, TI_PRE_COUNT($28)
@@ -73,7 +73,7 @@
 	xori	\reg, \reg, 1
 	mtc0	\reg, CP0_STATUS
 	irq_disable_hazard
-#ifdef CONFIG_PREEMPTION
+#ifdef CONFIG_PREEMPT
 	lw      \reg, TI_PRE_COUNT($28)
 	addi    \reg, \reg, -1
 	sw      \reg, TI_PRE_COUNT($28)

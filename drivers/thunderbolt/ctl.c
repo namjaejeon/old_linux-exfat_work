@@ -708,26 +708,19 @@ void tb_ctl_stop(struct tb_ctl *ctl)
 /* public interface, commands */
 
 /**
- * tb_cfg_ack_plug() - Ack hot plug/unplug event
- * @ctl: Control channel to use
- * @route: Router that originated the event
- * @port: Port where the hot plug/unplug happened
- * @unplug: Ack hot plug or unplug
+ * tb_cfg_error() - send error packet
  *
- * Call this as response for hot plug/unplug event to ack it.
- * Returns %0 on success or an error code on failure.
+ * Return: Returns 0 on success or an error code on failure.
  */
-int tb_cfg_ack_plug(struct tb_ctl *ctl, u64 route, u32 port, bool unplug)
+int tb_cfg_error(struct tb_ctl *ctl, u64 route, u32 port,
+		 enum tb_cfg_error error)
 {
 	struct cfg_error_pkg pkg = {
 		.header = tb_cfg_make_header(route),
 		.port = port,
-		.error = TB_CFG_ERROR_ACK_PLUG_EVENT,
-		.pg = unplug ? TB_CFG_ERROR_PG_HOT_UNPLUG
-			     : TB_CFG_ERROR_PG_HOT_PLUG,
+		.error = error,
 	};
-	tb_ctl_dbg(ctl, "acking hot %splug event on %llx:%x\n",
-		   unplug ? "un" : "", route, port);
+	tb_ctl_dbg(ctl, "resetting error on %llx:%x.\n", route, port);
 	return tb_ctl_tx(ctl, &pkg, sizeof(pkg), TB_CFG_PKG_ERROR);
 }
 
@@ -969,8 +962,8 @@ int tb_cfg_read(struct tb_ctl *ctl, void *buffer, u64 route, u32 port,
 		return tb_cfg_get_error(ctl, space, &res);
 
 	case -ETIMEDOUT:
-		tb_ctl_warn(ctl, "%llx: timeout reading config space %u from %#x\n",
-			    route, space, offset);
+		tb_ctl_warn(ctl, "timeout reading config space %u from %#x\n",
+			    space, offset);
 		break;
 
 	default:
@@ -995,8 +988,8 @@ int tb_cfg_write(struct tb_ctl *ctl, const void *buffer, u64 route, u32 port,
 		return tb_cfg_get_error(ctl, space, &res);
 
 	case -ETIMEDOUT:
-		tb_ctl_warn(ctl, "%llx: timeout writing config space %u to %#x\n",
-			    route, space, offset);
+		tb_ctl_warn(ctl, "timeout writing config space %u to %#x\n",
+			    space, offset);
 		break;
 
 	default:

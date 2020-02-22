@@ -55,7 +55,6 @@
 #include "amdgpu_connectors.h"
 #include "amdgpu_trace.h"
 #include "amdgpu_amdkfd.h"
-#include "amdgpu_ras.h"
 
 #include <linux/pm_runtime.h>
 
@@ -88,13 +87,10 @@ static void amdgpu_hotplug_work_func(struct work_struct *work)
 	struct drm_device *dev = adev->ddev;
 	struct drm_mode_config *mode_config = &dev->mode_config;
 	struct drm_connector *connector;
-	struct drm_connector_list_iter iter;
 
 	mutex_lock(&mode_config->mutex);
-	drm_connector_list_iter_begin(dev, &iter);
-	drm_for_each_connector_iter(connector, &iter)
+	list_for_each_entry(connector, &mode_config->connector_list, head)
 		amdgpu_connector_hotplug(connector);
-	drm_connector_list_iter_end(&iter);
 	mutex_unlock(&mode_config->mutex);
 	/* Just fire off a uevent and let userspace tell us what to do */
 	drm_helper_hpd_irq_event(dev);
@@ -157,22 +153,6 @@ irqreturn_t amdgpu_irq_handler(int irq, void *arg)
 	ret = amdgpu_ih_process(adev, &adev->irq.ih);
 	if (ret == IRQ_HANDLED)
 		pm_runtime_mark_last_busy(dev->dev);
-
-	/* For the hardware that cannot enable bif ring for both ras_controller_irq
-         * and ras_err_evnet_athub_irq ih cookies, the driver has to poll status
-	 * register to check whether the interrupt is triggered or not, and properly
-	 * ack the interrupt if it is there
-	 */
-	if (amdgpu_ras_is_supported(adev, AMDGPU_RAS_BLOCK__PCIE_BIF)) {
-		if (adev->nbio.funcs &&
-		    adev->nbio.funcs->handle_ras_controller_intr_no_bifring)
-			adev->nbio.funcs->handle_ras_controller_intr_no_bifring(adev);
-
-		if (adev->nbio.funcs &&
-		    adev->nbio.funcs->handle_ras_err_event_athub_intr_no_bifring)
-			adev->nbio.funcs->handle_ras_err_event_athub_intr_no_bifring(adev);
-	}
-
 	return ret;
 }
 
@@ -248,19 +228,10 @@ int amdgpu_irq_init(struct amdgpu_device *adev)
 	adev->irq.msi_enabled = false;
 
 	if (amdgpu_msi_ok(adev)) {
-		int nvec = pci_msix_vec_count(adev->pdev);
-		unsigned int flags;
-
-		if (nvec <= 0) {
-			flags = PCI_IRQ_MSI;
-		} else {
-			flags = PCI_IRQ_MSI | PCI_IRQ_MSIX;
-		}
-		/* we only need one vector */
-		nvec = pci_alloc_irq_vectors(adev->pdev, 1, 1, flags);
-		if (nvec > 0) {
+		int ret = pci_enable_msi(adev->pdev);
+		if (!ret) {
 			adev->irq.msi_enabled = true;
-			dev_dbg(adev->dev, "amdgpu: using MSI/MSI-X.\n");
+			dev_dbg(adev->dev, "amdgpu: using MSI.\n");
 		}
 	}
 
@@ -283,8 +254,7 @@ int amdgpu_irq_init(struct amdgpu_device *adev)
 	INIT_WORK(&adev->irq.ih2_work, amdgpu_irq_handle_ih2);
 
 	adev->irq.installed = true;
-	/* Use vector 0 for MSI-X */
-	r = drm_irq_install(adev->ddev, pci_irq_vector(adev->pdev, 0));
+	r = drm_irq_install(adev->ddev, adev->ddev->pdev->irq);
 	if (r) {
 		adev->irq.installed = false;
 		if (!amdgpu_device_has_dc_support(adev))
@@ -314,7 +284,7 @@ void amdgpu_irq_fini(struct amdgpu_device *adev)
 		drm_irq_uninstall(adev->ddev);
 		adev->irq.installed = false;
 		if (adev->irq.msi_enabled)
-			pci_free_irq_vectors(adev->pdev);
+			pci_disable_msi(adev->pdev);
 		if (!amdgpu_device_has_dc_support(adev))
 			flush_work(&adev->hotplug_work);
 	}
@@ -399,7 +369,7 @@ int amdgpu_irq_add_id(struct amdgpu_device *adev,
  * amdgpu_irq_dispatch - dispatch IRQ to IP blocks
  *
  * @adev: amdgpu device pointer
- * @ih: interrupt ring instance
+ * @entry: interrupt vector pointer
  *
  * Dispatches IRQ to IP blocks.
  */

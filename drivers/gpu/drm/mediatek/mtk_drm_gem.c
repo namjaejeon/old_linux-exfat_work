@@ -271,7 +271,7 @@ void *mtk_drm_gem_prime_vmap(struct drm_gem_object *obj)
 			       pgprot_writecombine(PAGE_KERNEL));
 
 out:
-	kfree(sgt);
+	kfree((void *)sgt);
 
 	return mtk_gem->kvaddr;
 }
@@ -285,5 +285,5 @@ void mtk_drm_gem_prime_vunmap(struct drm_gem_object *obj, void *vaddr)
 
 	vunmap(vaddr);
 	mtk_gem->kvaddr = 0;
-	kfree(mtk_gem->pages);
+	kfree((void *)mtk_gem->pages);
 }

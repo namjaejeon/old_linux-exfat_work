@@ -155,8 +155,12 @@ static int read_user_stack_64(unsigned long __user *ptr, unsigned long *ret)
 	    ((unsigned long)ptr & 7))
 		return -EFAULT;
 
-	if (!probe_user_read(ret, ptr, sizeof(*ret)))
+	pagefault_disable();
+	if (!__get_user_inatomic(*ret, ptr)) {
+		pagefault_enable();
 		return 0;
+	}
+	pagefault_enable();
 
 	return read_user_stack_slow(ptr, ret, 8);
 }
@@ -167,8 +171,12 @@ static int read_user_stack_32(unsigned int __user *ptr, unsigned int *ret)
 	    ((unsigned long)ptr & 3))
 		return -EFAULT;
 
-	if (!probe_user_read(ret, ptr, sizeof(*ret)))
+	pagefault_disable();
+	if (!__get_user_inatomic(*ret, ptr)) {
+		pagefault_enable();
 		return 0;
+	}
+	pagefault_enable();
 
 	return read_user_stack_slow(ptr, ret, 4);
 }
@@ -276,6 +284,16 @@ static void perf_callchain_user_64(struct perf_callchain_entry_ctx *entry,
 	}
 }
 
+static inline int current_is_64bit(void)
+{
+	/*
+	 * We can't use test_thread_flag() here because we may be on an
+	 * interrupt stack, and the thread flags don't get copied over
+	 * from the thread_info on the main stack to the interrupt stack.
+	 */
+	return !test_ti_thread_flag(task_thread_info(current), TIF_32BIT);
+}
+
 #else  /* CONFIG_PPC64 */
 /*
  * On 32-bit we just access the address and let hash_page create a
@@ -285,16 +303,27 @@ static void perf_callchain_user_64(struct perf_callchain_entry_ctx *entry,
  */
 static int read_user_stack_32(unsigned int __user *ptr, unsigned int *ret)
 {
+	int rc;
+
 	if ((unsigned long)ptr > TASK_SIZE - sizeof(unsigned int) ||
 	    ((unsigned long)ptr & 3))
 		return -EFAULT;
 
-	return probe_user_read(ret, ptr, sizeof(*ret));
+	pagefault_disable();
+	rc = __get_user_inatomic(*ret, ptr);
+	pagefault_enable();
+
+	return rc;
 }
 
 static inline void perf_callchain_user_64(struct perf_callchain_entry_ctx *entry,
 					  struct pt_regs *regs)
 {
+}
+
+static inline int current_is_64bit(void)
+{
+	return 0;
 }
 
 static inline int valid_user_sp(unsigned long sp, int is_64)
@@ -457,7 +486,7 @@ static void perf_callchain_user_32(struct perf_callchain_entry_ctx *entry,
 void
 perf_callchain_user(struct perf_callchain_entry_ctx *entry, struct pt_regs *regs)
 {
-	if (!is_32bit_task())
+	if (current_is_64bit())
 		perf_callchain_user_64(entry, regs);
 	else
 		perf_callchain_user_32(entry, regs);

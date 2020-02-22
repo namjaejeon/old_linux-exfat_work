@@ -228,6 +228,18 @@ struct iwl_fw_dbg {
 };
 
 /**
+ * struct iwl_fw_ini_active_triggers
+ * @active: is this trigger active
+ * @size: allocated memory size of the trigger
+ * @trig: trigger
+ */
+struct iwl_fw_ini_active_triggers {
+	bool active;
+	size_t size;
+	struct iwl_fw_ini_trigger *trig;
+};
+
+/**
  * struct iwl_fw - variables associated with the firmware
  *
  * @ucode_ver: ucode version from the ucode file
@@ -251,7 +263,7 @@ struct iwl_fw_dbg {
 struct iwl_fw {
 	u32 ucode_ver;
 
-	char fw_version[64];
+	char fw_version[ETHTOOL_FWVERS_LEN];
 
 	/* ucode images */
 	struct fw_img img[IWL_UCODE_TYPE_MAX];
@@ -311,24 +323,6 @@ iwl_get_ucode_image(const struct iwl_fw *fw, enum iwl_ucode_type ucode_type)
 		return NULL;
 
 	return &fw->img[ucode_type];
-}
-
-static inline u8 iwl_mvm_lookup_cmd_ver(const struct iwl_fw *fw, u8 grp, u8 cmd)
-{
-	const struct iwl_fw_cmd_version *entry;
-	unsigned int i;
-
-	if (!fw->ucode_capa.cmd_versions ||
-	    !fw->ucode_capa.n_cmd_versions)
-		return IWL_FW_CMD_VER_UNKNOWN;
-
-	entry = fw->ucode_capa.cmd_versions;
-	for (i = 0; i < fw->ucode_capa.n_cmd_versions; i++, entry++) {
-		if (entry->group == grp && entry->cmd == cmd)
-			return entry->cmd_ver;
-	}
-
-	return IWL_FW_CMD_VER_UNKNOWN;
 }
 
 #endif  /* __iwl_fw_img_h__ */

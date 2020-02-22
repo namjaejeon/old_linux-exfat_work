@@ -16,7 +16,7 @@
 
 .text
 
-SYM_FUNC_START(swsusp_arch_suspend)
+ENTRY(swsusp_arch_suspend)
 	movl %esp, saved_context_esp
 	movl %ebx, saved_context_ebx
 	movl %ebp, saved_context_ebp
@@ -33,9 +33,9 @@ SYM_FUNC_START(swsusp_arch_suspend)
 	call swsusp_save
 	FRAME_END
 	ret
-SYM_FUNC_END(swsusp_arch_suspend)
+ENDPROC(swsusp_arch_suspend)
 
-SYM_CODE_START(restore_image)
+ENTRY(restore_image)
 	/* prepare to jump to the image kernel */
 	movl	restore_jump_address, %ebx
 	movl	restore_cr3, %ebp
@@ -45,10 +45,9 @@ SYM_CODE_START(restore_image)
 	/* jump to relocated restore code */
 	movl	relocated_restore_code, %eax
 	jmpl	*%eax
-SYM_CODE_END(restore_image)
 
 /* code below has been relocated to a safe page */
-SYM_CODE_START(core_restore_code)
+ENTRY(core_restore_code)
 	movl	temp_pgt, %eax
 	movl	%eax, %cr3
 
@@ -78,11 +77,10 @@ copy_loop:
 
 done:
 	jmpl	*%ebx
-SYM_CODE_END(core_restore_code)
 
 	/* code below belongs to the image kernel */
 	.align PAGE_SIZE
-SYM_FUNC_START(restore_registers)
+ENTRY(restore_registers)
 	/* go back to the original page tables */
 	movl	%ebp, %cr3
 	movl	mmu_cr4_features, %ecx
@@ -109,4 +107,4 @@ SYM_FUNC_START(restore_registers)
 	movl	%eax, in_suspend
 
 	ret
-SYM_FUNC_END(restore_registers)
+ENDPROC(restore_registers)

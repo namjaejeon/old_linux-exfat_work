@@ -63,10 +63,7 @@ static int pl061_get_direction(struct gpio_chip *gc, unsigned offset)
 {
 	struct pl061 *pl061 = gpiochip_get_data(gc);
 
-	if (readb(pl061->base + GPIODIR) & BIT(offset))
-		return GPIO_LINE_DIRECTION_OUT;
-
-	return GPIO_LINE_DIRECTION_IN;
+	return !(readb(pl061->base + GPIODIR) & BIT(offset));
 }
 
 static int pl061_direction_input(struct gpio_chip *gc, unsigned offset)

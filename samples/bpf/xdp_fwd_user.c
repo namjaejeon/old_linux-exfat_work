@@ -24,16 +24,14 @@
 #include <fcntl.h>
 #include <libgen.h>
 
-#include <bpf/libbpf.h>
+#include "libbpf.h"
 #include <bpf/bpf.h>
-
-static __u32 xdp_flags = XDP_FLAGS_UPDATE_IF_NOEXIST;
 
 static int do_attach(int idx, int prog_fd, int map_fd, const char *name)
 {
 	int err;
 
-	err = bpf_set_link_xdp_fd(idx, prog_fd, xdp_flags);
+	err = bpf_set_link_xdp_fd(idx, prog_fd, 0);
 	if (err < 0) {
 		printf("ERROR: failed to attach program to %s\n", name);
 		return err;
@@ -51,7 +49,7 @@ static int do_detach(int idx, const char *name)
 {
 	int err;
 
-	err = bpf_set_link_xdp_fd(idx, -1, xdp_flags);
+	err = bpf_set_link_xdp_fd(idx, -1, 0);
 	if (err < 0)
 		printf("ERROR: failed to detach program from %s\n", name);
 
@@ -85,16 +83,10 @@ int main(int argc, char **argv)
 	int attach = 1;
 	int ret = 0;
 
-	while ((opt = getopt(argc, argv, ":dDSF")) != -1) {
+	while ((opt = getopt(argc, argv, ":dD")) != -1) {
 		switch (opt) {
 		case 'd':
 			attach = 0;
-			break;
-		case 'S':
-			xdp_flags |= XDP_FLAGS_SKB_MODE;
-			break;
-		case 'F':
-			xdp_flags &= ~XDP_FLAGS_UPDATE_IF_NOEXIST;
 			break;
 		case 'D':
 			prog_name = "xdp_fwd_direct";
@@ -104,9 +96,6 @@ int main(int argc, char **argv)
 			return 1;
 		}
 	}
-
-	if (!(xdp_flags & XDP_FLAGS_SKB_MODE))
-		xdp_flags |= XDP_FLAGS_DRV_MODE;
 
 	if (optind == argc) {
 		usage(basename(argv[0]));

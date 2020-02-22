@@ -72,7 +72,7 @@
 	restore_user_regs_last
 	.endm
 
-#ifdef CONFIG_PREEMPTION
+#ifdef CONFIG_PREEMPT
 	.macro	preempt_stop
 	.endm
 #else
@@ -158,7 +158,7 @@ no_work_pending:
 /*
  * preemptive kernel
  */
-#ifdef CONFIG_PREEMPTION
+#ifdef CONFIG_PREEMPT
 resume_kernel:
 	gie_disable
 	lwi	$t0, [tsk+#TSK_TI_PREEMPT]

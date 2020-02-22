@@ -360,7 +360,7 @@ static int zynq_gpio_dir_out(struct gpio_chip *chip, unsigned int pin,
  *
  * This function returns the direction of the specified GPIO.
  *
- * Return: GPIO_LINE_DIRECTION_OUT or GPIO_LINE_DIRECTION_IN
+ * Return: 0 for output, 1 for input
  */
 static int zynq_gpio_get_direction(struct gpio_chip *chip, unsigned int pin)
 {
@@ -372,10 +372,7 @@ static int zynq_gpio_get_direction(struct gpio_chip *chip, unsigned int pin)
 
 	reg = readl_relaxed(gpio->base_addr + ZYNQ_GPIO_DIRM_OFFSET(bank_num));
 
-	if (reg & BIT(bank_pin_num))
-		return GPIO_LINE_DIRECTION_OUT;
-
-	return GPIO_LINE_DIRECTION_IN;
+	return !(reg & BIT(bank_pin_num));
 }
 
 /**
@@ -684,8 +681,6 @@ static void zynq_gpio_restore_context(struct zynq_gpio *gpio)
 	unsigned int bank_num;
 
 	for (bank_num = 0; bank_num < gpio->p_data->max_bank; bank_num++) {
-		writel_relaxed(ZYNQ_GPIO_IXR_DISABLE_ALL, gpio->base_addr +
-				ZYNQ_GPIO_INTDIS_OFFSET(bank_num));
 		writel_relaxed(gpio->context.datalsw[bank_num],
 			       gpio->base_addr +
 			       ZYNQ_GPIO_DATA_LSW_OFFSET(bank_num));
@@ -695,6 +690,9 @@ static void zynq_gpio_restore_context(struct zynq_gpio *gpio)
 		writel_relaxed(gpio->context.dirm[bank_num],
 			       gpio->base_addr +
 			       ZYNQ_GPIO_DIRM_OFFSET(bank_num));
+		writel_relaxed(gpio->context.int_en[bank_num],
+			       gpio->base_addr +
+			       ZYNQ_GPIO_INTEN_OFFSET(bank_num));
 		writel_relaxed(gpio->context.int_type[bank_num],
 			       gpio->base_addr +
 			       ZYNQ_GPIO_INTTYPE_OFFSET(bank_num));
@@ -704,9 +702,6 @@ static void zynq_gpio_restore_context(struct zynq_gpio *gpio)
 		writel_relaxed(gpio->context.int_any[bank_num],
 			       gpio->base_addr +
 			       ZYNQ_GPIO_INTANY_OFFSET(bank_num));
-		writel_relaxed(~(gpio->context.int_en[bank_num]),
-			       gpio->base_addr +
-			       ZYNQ_GPIO_INTEN_OFFSET(bank_num));
 	}
 }
 

@@ -44,10 +44,7 @@ static int ts4900_gpio_get_direction(struct gpio_chip *chip,
 
 	regmap_read(priv->regmap, offset, &reg);
 
-	if (reg & TS4900_GPIO_OE)
-		return GPIO_LINE_DIRECTION_OUT;
-
-	return GPIO_LINE_DIRECTION_IN;
+	return !(reg & TS4900_GPIO_OE);
 }
 
 static int ts4900_gpio_direction_input(struct gpio_chip *chip,

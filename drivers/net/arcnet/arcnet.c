@@ -763,7 +763,7 @@ static int go_tx(struct net_device *dev)
 }
 
 /* Called by the kernel when transmit times out */
-void arcnet_timeout(struct net_device *dev, unsigned int txqueue)
+void arcnet_timeout(struct net_device *dev)
 {
 	unsigned long flags;
 	struct arcnet_local *lp = netdev_priv(dev);

@@ -16,6 +16,7 @@
 #include <linux/platform_device.h>
 #include <linux/input.h>
 #include <linux/input/mt.h>
+#include <linux/input-polldev.h>
 #include <linux/input/touchscreen.h>
 #include <soc/bcm2835/raspberrypi-firmware.h>
 
@@ -33,7 +34,7 @@
 
 struct rpi_ts {
 	struct platform_device *pdev;
-	struct input_dev *input;
+	struct input_polled_dev *poll_dev;
 	struct touchscreen_properties prop;
 
 	void __iomem *fw_regs_va;
@@ -56,9 +57,10 @@ struct rpi_ts_regs {
 	} point[RPI_TS_MAX_SUPPORTED_POINTS];
 };
 
-static void rpi_ts_poll(struct input_dev *input)
+static void rpi_ts_poll(struct input_polled_dev *dev)
 {
-	struct rpi_ts *ts = input_get_drvdata(input);
+	struct input_dev *input = dev->input;
+	struct rpi_ts *ts = dev->private;
 	struct rpi_ts_regs regs;
 	int modified_ids = 0;
 	long released_ids;
@@ -121,9 +123,10 @@ static int rpi_ts_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct device_node *np = dev->of_node;
-	struct input_dev *input;
+	struct input_polled_dev *poll_dev;
 	struct device_node *fw_node;
 	struct rpi_firmware *fw;
+	struct input_dev *input;
 	struct rpi_ts *ts;
 	u32 touchbuf;
 	int error;
@@ -157,6 +160,7 @@ static int rpi_ts_probe(struct platform_device *pdev)
 		return error;
 	}
 
+
 	touchbuf = (u32)ts->fw_regs_phys;
 	error = rpi_firmware_property(fw, RPI_FIRMWARE_FRAMEBUFFER_SET_TOUCHBUF,
 				      &touchbuf, sizeof(touchbuf));
@@ -166,17 +170,19 @@ static int rpi_ts_probe(struct platform_device *pdev)
 		return error;
 	}
 
-	input = devm_input_allocate_device(dev);
-	if (!input) {
+	poll_dev = devm_input_allocate_polled_device(dev);
+	if (!poll_dev) {
 		dev_err(dev, "Failed to allocate input device\n");
 		return -ENOMEM;
 	}
-
-	ts->input = input;
-	input_set_drvdata(input, ts);
+	ts->poll_dev = poll_dev;
+	input = poll_dev->input;
 
 	input->name = "raspberrypi-ts";
 	input->id.bustype = BUS_HOST;
+	poll_dev->poll_interval = RPI_TS_POLL_INTERVAL;
+	poll_dev->poll = rpi_ts_poll;
+	poll_dev->private = ts;
 
 	input_set_abs_params(input, ABS_MT_POSITION_X, 0,
 			     RPI_TS_DEFAULT_WIDTH, 0, 0);
@@ -191,15 +197,7 @@ static int rpi_ts_probe(struct platform_device *pdev)
 		return error;
 	}
 
-	error = input_setup_polling(input, rpi_ts_poll);
-	if (error) {
-		dev_err(dev, "could not set up polling mode, %d\n", error);
-		return error;
-	}
-
-	input_set_poll_interval(input, RPI_TS_POLL_INTERVAL);
-
-	error = input_register_device(input);
+	error = input_register_polled_device(poll_dev);
 	if (error) {
 		dev_err(dev, "could not register input device, %d\n", error);
 		return error;
@@ -216,10 +214,10 @@ MODULE_DEVICE_TABLE(of, rpi_ts_match);
 
 static struct platform_driver rpi_ts_driver = {
 	.driver = {
-		.name = "raspberrypi-ts",
+		.name   = "raspberrypi-ts",
 		.of_match_table = rpi_ts_match,
 	},
-	.probe = rpi_ts_probe,
+	.probe          = rpi_ts_probe,
 };
 module_platform_driver(rpi_ts_driver);
 

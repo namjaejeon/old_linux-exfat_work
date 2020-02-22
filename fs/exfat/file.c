@@ -160,11 +160,12 @@ int __exfat_truncate(struct inode *inode, loff_t new_size)
 			return -EIO;
 		ep2 = ep + 1;
 
-		ktime_get_real_ts64(&ts);
+		ts = current_time(inode);
 		exfat_set_entry_time(sbi, &ts,
+				&ep->dentry.file.modify_tz,
 				&ep->dentry.file.modify_time,
 				&ep->dentry.file.modify_date,
-				&ep->dentry.file.modify_tz);
+				&ep->dentry.file.modify_time_ms);
 		ep->dentry.file.attr = cpu_to_le16(ei->attr);
 
 		/* File size should be zero if there is no cluster allocated */
@@ -269,8 +270,12 @@ int exfat_getattr(const struct path *path, struct kstat *stat,
 		unsigned int request_mask, unsigned int query_flags)
 {
 	struct inode *inode = d_backing_inode(path->dentry);
+	struct exfat_inode_info *ei = EXFAT_I(inode);
 
 	generic_fillattr(inode, stat);
+	stat->result_mask |= STATX_BTIME;
+	stat->btime.tv_sec = ei->i_crtime.tv_sec;
+	stat->btime.tv_nsec = ei->i_crtime.tv_nsec;
 	stat->blksize = EXFAT_SB(inode->i_sb)->cluster_size;
 	return 0;
 }

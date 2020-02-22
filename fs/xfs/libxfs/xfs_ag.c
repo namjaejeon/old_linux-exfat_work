@@ -23,28 +23,25 @@
 #include "xfs_ag_resv.h"
 #include "xfs_health.h"
 
-static int
+static struct xfs_buf *
 xfs_get_aghdr_buf(
 	struct xfs_mount	*mp,
 	xfs_daddr_t		blkno,
 	size_t			numblks,
-	struct xfs_buf		**bpp,
 	const struct xfs_buf_ops *ops)
 {
 	struct xfs_buf		*bp;
-	int			error;
 
-	error = xfs_buf_get_uncached(mp->m_ddev_targp, numblks, 0, &bp);
-	if (error)
-		return error;
+	bp = xfs_buf_get_uncached(mp->m_ddev_targp, numblks, 0);
+	if (!bp)
+		return NULL;
 
 	xfs_buf_zero(bp, 0, BBTOB(bp->b_length));
 	bp->b_bn = blkno;
 	bp->b_maps[0].bm_bn = blkno;
 	bp->b_ops = ops;
 
-	*bpp = bp;
-	return 0;
+	return bp;
 }
 
 static inline bool is_log_ag(struct xfs_mount *mp, struct aghdr_init_data *id)
@@ -343,13 +340,13 @@ xfs_ag_init_hdr(
 	struct aghdr_init_data	*id,
 	aghdr_init_work_f	work,
 	const struct xfs_buf_ops *ops)
+
 {
 	struct xfs_buf		*bp;
-	int			error;
 
-	error = xfs_get_aghdr_buf(mp, id->daddr, id->numblks, &bp, ops);
-	if (error)
-		return error;
+	bp = xfs_get_aghdr_buf(mp, id->daddr, id->numblks, ops);
+	if (!bp)
+		return -ENOMEM;
 
 	(*work)(mp, bp, id);
 

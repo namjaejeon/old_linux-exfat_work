@@ -69,9 +69,8 @@ static struct fiq_handler fh = {
 	.name		= DRV_NAME,
 };
 
-static int snd_imx_pcm_hw_params(struct snd_soc_component *component,
-				 struct snd_pcm_substream *substream,
-				 struct snd_pcm_hw_params *params)
+static int snd_imx_pcm_hw_params(struct snd_pcm_substream *substream,
+				struct snd_pcm_hw_params *params)
 {
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	struct imx_pcm_runtime_data *iprtd = runtime->private_data;
@@ -86,8 +85,7 @@ static int snd_imx_pcm_hw_params(struct snd_soc_component *component,
 	return 0;
 }
 
-static int snd_imx_pcm_prepare(struct snd_soc_component *component,
-			       struct snd_pcm_substream *substream)
+static int snd_imx_pcm_prepare(struct snd_pcm_substream *substream)
 {
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	struct imx_pcm_runtime_data *iprtd = runtime->private_data;
@@ -106,8 +104,7 @@ static int snd_imx_pcm_prepare(struct snd_soc_component *component,
 
 static int imx_pcm_fiq;
 
-static int snd_imx_pcm_trigger(struct snd_soc_component *component,
-			       struct snd_pcm_substream *substream, int cmd)
+static int snd_imx_pcm_trigger(struct snd_pcm_substream *substream, int cmd)
 {
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	struct imx_pcm_runtime_data *iprtd = runtime->private_data;
@@ -144,9 +141,7 @@ static int snd_imx_pcm_trigger(struct snd_soc_component *component,
 	return 0;
 }
 
-static snd_pcm_uframes_t
-snd_imx_pcm_pointer(struct snd_soc_component *component,
-		    struct snd_pcm_substream *substream)
+static snd_pcm_uframes_t snd_imx_pcm_pointer(struct snd_pcm_substream *substream)
 {
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	struct imx_pcm_runtime_data *iprtd = runtime->private_data;
@@ -170,8 +165,7 @@ static const struct snd_pcm_hardware snd_imx_hardware = {
 	.fifo_size = 0,
 };
 
-static int snd_imx_open(struct snd_soc_component *component,
-			struct snd_pcm_substream *substream)
+static int snd_imx_open(struct snd_pcm_substream *substream)
 {
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	struct imx_pcm_runtime_data *iprtd;
@@ -200,8 +194,7 @@ static int snd_imx_open(struct snd_soc_component *component,
 	return 0;
 }
 
-static int snd_imx_close(struct snd_soc_component *component,
-			 struct snd_pcm_substream *substream)
+static int snd_imx_close(struct snd_pcm_substream *substream)
 {
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	struct imx_pcm_runtime_data *iprtd = runtime->private_data;
@@ -213,9 +206,8 @@ static int snd_imx_close(struct snd_soc_component *component,
 	return 0;
 }
 
-static int snd_imx_pcm_mmap(struct snd_soc_component *component,
-			    struct snd_pcm_substream *substream,
-			    struct vm_area_struct *vma)
+static int snd_imx_pcm_mmap(struct snd_pcm_substream *substream,
+		struct vm_area_struct *vma)
 {
 	struct snd_pcm_runtime *runtime = substream->runtime;
 	int ret;
@@ -229,6 +221,17 @@ static int snd_imx_pcm_mmap(struct snd_soc_component *component,
 			runtime->dma_bytes);
 	return ret;
 }
+
+static const struct snd_pcm_ops imx_pcm_ops = {
+	.open		= snd_imx_open,
+	.close		= snd_imx_close,
+	.ioctl		= snd_pcm_lib_ioctl,
+	.hw_params	= snd_imx_pcm_hw_params,
+	.prepare	= snd_imx_pcm_prepare,
+	.trigger	= snd_imx_pcm_trigger,
+	.pointer	= snd_imx_pcm_pointer,
+	.mmap		= snd_imx_pcm_mmap,
+};
 
 static int imx_pcm_preallocate_dma_buffer(struct snd_pcm *pcm, int stream)
 {
@@ -276,8 +279,7 @@ static int imx_pcm_new(struct snd_soc_pcm_runtime *rtd)
 
 static int ssi_irq;
 
-static int snd_imx_pcm_new(struct snd_soc_component *component,
-			   struct snd_soc_pcm_runtime *rtd)
+static int imx_pcm_fiq_new(struct snd_soc_pcm_runtime *rtd)
 {
 	struct snd_pcm *pcm = rtd->pcm;
 	struct snd_pcm_substream *substream;
@@ -327,8 +329,7 @@ static void imx_pcm_free(struct snd_pcm *pcm)
 	}
 }
 
-static void snd_imx_pcm_free(struct snd_soc_component *component,
-			     struct snd_pcm *pcm)
+static void imx_pcm_fiq_free(struct snd_pcm *pcm)
 {
 	mxc_set_irq_fiq(ssi_irq, 0);
 	release_fiq(&fh);
@@ -336,15 +337,9 @@ static void snd_imx_pcm_free(struct snd_soc_component *component,
 }
 
 static const struct snd_soc_component_driver imx_soc_component_fiq = {
-	.open		= snd_imx_open,
-	.close		= snd_imx_close,
-	.hw_params	= snd_imx_pcm_hw_params,
-	.prepare	= snd_imx_pcm_prepare,
-	.trigger	= snd_imx_pcm_trigger,
-	.pointer	= snd_imx_pcm_pointer,
-	.mmap		= snd_imx_pcm_mmap,
-	.pcm_construct	= snd_imx_pcm_new,
-	.pcm_destruct	= snd_imx_pcm_free,
+	.ops		= &imx_pcm_ops,
+	.pcm_new	= imx_pcm_fiq_new,
+	.pcm_free	= imx_pcm_fiq_free,
 };
 
 int imx_pcm_fiq_init(struct platform_device *pdev,

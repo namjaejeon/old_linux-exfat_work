@@ -393,17 +393,12 @@ nla_put_failure:
 	return -1;
 }
 
-static void mall_bind_class(void *fh, u32 classid, unsigned long cl, void *q,
-			    unsigned long base)
+static void mall_bind_class(void *fh, u32 classid, unsigned long cl)
 {
 	struct cls_mall_head *head = fh;
 
-	if (head && head->res.classid == classid) {
-		if (cl)
-			__tcf_bind_filter(q, &head->res, base);
-		else
-			__tcf_unbind_filter(q, &head->res);
-	}
+	if (head && head->res.classid == classid)
+		head->res.class = cl;
 }
 
 static struct tcf_proto_ops cls_mall_ops __read_mostly = {

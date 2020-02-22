@@ -1,5 +1,4 @@
 #include "bcm283x.dtsi"
-#include "bcm2835-common.dtsi"
 
 / {
 	compatible = "brcm,bcm2837";

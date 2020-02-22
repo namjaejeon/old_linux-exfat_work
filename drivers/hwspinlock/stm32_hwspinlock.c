@@ -58,10 +58,12 @@ static int stm32_hwspinlock_probe(struct platform_device *pdev)
 {
 	struct stm32_hwspinlock *hw;
 	void __iomem *io_base;
+	struct resource *res;
 	size_t array_size;
 	int i, ret;
 
-	io_base = devm_platform_ioremap_resource(pdev, 0);
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	io_base = devm_ioremap_resource(&pdev->dev, res);
 	if (IS_ERR(io_base))
 		return PTR_ERR(io_base);
 

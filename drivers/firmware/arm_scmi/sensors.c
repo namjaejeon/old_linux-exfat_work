@@ -68,7 +68,6 @@ struct scmi_msg_sensor_reading_get {
 };
 
 struct sensors_info {
-	u32 version;
 	int num_sensors;
 	int max_requests;
 	u64 reg_addr;
@@ -295,7 +294,6 @@ static int scmi_sensors_protocol_init(struct scmi_handle *handle)
 
 	scmi_sensor_description_get(handle, sinfo);
 
-	sinfo->version = version;
 	handle->sensor_ops = &sensor_ops;
 	handle->sensor_priv = sinfo;
 

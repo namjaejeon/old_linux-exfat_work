@@ -18,6 +18,8 @@
 
 #include <trace/events/cgroup.h>
 
+#define cg_invalf(fc, fmt, ...) invalf(fc, fmt, ## __VA_ARGS__)
+
 /*
  * pidlists linger the following amount before being destroyed.  The goal
  * is avoiding frequent destruction in the middle of consecutive read calls
@@ -493,13 +495,12 @@ static ssize_t __cgroup1_procs_write(struct kernfs_open_file *of,
 	struct task_struct *task;
 	const struct cred *cred, *tcred;
 	ssize_t ret;
-	bool locked;
 
 	cgrp = cgroup_kn_lock_live(of->kn, false);
 	if (!cgrp)
 		return -ENODEV;
 
-	task = cgroup_procs_write_start(buf, threadgroup, &locked);
+	task = cgroup_procs_write_start(buf, threadgroup);
 	ret = PTR_ERR_OR_ZERO(task);
 	if (ret)
 		goto out_unlock;
@@ -521,7 +522,7 @@ static ssize_t __cgroup1_procs_write(struct kernfs_open_file *of,
 	ret = cgroup_attach_task(cgrp, task, threadgroup);
 
 out_finish:
-	cgroup_procs_write_finish(task, locked);
+	cgroup_procs_write_finish(task);
 out_unlock:
 	cgroup_kn_unlock(of->kn);
 
@@ -885,7 +886,7 @@ enum cgroup1_param {
 	Opt_xattr,
 };
 
-const struct fs_parameter_spec cgroup1_fs_parameters[] = {
+static const struct fs_parameter_spec cgroup1_param_specs[] = {
 	fsparam_flag  ("all",		Opt_all),
 	fsparam_flag  ("clone_children", Opt_clone_children),
 	fsparam_flag  ("cpuset_v2_mode", Opt_cpuset_v2_mode),
@@ -897,6 +898,11 @@ const struct fs_parameter_spec cgroup1_fs_parameters[] = {
 	{}
 };
 
+const struct fs_parameter_description cgroup1_fs_parameters = {
+	.name		= "cgroup1",
+	.specs		= cgroup1_param_specs,
+};
+
 int cgroup1_parse_param(struct fs_context *fc, struct fs_parameter *param)
 {
 	struct cgroup_fs_context *ctx = cgroup_fc2context(fc);
@@ -904,7 +910,7 @@ int cgroup1_parse_param(struct fs_context *fc, struct fs_parameter *param)
 	struct fs_parse_result result;
 	int opt, i;
 
-	opt = fs_parse(fc, cgroup1_fs_parameters, param, &result);
+	opt = fs_parse(fc, &cgroup1_fs_parameters, param, &result);
 	if (opt == -ENOPARAM) {
 		if (strcmp(param->key, "source") == 0) {
 			fc->source = param->string;
@@ -917,7 +923,7 @@ int cgroup1_parse_param(struct fs_context *fc, struct fs_parameter *param)
 			ctx->subsys_mask |= (1 << i);
 			return 0;
 		}
-		return invalfc(fc, "Unknown subsys name '%s'", param->key);
+		return cg_invalf(fc, "cgroup1: Unknown subsys name '%s'", param->key);
 	}
 	if (opt < 0)
 		return opt;
@@ -945,7 +951,7 @@ int cgroup1_parse_param(struct fs_context *fc, struct fs_parameter *param)
 	case Opt_release_agent:
 		/* Specifying two release agents is forbidden */
 		if (ctx->release_agent)
-			return invalfc(fc, "release_agent respecified");
+			return cg_invalf(fc, "cgroup1: release_agent respecified");
 		ctx->release_agent = param->string;
 		param->string = NULL;
 		break;
@@ -955,9 +961,9 @@ int cgroup1_parse_param(struct fs_context *fc, struct fs_parameter *param)
 			return -ENOENT;
 		/* Can't specify an empty name */
 		if (!param->size)
-			return invalfc(fc, "Empty name");
+			return cg_invalf(fc, "cgroup1: Empty name");
 		if (param->size > MAX_CGROUP_ROOT_NAMELEN - 1)
-			return invalfc(fc, "Name too long");
+			return cg_invalf(fc, "cgroup1: Name too long");
 		/* Must match [\w.-]+ */
 		for (i = 0; i < param->size; i++) {
 			char c = param->string[i];
@@ -965,11 +971,11 @@ int cgroup1_parse_param(struct fs_context *fc, struct fs_parameter *param)
 				continue;
 			if ((c == '.') || (c == '-') || (c == '_'))
 				continue;
-			return invalfc(fc, "Invalid name");
+			return cg_invalf(fc, "cgroup1: Invalid name");
 		}
 		/* Specifying two names is forbidden */
 		if (ctx->name)
-			return invalfc(fc, "name respecified");
+			return cg_invalf(fc, "cgroup1: name respecified");
 		ctx->name = param->string;
 		param->string = NULL;
 		break;
@@ -1004,7 +1010,7 @@ static int check_cgroupfs_options(struct fs_context *fc)
 	if (ctx->all_ss) {
 		/* Mutually exclusive option 'all' + subsystem name */
 		if (ctx->subsys_mask)
-			return invalfc(fc, "subsys name conflicts with all");
+			return cg_invalf(fc, "cgroup1: subsys name conflicts with all");
 		/* 'all' => select all the subsystems */
 		ctx->subsys_mask = enabled;
 	}
@@ -1014,7 +1020,7 @@ static int check_cgroupfs_options(struct fs_context *fc)
 	 * empty hierarchies must have a name).
 	 */
 	if (!ctx->subsys_mask && !ctx->name)
-		return invalfc(fc, "Need name or subsystem set");
+		return cg_invalf(fc, "cgroup1: Need name or subsystem set");
 
 	/*
 	 * Option noprefix was introduced just for backward compatibility
@@ -1022,11 +1028,11 @@ static int check_cgroupfs_options(struct fs_context *fc)
 	 * the cpuset subsystem.
 	 */
 	if ((ctx->flags & CGRP_ROOT_NOPREFIX) && (ctx->subsys_mask & mask))
-		return invalfc(fc, "noprefix used incorrectly");
+		return cg_invalf(fc, "cgroup1: noprefix used incorrectly");
 
 	/* Can't specify "none" and some subsystems */
 	if (ctx->subsys_mask && ctx->none)
-		return invalfc(fc, "none used incorrectly");
+		return cg_invalf(fc, "cgroup1: none used incorrectly");
 
 	return 0;
 }
@@ -1056,7 +1062,7 @@ int cgroup1_reconfigure(struct fs_context *fc)
 	/* Don't allow flags or name to change at remount */
 	if ((ctx->flags ^ root->flags) ||
 	    (ctx->name && strcmp(ctx->name, root->name))) {
-		errorfc(fc, "option or name mismatch, new: 0x%x \"%s\", old: 0x%x \"%s\"",
+		cg_invalf(fc, "option or name mismatch, new: 0x%x \"%s\", old: 0x%x \"%s\"",
 		       ctx->flags, ctx->name ?: "", root->flags, root->name);
 		ret = -EINVAL;
 		goto out_unlock;
@@ -1173,7 +1179,7 @@ static int cgroup1_root_to_use(struct fs_context *fc)
 	 * can't create new one without subsys specification.
 	 */
 	if (!ctx->subsys_mask && !ctx->none)
-		return invalfc(fc, "No subsys list or none specified");
+		return cg_invalf(fc, "cgroup1: No subsys list or none specified");
 
 	/* Hierarchies may only be created in the initial cgroup namespace. */
 	if (ctx->ns != &init_cgroup_ns)

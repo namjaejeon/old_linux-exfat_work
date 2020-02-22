@@ -8,7 +8,6 @@
 #include <linux/init.h>
 #include <linux/acpi.h>
 #include <linux/thermal.h>
-#include <linux/units.h>
 #include "int340x_thermal_zone.h"
 
 static int int340x_thermal_get_zone_temp(struct thermal_zone_device *zone,
@@ -35,7 +34,7 @@ static int int340x_thermal_get_zone_temp(struct thermal_zone_device *zone,
 		*temp = (unsigned long)conv_temp * 10;
 	} else
 		/* _TMP returns the temperature in tenths of degrees Kelvin */
-		*temp = deci_kelvin_to_millicelsius(tmp);
+		*temp = DECI_KELVIN_TO_MILLICELSIUS(tmp);
 
 	return 0;
 }
@@ -117,7 +116,7 @@ static int int340x_thermal_set_trip_temp(struct thermal_zone_device *zone,
 
 	snprintf(name, sizeof(name), "PAT%d", trip);
 	status = acpi_execute_simple_method(d->adev->handle, name,
-			millicelsius_to_deci_kelvin(temp));
+			MILLICELSIUS_TO_DECI_KELVIN(temp));
 	if (ACPI_FAILURE(status))
 		return -EIO;
 
@@ -164,7 +163,7 @@ static int int340x_thermal_get_trip_config(acpi_handle handle, char *name,
 	if (ACPI_FAILURE(status))
 		return -EIO;
 
-	*temp = deci_kelvin_to_millicelsius(r);
+	*temp = DECI_KELVIN_TO_MILLICELSIUS(r);
 
 	return 0;
 }

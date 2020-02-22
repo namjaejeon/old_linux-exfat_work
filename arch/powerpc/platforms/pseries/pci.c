@@ -192,7 +192,7 @@ int pseries_pci_sriov_enable(struct pci_dev *pdev, u16 num_vfs)
 int pseries_pcibios_sriov_enable(struct pci_dev *pdev, u16 num_vfs)
 {
 	/* Allocate PCI data */
-	add_sriov_vf_pdns(pdev);
+	add_dev_pci_data(pdev);
 	return pseries_pci_sriov_enable(pdev, num_vfs);
 }
 
@@ -204,7 +204,7 @@ int pseries_pcibios_sriov_disable(struct pci_dev *pdev)
 	/* Releasing pe_num_map */
 	kfree(pdn->pe_num_map);
 	/* Release PCI data */
-	remove_sriov_vf_pdns(pdev);
+	remove_dev_pci_data(pdev);
 	pci_vf_drivers_autoprobe(pdev, true);
 	return 0;
 }

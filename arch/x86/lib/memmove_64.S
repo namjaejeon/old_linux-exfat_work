@@ -26,10 +26,13 @@
  */
 .weak memmove
 
-SYM_FUNC_START_ALIAS(memmove)
-SYM_FUNC_START(__memmove)
+ENTRY(memmove)
+ENTRY(__memmove)
 
+	/* Handle more 32 bytes in loop */
 	mov %rdi, %rax
+	cmp $0x20, %rdx
+	jb	1f
 
 	/* Decide forward/backward copy mode */
 	cmp %rdi, %rsi
@@ -39,9 +42,7 @@ SYM_FUNC_START(__memmove)
 	cmp %rdi, %r8
 	jg 2f
 
-	/* FSRM implies ERMS => no length checks, do the copy directly */
 .Lmemmove_begin_forward:
-	ALTERNATIVE "cmp $0x20, %rdx; jb 1f", "", X86_FEATURE_FSRM
 	ALTERNATIVE "", "movq %rdx, %rcx; rep movsb; retq", X86_FEATURE_ERMS
 
 	/*
@@ -113,8 +114,6 @@ SYM_FUNC_START(__memmove)
 	 */
 	.p2align 4
 2:
-	cmp $0x20, %rdx
-	jb 1f
 	cmp $680, %rdx
 	jb 6f
 	cmp %dil, %sil
@@ -208,7 +207,7 @@ SYM_FUNC_START(__memmove)
 	movb %r11b, (%rdi)
 13:
 	retq
-SYM_FUNC_END(__memmove)
-SYM_FUNC_END_ALIAS(memmove)
+ENDPROC(__memmove)
+ENDPROC(memmove)
 EXPORT_SYMBOL(__memmove)
 EXPORT_SYMBOL(memmove)

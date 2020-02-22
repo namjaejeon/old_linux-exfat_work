@@ -10,7 +10,8 @@
 
 	/* put return address in eax (arg1) */
 	.macro THUNK name, func, put_ret_addr_in_eax=0
-SYM_CODE_START_NOALIGN(\name)
+	.globl \name
+\name:
 	pushl %eax
 	pushl %ecx
 	pushl %edx
@@ -26,7 +27,6 @@ SYM_CODE_START_NOALIGN(\name)
 	popl %eax
 	ret
 	_ASM_NOKPROBE(\name)
-SYM_CODE_END(\name)
 	.endm
 
 #ifdef CONFIG_TRACE_IRQFLAGS

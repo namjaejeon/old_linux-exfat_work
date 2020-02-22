@@ -25,6 +25,7 @@
 #include <linux/gpio.h>
 #include <linux/wm97xx.h>
 #include <linux/power_supply.h>
+#include <linux/usb/gpio_vbus.h>
 #include <linux/platform_data/i2c-gpio.h>
 #include <linux/gpio/machine.h>
 

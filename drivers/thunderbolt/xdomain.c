@@ -1220,13 +1220,7 @@ struct tb_xdomain *tb_xdomain_alloc(struct tb *tb, struct device *parent,
 				    u64 route, const uuid_t *local_uuid,
 				    const uuid_t *remote_uuid)
 {
-	struct tb_switch *parent_sw = tb_to_switch(parent);
 	struct tb_xdomain *xd;
-	struct tb_port *down;
-
-	/* Make sure the downstream domain is accessible */
-	down = tb_port_at(route, parent_sw);
-	tb_port_unlock(down);
 
 	xd = kzalloc(sizeof(*xd), GFP_KERNEL);
 	if (!xd)
@@ -1410,9 +1404,10 @@ struct tb_xdomain_lookup {
 static struct tb_xdomain *switch_find_xdomain(struct tb_switch *sw,
 	const struct tb_xdomain_lookup *lookup)
 {
-	struct tb_port *port;
+	int i;
 
-	tb_switch_for_each_port(sw, port) {
+	for (i = 1; i <= sw->config.max_port_number; i++) {
+		struct tb_port *port = &sw->ports[i];
 		struct tb_xdomain *xd;
 
 		if (port->xdomain) {

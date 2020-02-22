@@ -436,12 +436,13 @@ xdr_shrink_bufhead(struct xdr_buf *buf, size_t len)
 }
 
 /**
- * xdr_shrink_pagelen - shrinks buf->pages by up to @len bytes
+ * xdr_shrink_pagelen
  * @buf: xdr_buf
  * @len: bytes to remove from buf->pages
  *
- * The extra data is not lost, but is instead moved into buf->tail.
- * Returns the actual number of bytes moved.
+ * Shrinks XDR buffer's page array buf->pages by
+ * 'len' bytes. The extra data is not lost, but is instead
+ * moved into the tail.
  */
 static unsigned int
 xdr_shrink_pagelen(struct xdr_buf *buf, size_t len)
@@ -454,8 +455,8 @@ xdr_shrink_pagelen(struct xdr_buf *buf, size_t len)
 
 	result = 0;
 	tail = buf->tail;
-	if (len > buf->page_len)
-		len = buf-> page_len;
+	BUG_ON (len > pglen);
+
 	tailbuf_len = buf->buflen - buf->head->iov_len - buf->page_len;
 
 	/* Shift the tail first */
@@ -1079,7 +1080,7 @@ void xdr_enter_page(struct xdr_stream *xdr, unsigned int len)
 }
 EXPORT_SYMBOL_GPL(xdr_enter_page);
 
-static const struct kvec empty_iov = {.iov_base = NULL, .iov_len = 0};
+static struct kvec empty_iov = {.iov_base = NULL, .iov_len = 0};
 
 void
 xdr_buf_from_iov(struct kvec *iov, struct xdr_buf *buf)

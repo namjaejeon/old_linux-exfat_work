@@ -10,9 +10,6 @@
 #ifndef __ASSEMBLY__
 
 typedef struct {
-#ifndef CONFIG_MMU
-	unsigned long	end_brk;
-#endif
 	void *vdso;
 #ifdef CONFIG_SMP
 	/* A local icache flush is needed before user execution can resume. */

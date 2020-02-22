@@ -16,8 +16,7 @@ komeda-y := \
 	komeda_crtc.o \
 	komeda_plane.o \
 	komeda_wb_connector.o \
-	komeda_private_obj.o \
-	komeda_event.o
+	komeda_private_obj.o
 
 komeda-y += \
 	d71/d71_dev.o \

@@ -46,7 +46,9 @@ nfp_map_ptr_record(struct nfp_app_bpf *bpf, struct nfp_prog *nfp_prog,
 	/* Grab a single ref to the map for our record.  The prog destroy ndo
 	 * happens after free_used_maps().
 	 */
-	bpf_map_inc(map);
+	map = bpf_map_inc(map, false);
+	if (IS_ERR(map))
+		return PTR_ERR(map);
 
 	record = kmalloc(sizeof(*record), GFP_KERNEL);
 	if (!record) {
@@ -374,7 +376,7 @@ nfp_bpf_map_alloc(struct nfp_app_bpf *bpf, struct bpf_offloaded_map *offmap)
 	}
 
 	use_map_size = DIV_ROUND_UP(offmap->map.value_size, 4) *
-		       sizeof_field(struct nfp_bpf_map, use_map[0]);
+		       FIELD_SIZEOF(struct nfp_bpf_map, use_map[0]);
 
 	nfp_map = kzalloc(sizeof(*nfp_map) + use_map_size, GFP_USER);
 	if (!nfp_map)
@@ -458,8 +460,8 @@ int nfp_bpf_event_output(struct nfp_app_bpf *bpf, const void *data,
 		return -EINVAL;
 
 	rcu_read_lock();
-	record = rhashtable_lookup(&bpf->maps_neutral, &map_id,
-				   nfp_bpf_maps_neutral_params);
+	record = rhashtable_lookup_fast(&bpf->maps_neutral, &map_id,
+					nfp_bpf_maps_neutral_params);
 	if (!record || map_id_full > U32_MAX) {
 		rcu_read_unlock();
 		cmsg_warn(bpf, "perf event: map id %lld (0x%llx) not recognized, dropping event\n",

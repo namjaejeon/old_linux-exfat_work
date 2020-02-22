@@ -25,7 +25,7 @@ static int live_engine_pm(void *arg)
 	}
 
 	GEM_BUG_ON(intel_gt_pm_is_awake(gt));
-	for_each_engine(engine, gt, id) {
+	for_each_engine(engine, gt->i915, id) {
 		const typeof(*igt_atomic_phases) *p;
 
 		for (p = igt_atomic_phases; p->name; p++) {
@@ -51,12 +51,11 @@ static int live_engine_pm(void *arg)
 				pr_err("intel_engine_pm_get_if_awake(%s) failed under %s\n",
 				       engine->name, p->name);
 			else
-				intel_engine_pm_put_async(engine);
-			intel_engine_pm_put_async(engine);
+				intel_engine_pm_put(engine);
+			intel_engine_pm_put(engine);
 			p->critical_section_end();
 
-			intel_engine_pm_flush(engine);
-
+			/* engine wakeref is sync (instant) */
 			if (intel_engine_pm_is_awake(engine)) {
 				pr_err("%s is still awake after flushing pm\n",
 				       engine->name);

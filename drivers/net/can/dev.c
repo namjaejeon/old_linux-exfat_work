@@ -553,9 +553,10 @@ static void can_restart(struct net_device *dev)
 
 	/* send restart message upstream */
 	skb = alloc_can_err_skb(dev, &cf);
-	if (!skb)
+	if (!skb) {
+		err = -ENOMEM;
 		goto restart;
-
+	}
 	cf->can_id |= CAN_ERR_RESTARTED;
 
 	netif_rx(skb);
@@ -847,7 +848,6 @@ void of_can_transceiver(struct net_device *dev)
 		return;
 
 	ret = of_property_read_u32(dn, "max-bitrate", &priv->bitrate_max);
-	of_node_put(dn);
 	if ((ret && ret != -EINVAL) || (!ret && !priv->bitrate_max))
 		netdev_warn(dev, "Invalid value for transceiver max bitrate. Ignoring bitrate limit.\n");
 }

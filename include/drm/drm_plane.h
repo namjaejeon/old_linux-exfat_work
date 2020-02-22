@@ -140,11 +140,10 @@ struct drm_plane_state {
 	 * @zpos:
 	 * Priority of the given plane on crtc (optional).
 	 *
-	 * User-space may set mutable zpos properties so that multiple active
-	 * planes on the same CRTC have identical zpos values. This is a
-	 * user-space bug, but drivers can solve the conflict by comparing the
-	 * plane object IDs; the plane with a higher ID is stacked on top of a
-	 * plane with a lower ID.
+	 * Note that multiple active planes on the same crtc can have an
+	 * identical zpos value. The rule to solving the conflict is to compare
+	 * the plane object IDs; the plane with a higher ID must be stacked on
+	 * top of a plane with a lower ID.
 	 *
 	 * See drm_plane_create_zpos_property() and
 	 * drm_plane_create_zpos_immutable_property() for more details.
@@ -184,26 +183,8 @@ struct drm_plane_state {
 	 */
 	struct drm_property_blob *fb_damage_clips;
 
-	/**
-	 * @src:
-	 *
-	 * source coordinates of the plane (in 16.16).
-	 *
-	 * When using drm_atomic_helper_check_plane_state(),
-	 * the coordinates are clipped, but the driver may choose
-	 * to use unclipped coordinates instead when the hardware
-	 * performs the clipping automatically.
-	 */
-	/**
-	 * @dst:
-	 *
-	 * clipped destination coordinates of the plane.
-	 *
-	 * When using drm_atomic_helper_check_plane_state(),
-	 * the coordinates are clipped, but the driver may choose
-	 * to use unclipped coordinates instead when the hardware
-	 * performs the clipping automatically.
-	 */
+	/** @src: clipped source coordinates of the plane (in 16.16) */
+	/** @dst: clipped destination coordinates of the plane */
 	struct drm_rect src, dst;
 
 	/**

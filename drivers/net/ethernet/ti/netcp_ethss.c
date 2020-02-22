@@ -783,28 +783,28 @@ struct netcp_ethtool_stat {
 #define GBE_STATSA_INFO(field)						\
 {									\
 	"GBE_A:"#field, GBE_STATSA_MODULE,				\
-	sizeof_field(struct gbe_hw_stats, field),			\
+	FIELD_SIZEOF(struct gbe_hw_stats, field),			\
 	offsetof(struct gbe_hw_stats, field)				\
 }
 
 #define GBE_STATSB_INFO(field)						\
 {									\
 	"GBE_B:"#field, GBE_STATSB_MODULE,				\
-	sizeof_field(struct gbe_hw_stats, field),			\
+	FIELD_SIZEOF(struct gbe_hw_stats, field),			\
 	offsetof(struct gbe_hw_stats, field)				\
 }
 
 #define GBE_STATSC_INFO(field)						\
 {									\
 	"GBE_C:"#field, GBE_STATSC_MODULE,				\
-	sizeof_field(struct gbe_hw_stats, field),			\
+	FIELD_SIZEOF(struct gbe_hw_stats, field),			\
 	offsetof(struct gbe_hw_stats, field)				\
 }
 
 #define GBE_STATSD_INFO(field)						\
 {									\
 	"GBE_D:"#field, GBE_STATSD_MODULE,				\
-	sizeof_field(struct gbe_hw_stats, field),			\
+	FIELD_SIZEOF(struct gbe_hw_stats, field),			\
 	offsetof(struct gbe_hw_stats, field)				\
 }
 
@@ -957,7 +957,7 @@ static const struct netcp_ethtool_stat gbe13_et_stats[] = {
 #define GBENU_STATS_HOST(field)					\
 {								\
 	"GBE_HOST:"#field, GBENU_STATS0_MODULE,			\
-	sizeof_field(struct gbenu_hw_stats, field),		\
+	FIELD_SIZEOF(struct gbenu_hw_stats, field),		\
 	offsetof(struct gbenu_hw_stats, field)			\
 }
 
@@ -967,56 +967,56 @@ static const struct netcp_ethtool_stat gbe13_et_stats[] = {
 #define GBENU_STATS_P1(field)					\
 {								\
 	"GBE_P1:"#field, GBENU_STATS1_MODULE,			\
-	sizeof_field(struct gbenu_hw_stats, field),		\
+	FIELD_SIZEOF(struct gbenu_hw_stats, field),		\
 	offsetof(struct gbenu_hw_stats, field)			\
 }
 
 #define GBENU_STATS_P2(field)					\
 {								\
 	"GBE_P2:"#field, GBENU_STATS2_MODULE,			\
-	sizeof_field(struct gbenu_hw_stats, field),		\
+	FIELD_SIZEOF(struct gbenu_hw_stats, field),		\
 	offsetof(struct gbenu_hw_stats, field)			\
 }
 
 #define GBENU_STATS_P3(field)					\
 {								\
 	"GBE_P3:"#field, GBENU_STATS3_MODULE,			\
-	sizeof_field(struct gbenu_hw_stats, field),		\
+	FIELD_SIZEOF(struct gbenu_hw_stats, field),		\
 	offsetof(struct gbenu_hw_stats, field)			\
 }
 
 #define GBENU_STATS_P4(field)					\
 {								\
 	"GBE_P4:"#field, GBENU_STATS4_MODULE,			\
-	sizeof_field(struct gbenu_hw_stats, field),		\
+	FIELD_SIZEOF(struct gbenu_hw_stats, field),		\
 	offsetof(struct gbenu_hw_stats, field)			\
 }
 
 #define GBENU_STATS_P5(field)					\
 {								\
 	"GBE_P5:"#field, GBENU_STATS5_MODULE,			\
-	sizeof_field(struct gbenu_hw_stats, field),		\
+	FIELD_SIZEOF(struct gbenu_hw_stats, field),		\
 	offsetof(struct gbenu_hw_stats, field)			\
 }
 
 #define GBENU_STATS_P6(field)					\
 {								\
 	"GBE_P6:"#field, GBENU_STATS6_MODULE,			\
-	sizeof_field(struct gbenu_hw_stats, field),		\
+	FIELD_SIZEOF(struct gbenu_hw_stats, field),		\
 	offsetof(struct gbenu_hw_stats, field)			\
 }
 
 #define GBENU_STATS_P7(field)					\
 {								\
 	"GBE_P7:"#field, GBENU_STATS7_MODULE,			\
-	sizeof_field(struct gbenu_hw_stats, field),		\
+	FIELD_SIZEOF(struct gbenu_hw_stats, field),		\
 	offsetof(struct gbenu_hw_stats, field)			\
 }
 
 #define GBENU_STATS_P8(field)					\
 {								\
 	"GBE_P8:"#field, GBENU_STATS8_MODULE,			\
-	sizeof_field(struct gbenu_hw_stats, field),		\
+	FIELD_SIZEOF(struct gbenu_hw_stats, field),		\
 	offsetof(struct gbenu_hw_stats, field)			\
 }
 
@@ -1607,21 +1607,21 @@ static const struct netcp_ethtool_stat gbenu_et_stats[] = {
 #define XGBE_STATS0_INFO(field)				\
 {							\
 	"GBE_0:"#field, XGBE_STATS0_MODULE,		\
-	sizeof_field(struct xgbe_hw_stats, field),	\
+	FIELD_SIZEOF(struct xgbe_hw_stats, field),	\
 	offsetof(struct xgbe_hw_stats, field)		\
 }
 
 #define XGBE_STATS1_INFO(field)				\
 {							\
 	"GBE_1:"#field, XGBE_STATS1_MODULE,		\
-	sizeof_field(struct xgbe_hw_stats, field),	\
+	FIELD_SIZEOF(struct xgbe_hw_stats, field),	\
 	offsetof(struct xgbe_hw_stats, field)		\
 }
 
 #define XGBE_STATS2_INFO(field)				\
 {							\
 	"GBE_2:"#field, XGBE_STATS2_MODULE,		\
-	sizeof_field(struct xgbe_hw_stats, field),	\
+	FIELD_SIZEOF(struct xgbe_hw_stats, field),	\
 	offsetof(struct xgbe_hw_stats, field)		\
 }
 
@@ -2291,7 +2291,6 @@ static int gbe_slave_open(struct gbe_intf *gbe_intf)
 	struct gbe_slave *slave = gbe_intf->slave;
 	phy_interface_t phy_mode;
 	bool has_phy = false;
-	int err;
 
 	void (*hndlr)(struct net_device *) = gbe_adjust_link;
 
@@ -2321,11 +2320,11 @@ static int gbe_slave_open(struct gbe_intf *gbe_intf)
 		slave->phy_port_t = PORT_MII;
 	} else if (slave->link_interface == RGMII_LINK_MAC_PHY) {
 		has_phy = true;
-		err = of_get_phy_mode(slave->node, &phy_mode);
+		phy_mode = of_get_phy_mode(slave->node);
 		/* if phy-mode is not present, default to
 		 * PHY_INTERFACE_MODE_RGMII
 		 */
-		if (err)
+		if (phy_mode < 0)
 			phy_mode = PHY_INTERFACE_MODE_RGMII;
 
 		if (!phy_interface_mode_is_rgmii(phy_mode)) {
@@ -2533,6 +2532,8 @@ static int gbe_del_vid(void *intf_priv, int vid)
 }
 
 #if IS_ENABLED(CONFIG_TI_CPTS)
+#define HAS_PHY_TXTSTAMP(p) ((p)->drv && (p)->drv->txtstamp)
+#define HAS_PHY_RXTSTAMP(p) ((p)->drv && (p)->drv->rxtstamp)
 
 static void gbe_txtstamp(void *context, struct sk_buff *skb)
 {
@@ -2564,7 +2565,7 @@ static int gbe_txtstamp_mark_pkt(struct gbe_intf *gbe_intf,
 	 * We mark it here because skb_tx_timestamp() is called
 	 * after all the txhooks are called.
 	 */
-	if (phy_has_txtstamp(phydev)) {
+	if (phydev && HAS_PHY_TXTSTAMP(phydev)) {
 		skb_shinfo(p_info->skb)->tx_flags |= SKBTX_IN_PROGRESS;
 		return 0;
 	}
@@ -2586,7 +2587,7 @@ static int gbe_rxtstamp(struct gbe_intf *gbe_intf, struct netcp_packet *p_info)
 	if (p_info->rxtstamp_complete)
 		return 0;
 
-	if (phy_has_rxtstamp(phydev)) {
+	if (phydev && HAS_PHY_RXTSTAMP(phydev)) {
 		p_info->rxtstamp_complete = true;
 		return 0;
 	}
@@ -2828,7 +2829,7 @@ static int gbe_ioctl(void *intf_priv, struct ifreq *req, int cmd)
 	struct gbe_intf *gbe_intf = intf_priv;
 	struct phy_device *phy = gbe_intf->slave->phy;
 
-	if (!phy_has_hwtstamp(phy)) {
+	if (!phy || !phy->drv->hwtstamp) {
 		switch (cmd) {
 		case SIOCGHWTSTAMP:
 			return gbe_hwtstamp_get(gbe_intf, req);

@@ -19,7 +19,6 @@
 #include <linux/vfs.h>
 #include <linux/sunrpc/gss_api.h>
 #include "internal.h"
-#include "nfs.h"
 
 #define NFSDBG_FACILITY		NFSDBG_VFS
 
@@ -140,65 +139,31 @@ EXPORT_SYMBOL_GPL(nfs_path);
  */
 struct vfsmount *nfs_d_automount(struct path *path)
 {
-	struct nfs_fs_context *ctx;
-	struct fs_context *fc;
-	struct vfsmount *mnt = ERR_PTR(-ENOMEM);
+	struct vfsmount *mnt;
 	struct nfs_server *server = NFS_SERVER(d_inode(path->dentry));
-	struct nfs_client *client = server->nfs_client;
-	int ret;
+	struct nfs_fh *fh = NULL;
+	struct nfs_fattr *fattr = NULL;
 
 	if (IS_ROOT(path->dentry))
 		return ERR_PTR(-ESTALE);
 
-	/* Open a new filesystem context, transferring parameters from the
-	 * parent superblock, including the network namespace.
-	 */
-	fc = fs_context_for_submount(&nfs_fs_type, path->dentry);
-	if (IS_ERR(fc))
-		return ERR_CAST(fc);
+	mnt = ERR_PTR(-ENOMEM);
+	fh = nfs_alloc_fhandle();
+	fattr = nfs_alloc_fattr();
+	if (fh == NULL || fattr == NULL)
+		goto out;
 
-	ctx = nfs_fc2context(fc);
-	ctx->clone_data.dentry	= path->dentry;
-	ctx->clone_data.sb	= path->dentry->d_sb;
-	ctx->clone_data.fattr	= nfs_alloc_fattr();
-	if (!ctx->clone_data.fattr)
-		goto out_fc;
-
-	if (fc->net_ns != client->cl_net) {
-		put_net(fc->net_ns);
-		fc->net_ns = get_net(client->cl_net);
-	}
-
-	/* for submounts we want the same server; referrals will reassign */
-	memcpy(&ctx->nfs_server.address, &client->cl_addr, client->cl_addrlen);
-	ctx->nfs_server.addrlen	= client->cl_addrlen;
-	ctx->nfs_server.port	= server->port;
-
-	ctx->version		= client->rpc_ops->version;
-	ctx->minorversion	= client->cl_minorversion;
-	ctx->nfs_mod		= client->cl_nfs_mod;
-	__module_get(ctx->nfs_mod->owner);
-
-	ret = client->rpc_ops->submount(fc, server);
-	if (ret < 0) {
-		mnt = ERR_PTR(ret);
-		goto out_fc;
-	}
-
-	up_write(&fc->root->d_sb->s_umount);
-	mnt = vfs_create_mount(fc);
+	mnt = server->nfs_client->rpc_ops->submount(server, path->dentry, fh, fattr);
 	if (IS_ERR(mnt))
-		goto out_fc;
-
-	if (nfs_mountpoint_expiry_timeout < 0)
-		goto out_fc;
+		goto out;
 
 	mntget(mnt); /* prevent immediate expiration */
 	mnt_set_expiry(mnt, &nfs_automount_list);
 	schedule_delayed_work(&nfs_automount_task, nfs_mountpoint_expiry_timeout);
 
-out_fc:
-	put_fs_context(fc);
+out:
+	nfs_free_fattr(fattr);
+	nfs_free_fhandle(fh);
 	return mnt;
 }
 
@@ -245,6 +210,16 @@ void nfs_release_automount_timer(void)
 		cancel_delayed_work(&nfs_automount_task);
 }
 
+/*
+ * Clone a mountpoint of the appropriate type
+ */
+static struct vfsmount *nfs_do_clone_mount(struct nfs_server *server,
+					   const char *devname,
+					   struct nfs_clone_mount *mountdata)
+{
+	return vfs_submount(mountdata->dentry, &nfs_xdev_fs_type, devname, mountdata);
+}
+
 /**
  * nfs_do_submount - set up mountpoint when crossing a filesystem boundary
  * @dentry: parent directory
@@ -253,62 +228,46 @@ void nfs_release_automount_timer(void)
  * @authflavor: security flavor to use when performing the mount
  *
  */
-int nfs_do_submount(struct fs_context *fc)
+struct vfsmount *nfs_do_submount(struct dentry *dentry, struct nfs_fh *fh,
+				 struct nfs_fattr *fattr, rpc_authflavor_t authflavor)
 {
-	struct nfs_fs_context *ctx = nfs_fc2context(fc);
-	struct dentry *dentry = ctx->clone_data.dentry;
-	struct nfs_server *server;
-	char *buffer, *p;
-	int ret;
+	struct nfs_clone_mount mountdata = {
+		.sb = dentry->d_sb,
+		.dentry = dentry,
+		.fh = fh,
+		.fattr = fattr,
+		.authflavor = authflavor,
+	};
+	struct vfsmount *mnt;
+	char *page = (char *) __get_free_page(GFP_USER);
+	char *devname;
 
-	/* create a new volume representation */
-	server = ctx->nfs_mod->rpc_ops->clone_server(NFS_SB(ctx->clone_data.sb),
-						     ctx->mntfh,
-						     ctx->clone_data.fattr,
-						     ctx->selected_flavor);
+	if (page == NULL)
+		return ERR_PTR(-ENOMEM);
 
-	if (IS_ERR(server))
-		return PTR_ERR(server);
+	devname = nfs_devname(dentry, page, PAGE_SIZE);
+	if (IS_ERR(devname))
+		mnt = ERR_CAST(devname);
+	else
+		mnt = nfs_do_clone_mount(NFS_SB(dentry->d_sb), devname, &mountdata);
 
-	ctx->server = server;
-
-	buffer = kmalloc(4096, GFP_USER);
-	if (!buffer)
-		return -ENOMEM;
-
-	ctx->internal		= true;
-	ctx->clone_data.inherited_bsize = ctx->clone_data.sb->s_blocksize_bits;
-
-	p = nfs_devname(dentry, buffer, 4096);
-	if (IS_ERR(p)) {
-		nfs_errorf(fc, "NFS: Couldn't determine submount pathname");
-		ret = PTR_ERR(p);
-	} else {
-		ret = vfs_parse_fs_string(fc, "source", p, buffer + 4096 - p);
-		if (!ret)
-			ret = vfs_get_tree(fc);
-	}
-	kfree(buffer);
-	return ret;
+	free_page((unsigned long)page);
+	return mnt;
 }
 EXPORT_SYMBOL_GPL(nfs_do_submount);
 
-int nfs_submount(struct fs_context *fc, struct nfs_server *server)
+struct vfsmount *nfs_submount(struct nfs_server *server, struct dentry *dentry,
+			      struct nfs_fh *fh, struct nfs_fattr *fattr)
 {
-	struct nfs_fs_context *ctx = nfs_fc2context(fc);
-	struct dentry *dentry = ctx->clone_data.dentry;
-	struct dentry *parent = dget_parent(dentry);
 	int err;
+	struct dentry *parent = dget_parent(dentry);
 
 	/* Look it up again to get its attributes */
-	err = server->nfs_client->rpc_ops->lookup(d_inode(parent), dentry,
-						  ctx->mntfh, ctx->clone_data.fattr,
-						  NULL);
+	err = server->nfs_client->rpc_ops->lookup(d_inode(parent), &dentry->d_name, fh, fattr, NULL);
 	dput(parent);
 	if (err != 0)
-		return err;
+		return ERR_PTR(err);
 
-	ctx->selected_flavor = server->client->cl_auth->au_flavor;
-	return nfs_do_submount(fc);
+	return nfs_do_submount(dentry, fh, fattr, server->client->cl_auth->au_flavor);
 }
 EXPORT_SYMBOL_GPL(nfs_submount);

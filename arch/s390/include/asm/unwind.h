@@ -35,6 +35,7 @@ struct unwind_state {
 	struct task_struct *task;
 	struct pt_regs *regs;
 	unsigned long sp, ip;
+	bool reuse_sp;
 	int graph_idx;
 	bool reliable;
 	bool error;
@@ -58,11 +59,10 @@ static inline bool unwind_error(struct unwind_state *state)
 static inline void unwind_start(struct unwind_state *state,
 				struct task_struct *task,
 				struct pt_regs *regs,
-				unsigned long first_frame)
+				unsigned long sp)
 {
-	task = task ?: current;
-	first_frame = first_frame ?: get_stack_pointer(task, regs);
-	__unwind_start(state, task, regs, first_frame);
+	sp = sp ? : get_stack_pointer(task, regs);
+	__unwind_start(state, task, regs, sp);
 }
 
 static inline struct pt_regs *unwind_get_entry_regs(struct unwind_state *state)

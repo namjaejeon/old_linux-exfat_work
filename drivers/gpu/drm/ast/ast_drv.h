@@ -82,25 +82,6 @@ enum ast_tx_chip {
 #define AST_DRAM_4Gx16   7
 #define AST_DRAM_8Gx16   8
 
-
-#define AST_MAX_HWC_WIDTH	64
-#define AST_MAX_HWC_HEIGHT	64
-
-#define AST_HWC_SIZE		(AST_MAX_HWC_WIDTH * AST_MAX_HWC_HEIGHT * 2)
-#define AST_HWC_SIGNATURE_SIZE	32
-
-#define AST_DEFAULT_HWC_NUM	2
-
-/* define for signature structure */
-#define AST_HWC_SIGNATURE_CHECKSUM	0x00
-#define AST_HWC_SIGNATURE_SizeX		0x04
-#define AST_HWC_SIGNATURE_SizeY		0x08
-#define AST_HWC_SIGNATURE_X		0x0C
-#define AST_HWC_SIGNATURE_Y		0x10
-#define AST_HWC_SIGNATURE_HOTSPOTX	0x14
-#define AST_HWC_SIGNATURE_HOTSPOTY	0x18
-
-
 struct ast_private {
 	struct drm_device *dev;
 
@@ -116,14 +97,8 @@ struct ast_private {
 
 	int fb_mtrr;
 
-	struct {
-		struct drm_gem_vram_object *gbo[AST_DEFAULT_HWC_NUM];
-		unsigned int next_index;
-	} cursor;
-
-	struct drm_plane primary_plane;
-	struct drm_plane cursor_plane;
-
+	struct drm_gem_object *cursor_cache;
+	int next_cursor;
 	bool support_wide_screen;
 	enum {
 		ast_use_p2a,
@@ -139,6 +114,8 @@ struct ast_private {
 
 int ast_driver_load(struct drm_device *dev, unsigned long flags);
 void ast_driver_unload(struct drm_device *dev);
+
+struct ast_gem_object;
 
 #define AST_IO_AR_PORT_WRITE		(0x40)
 #define AST_IO_MISC_PORT_WRITE		(0x42)
@@ -222,6 +199,23 @@ static inline void ast_open_key(struct ast_private *ast)
 
 #define AST_VIDMEM_DEFAULT_SIZE AST_VIDMEM_SIZE_8M
 
+#define AST_MAX_HWC_WIDTH 64
+#define AST_MAX_HWC_HEIGHT 64
+
+#define AST_HWC_SIZE                (AST_MAX_HWC_WIDTH*AST_MAX_HWC_HEIGHT*2)
+#define AST_HWC_SIGNATURE_SIZE      32
+
+#define AST_DEFAULT_HWC_NUM 2
+/* define for signature structure */
+#define AST_HWC_SIGNATURE_CHECKSUM  0x00
+#define AST_HWC_SIGNATURE_SizeX     0x04
+#define AST_HWC_SIGNATURE_SizeY     0x08
+#define AST_HWC_SIGNATURE_X         0x0C
+#define AST_HWC_SIGNATURE_Y         0x10
+#define AST_HWC_SIGNATURE_HOTSPOTX  0x14
+#define AST_HWC_SIGNATURE_HOTSPOTY  0x18
+
+
 struct ast_i2c_chan {
 	struct i2c_adapter adapter;
 	struct drm_device *dev;
@@ -281,17 +275,6 @@ struct ast_vbios_mode_info {
 	const struct ast_vbios_enhtable *enh_table;
 };
 
-struct ast_crtc_state {
-	struct drm_crtc_state base;
-
-	/* Last known format of primary plane */
-	const struct drm_format_info *format;
-
-	struct ast_vbios_mode_info vbios_mode_info;
-};
-
-#define to_ast_crtc_state(state) container_of(state, struct ast_crtc_state, base)
-
 extern int ast_mode_init(struct drm_device *dev);
 extern void ast_mode_fini(struct drm_device *dev);
 
@@ -300,6 +283,10 @@ extern void ast_mode_fini(struct drm_device *dev);
 
 int ast_mm_init(struct ast_private *ast);
 void ast_mm_fini(struct ast_private *ast);
+
+int ast_gem_create(struct drm_device *dev,
+		   u32 size, bool iskernel,
+		   struct drm_gem_object **obj);
 
 /* ast post */
 void ast_enable_vga(struct drm_device *dev);

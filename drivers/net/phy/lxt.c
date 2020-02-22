@@ -190,11 +190,27 @@ static int lxt973a2_read_status(struct phy_device *phydev)
 				phydev->duplex = DUPLEX_FULL;
 		}
 
-		phy_resolve_aneg_pause(phydev);
+		if (phydev->duplex == DUPLEX_FULL) {
+			phydev->pause = lpa & LPA_PAUSE_CAP ? 1 : 0;
+			phydev->asym_pause = lpa & LPA_PAUSE_ASYM ? 1 : 0;
+		}
 	} else {
-		err = genphy_read_status_fixed(phydev);
-		if (err < 0)
-			return err;
+		int bmcr = phy_read(phydev, MII_BMCR);
+
+		if (bmcr < 0)
+			return bmcr;
+
+		if (bmcr & BMCR_FULLDPLX)
+			phydev->duplex = DUPLEX_FULL;
+		else
+			phydev->duplex = DUPLEX_HALF;
+
+		if (bmcr & BMCR_SPEED1000)
+			phydev->speed = SPEED_1000;
+		else if (bmcr & BMCR_SPEED100)
+			phydev->speed = SPEED_100;
+		else
+			phydev->speed = SPEED_10;
 
 		phydev->pause = phydev->asym_pause = 0;
 		linkmode_zero(phydev->lp_advertising);

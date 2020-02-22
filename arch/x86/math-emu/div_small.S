@@ -19,7 +19,7 @@
 #include "fpu_emu.h"
 
 .text
-SYM_FUNC_START(FPU_div_small)
+ENTRY(FPU_div_small)
 	pushl	%ebp
 	movl	%esp,%ebp
 
@@ -45,4 +45,4 @@ SYM_FUNC_START(FPU_div_small)
 
 	leave
 	ret
-SYM_FUNC_END(FPU_div_small)
+ENDPROC(FPU_div_small)

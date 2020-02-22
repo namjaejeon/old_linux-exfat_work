@@ -1078,7 +1078,7 @@ out_save_flags:
  * Queue the work and return. Make sure we have not already been informed that
  * the IO Partition is gone; if so, we will have already timed-out the xmits.
  */
-static void visornic_xmit_timeout(struct net_device *netdev, unsigned int txqueue)
+static void visornic_xmit_timeout(struct net_device *netdev)
 {
 	struct visornic_devdata *devdata = netdev_priv(netdev);
 	unsigned long flags;

@@ -140,6 +140,7 @@ void udl_urb_completion(struct urb *urb)
 		    urb->status == -ESHUTDOWN)) {
 			DRM_ERROR("%s - nonzero write bulk status received: %d\n",
 				__func__, urb->status);
+			atomic_set(&udl->lost_pixels, 1);
 		}
 	}
 
@@ -270,6 +271,7 @@ struct urb *udl_get_urb(struct drm_device *dev)
 	/* Wait for an in-flight buffer to complete and get re-queued */
 	ret = down_timeout(&udl->urbs.limit_sem, GET_URB_TIMEOUT);
 	if (ret) {
+		atomic_set(&udl->lost_pixels, 1);
 		DRM_INFO("wait for urb interrupted: %x available: %d\n",
 		       ret, udl->urbs.available);
 		goto error;
@@ -302,6 +304,7 @@ int udl_submit_urb(struct drm_device *dev, struct urb *urb, size_t len)
 	ret = usb_submit_urb(urb, GFP_ATOMIC);
 	if (ret) {
 		udl_urb_completion(urb); /* because no one else will */
+		atomic_set(&udl->lost_pixels, 1);
 		DRM_ERROR("usb_submit_urb error %x\n", ret);
 	}
 	return ret;
@@ -335,6 +338,10 @@ int udl_init(struct udl_device *udl)
 	if (ret)
 		goto err;
 
+	ret = udl_fbdev_init(dev);
+	if (ret)
+		goto err;
+
 	drm_kms_helper_poll_init(dev);
 
 	return 0;
@@ -360,4 +367,6 @@ void udl_fini(struct drm_device *dev)
 
 	if (udl->urbs.count)
 		udl_free_urb_list(dev);
+
+	udl_fbdev_cleanup(dev);
 }

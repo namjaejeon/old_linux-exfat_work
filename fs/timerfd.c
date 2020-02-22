@@ -26,7 +26,6 @@
 #include <linux/syscalls.h>
 #include <linux/compat.h>
 #include <linux/rcupdate.h>
-#include <linux/time_namespace.h>
 
 struct timerfd_ctx {
 	union {
@@ -197,8 +196,6 @@ static int timerfd_setup(struct timerfd_ctx *ctx, int flags,
 	}
 
 	if (texp != 0) {
-		if (flags & TFD_TIMER_ABSTIME)
-			texp = timens_ktime_to_host(clockid, texp);
 		if (isalarm(ctx)) {
 			if (flags & TFD_TIMER_ABSTIME)
 				alarm_start(&ctx->t.alarm, texp);
@@ -305,11 +302,11 @@ static ssize_t timerfd_read(struct file *file, char __user *buf, size_t count,
 static void timerfd_show(struct seq_file *m, struct file *file)
 {
 	struct timerfd_ctx *ctx = file->private_data;
-	struct timespec64 value, interval;
+	struct itimerspec t;
 
 	spin_lock_irq(&ctx->wqh.lock);
-	value = ktime_to_timespec64(timerfd_get_remaining(ctx));
-	interval = ktime_to_timespec64(ctx->tintv);
+	t.it_value = ktime_to_timespec(timerfd_get_remaining(ctx));
+	t.it_interval = ktime_to_timespec(ctx->tintv);
 	spin_unlock_irq(&ctx->wqh.lock);
 
 	seq_printf(m,
@@ -321,10 +318,10 @@ static void timerfd_show(struct seq_file *m, struct file *file)
 		   ctx->clockid,
 		   (unsigned long long)ctx->ticks,
 		   ctx->settime_flags,
-		   (unsigned long long)value.tv_sec,
-		   (unsigned long long)value.tv_nsec,
-		   (unsigned long long)interval.tv_sec,
-		   (unsigned long long)interval.tv_nsec);
+		   (unsigned long long)t.it_value.tv_sec,
+		   (unsigned long long)t.it_value.tv_nsec,
+		   (unsigned long long)t.it_interval.tv_sec,
+		   (unsigned long long)t.it_interval.tv_nsec);
 }
 #else
 #define timerfd_show NULL

@@ -31,7 +31,7 @@
 #include <asm/cpufeatures.h>
 #include <asm/msr-index.h>
 
-SYM_FUNC_START_LOCAL(verify_cpu)
+ENTRY(verify_cpu)
 	pushf				# Save caller passed flags
 	push	$0			# Kill any dangerous flags
 	popf
@@ -137,4 +137,4 @@ SYM_FUNC_START_LOCAL(verify_cpu)
 	popf				# Restore caller passed flags
 	xorl %eax, %eax
 	ret
-SYM_FUNC_END(verify_cpu)
+ENDPROC(verify_cpu)

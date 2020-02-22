@@ -245,10 +245,10 @@ static int nfs_direct_cmp_commit_data_verf(struct nfs_direct_req *dreq,
 					 data->ds_commit_index);
 
 	/* verifier not set so always fail */
-	if (verfp->committed < 0 || data->res.verf->committed <= NFS_UNSTABLE)
+	if (verfp->committed < 0)
 		return 1;
 
-	return nfs_direct_cmp_verf(verfp, data->res.verf);
+	return nfs_direct_cmp_verf(verfp, &data->verf);
 }
 
 /**
@@ -824,8 +824,7 @@ static void nfs_direct_write_reschedule_io(struct nfs_pgio_header *hdr)
 		dreq->flags = NFS_ODIRECT_RESCHED_WRITES;
 		/* fake unstable write to let common nfs resend pages */
 		hdr->verf.committed = NFS_UNSTABLE;
-		hdr->good_bytes = hdr->args.offset + hdr->args.count -
-			hdr->io_start;
+		hdr->good_bytes = hdr->args.count;
 	}
 	spin_unlock(&dreq->lock);
 }

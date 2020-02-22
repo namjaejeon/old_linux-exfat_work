@@ -181,18 +181,14 @@ static inline int twl_i2c_read_u8(u8 mod_no, u8 *val, u8 reg) {
 }
 
 static inline int twl_i2c_write_u16(u8 mod_no, u16 val, u8 reg) {
-	__le16 value;
-
-	value = cpu_to_le16(val);
-	return twl_i2c_write(mod_no, (u8 *) &value, reg, 2);
+	val = cpu_to_le16(val);
+	return twl_i2c_write(mod_no, (u8*) &val, reg, 2);
 }
 
 static inline int twl_i2c_read_u16(u8 mod_no, u16 *val, u8 reg) {
 	int ret;
-	__le16 value;
-
-	ret = twl_i2c_read(mod_no, (u8 *) &value, reg, 2);
-	*val = le16_to_cpu(value);
+	ret = twl_i2c_read(mod_no, (u8*) val, reg, 2);
+	*val = le16_to_cpu(*val);
 	return ret;
 }
 

@@ -3,7 +3,7 @@
  *
  * Module Name: evregion - Operation Region support
  *
- * Copyright (C) 2000 - 2020, Intel Corp.
+ * Copyright (C) 2000 - 2019, Intel Corp.
  *
  *****************************************************************************/
 
@@ -836,11 +836,11 @@ acpi_ev_orphan_ec_reg_method(struct acpi_namespace_node *ec_device_node)
 	objects[1].type = ACPI_TYPE_INTEGER;
 	objects[1].integer.value = ACPI_REG_CONNECT;
 
-	(void)acpi_evaluate_object(reg_method, NULL, &args, NULL);
+	status = acpi_evaluate_object(reg_method, NULL, &args, NULL);
 
 exit:
 	/* We ignore all errors from above, don't care */
 
-	(void)acpi_ut_acquire_mutex(ACPI_MTX_NAMESPACE);
+	status = acpi_ut_acquire_mutex(ACPI_MTX_NAMESPACE);
 	return_VOID;
 }

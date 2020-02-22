@@ -618,8 +618,7 @@ static struct insn_emulation_ops setend_ops = {
 };
 
 /*
- * Invoked as core_initcall, which guarantees that the instruction
- * emulation is ready for userspace.
+ * Invoked as late_initcall, since not needed before init spawned.
  */
 static int __init armv8_deprecated_init(void)
 {

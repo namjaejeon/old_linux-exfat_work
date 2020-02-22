@@ -8,7 +8,7 @@ title: Allwinner A10 Security ID Device Tree Bindings
 
 maintainers:
   - Chen-Yu Tsai <wens@csie.org>
-  - Maxime Ripard <mripard@kernel.org>
+  - Maxime Ripard <maxime.ripard@bootlin.com>
 
 allOf:
   - $ref: "nvmem.yaml#"
@@ -31,7 +31,9 @@ required:
   - compatible
   - reg
 
-unevaluatedProperties: false
+# FIXME: We should set it, but it would report all the generic
+# properties as additional properties.
+# additionalProperties: false
 
 examples:
   - |

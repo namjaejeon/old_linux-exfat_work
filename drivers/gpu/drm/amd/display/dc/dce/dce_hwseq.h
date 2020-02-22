@@ -25,7 +25,7 @@
 #ifndef __DCE_HWSEQ_H__
 #define __DCE_HWSEQ_H__
 
-#include "dc_types.h"
+#include "hw_sequencer.h"
 
 #define BL_REG_LIST()\
 	SR(LVTMA_PWRSEQ_CNTL), \
@@ -210,6 +210,7 @@
 	SR(DC_IP_REQUEST_CNTL), \
 	BL_REG_LIST()
 
+#if defined(CONFIG_DRM_AMD_DC_DCN2_0)
 #define HWSEQ_DCN2_REG_LIST()\
 	HWSEQ_DCN_REG_LIST(), \
 	HSWEQ_DCN_PIXEL_RATE_REG_LIST(OTG, 0), \
@@ -275,7 +276,9 @@
 	SR(D6VGA_CONTROL), \
 	SR(DC_IP_REQUEST_CNTL), \
 	BL_REG_LIST()
+#endif
 
+#if defined(CONFIG_DRM_AMD_DC_DCN2_1)
 #define HWSEQ_DCN21_REG_LIST()\
 	HWSEQ_DCN_REG_LIST(), \
 	HSWEQ_DCN_PIXEL_RATE_REG_LIST(OTG, 0), \
@@ -326,6 +329,7 @@
 	SR(D6VGA_CONTROL), \
 	SR(DC_IP_REQUEST_CNTL), \
 	BL_REG_LIST()
+#endif
 
 struct dce_hwseq_registers {
 
@@ -573,6 +577,7 @@ struct dce_hwseq_registers {
 	HWS_SF(, VGA_TEST_CONTROL, VGA_TEST_RENDER_START, mask_sh),\
 	HWSEQ_LVTMA_MASK_SH_LIST(mask_sh)
 
+#if defined(CONFIG_DRM_AMD_DC_DCN2_0)
 #define HWSEQ_DCN2_MASK_SH_LIST(mask_sh)\
 	HWSEQ_DCN_MASK_SH_LIST(mask_sh), \
 	HWS_SF(, DCHUBBUB_GLOBAL_TIMER_CNTL, DCHUBBUB_GLOBAL_TIMER_REFDIV, mask_sh), \
@@ -632,7 +637,9 @@ struct dce_hwseq_registers {
 	HWS_SF(, DOMAIN21_PG_STATUS, DOMAIN21_PGFSM_PWR_STATUS, mask_sh), \
 	HWS_SF(, DC_IP_REQUEST_CNTL, IP_REQUEST_EN, mask_sh), \
 	HWSEQ_LVTMA_MASK_SH_LIST(mask_sh)
+#endif
 
+#if defined(CONFIG_DRM_AMD_DC_DCN2_1)
 #define HWSEQ_DCN21_MASK_SH_LIST(mask_sh)\
 	HWSEQ_DCN_MASK_SH_LIST(mask_sh), \
 	HWS_SF(, DCHUBBUB_GLOBAL_TIMER_CNTL, DCHUBBUB_GLOBAL_TIMER_REFDIV, mask_sh), \
@@ -672,9 +679,9 @@ struct dce_hwseq_registers {
 	HWS_SF(, DOMAIN17_PG_STATUS, DOMAIN17_PGFSM_PWR_STATUS, mask_sh), \
 	HWS_SF(, DOMAIN18_PG_STATUS, DOMAIN18_PGFSM_PWR_STATUS, mask_sh), \
 	HWS_SF(, DC_IP_REQUEST_CNTL, IP_REQUEST_EN, mask_sh), \
-	HWSEQ_LVTMA_MASK_SH_LIST(mask_sh), \
 	HWS_SF(, LVTMA_PWRSEQ_CNTL, LVTMA_BLON, mask_sh), \
 	HWS_SF(, LVTMA_PWRSEQ_STATE, LVTMA_PWRSEQ_TARGET_STATE_R, mask_sh)
+#endif
 
 #define HWSEQ_REG_FIELD_LIST(type) \
 	type DCFE_CLOCK_ENABLE; \
@@ -792,7 +799,8 @@ struct dce_hwseq_registers {
 	type D2VGA_MODE_ENABLE; \
 	type D3VGA_MODE_ENABLE; \
 	type D4VGA_MODE_ENABLE; \
-	type AZALIA_AUDIO_DTO_MODULE;
+	type AZALIA_AUDIO_DTO_MODULE;\
+	type HPO_HDMISTREAMCLK_GATE_DIS;
 
 struct dce_hwseq_shift {
 	HWSEQ_REG_FIELD_LIST(uint8_t)
@@ -810,10 +818,6 @@ enum blnd_mode {
 	BLND_MODE_OTHER_PIPE, /* Data from other pipe only */
 	BLND_MODE_BLENDING,/* Alpha blending - blend 'current' and 'other' */
 };
-
-struct dce_hwseq;
-struct pipe_ctx;
-struct clock_source;
 
 void dce_enable_fe_clock(struct dce_hwseq *hwss,
 		unsigned int inst, bool enable);

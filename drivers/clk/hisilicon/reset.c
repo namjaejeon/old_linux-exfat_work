@@ -90,12 +90,14 @@ static const struct reset_control_ops hisi_reset_ops = {
 struct hisi_reset_controller *hisi_reset_init(struct platform_device *pdev)
 {
 	struct hisi_reset_controller *rstc;
+	struct resource *res;
 
 	rstc = devm_kmalloc(&pdev->dev, sizeof(*rstc), GFP_KERNEL);
 	if (!rstc)
 		return NULL;
 
-	rstc->membase = devm_platform_ioremap_resource(pdev, 0);
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	rstc->membase = devm_ioremap_resource(&pdev->dev, res);
 	if (IS_ERR(rstc->membase))
 		return NULL;
 

@@ -24,9 +24,8 @@
  *          Alex Deucher
  */
 
-#include <linux/pci.h>
-
 #include <drm/drm_device.h>
+#include <drm/drm_pci.h>
 #include <drm/radeon_drm.h>
 
 #include "radeon.h"
@@ -570,7 +569,7 @@ bool radeon_get_atom_connector_info_from_object_table(struct drm_device *dev)
 		path_size += le16_to_cpu(path->usSize);
 
 		if (device_support & le16_to_cpu(path->usDeviceTag)) {
-			uint8_t con_obj_id, con_obj_num;
+			uint8_t con_obj_id, con_obj_num, con_obj_type;
 
 			con_obj_id =
 			    (le16_to_cpu(path->usConnObjectId) & OBJECT_ID_MASK)
@@ -578,6 +577,9 @@ bool radeon_get_atom_connector_info_from_object_table(struct drm_device *dev)
 			con_obj_num =
 			    (le16_to_cpu(path->usConnObjectId) & ENUM_ID_MASK)
 			    >> ENUM_ID_SHIFT;
+			con_obj_type =
+			    (le16_to_cpu(path->usConnObjectId) &
+			     OBJECT_TYPE_MASK) >> OBJECT_TYPE_SHIFT;
 
 			/* TODO CV support */
 			if (le16_to_cpu(path->usDeviceTag) ==
@@ -645,7 +647,15 @@ bool radeon_get_atom_connector_info_from_object_table(struct drm_device *dev)
 			router.ddc_valid = false;
 			router.cd_valid = false;
 			for (j = 0; j < ((le16_to_cpu(path->usSize) - 8) / 2); j++) {
-				uint8_t grph_obj_type =
+				uint8_t grph_obj_id, grph_obj_num, grph_obj_type;
+
+				grph_obj_id =
+				    (le16_to_cpu(path->usGraphicObjIds[j]) &
+				     OBJECT_ID_MASK) >> OBJECT_ID_SHIFT;
+				grph_obj_num =
+				    (le16_to_cpu(path->usGraphicObjIds[j]) &
+				     ENUM_ID_MASK) >> ENUM_ID_SHIFT;
+				grph_obj_type =
 				    (le16_to_cpu(path->usGraphicObjIds[j]) &
 				     OBJECT_TYPE_MASK) >> OBJECT_TYPE_SHIFT;
 

@@ -111,8 +111,6 @@ unsigned long __bootdata_preserved(__etext_dma);
 unsigned long __bootdata_preserved(__sdma);
 unsigned long __bootdata_preserved(__edma);
 unsigned long __bootdata_preserved(__kaslr_offset);
-unsigned int __bootdata_preserved(zlib_dfltcc_support);
-EXPORT_SYMBOL(zlib_dfltcc_support);
 
 unsigned long VMALLOC_START;
 EXPORT_SYMBOL(VMALLOC_START);
@@ -243,6 +241,8 @@ static void __init conmode_default(void)
 		SET_CONSOLE_SCLP;
 #endif
 	}
+	if (IS_ENABLED(CONFIG_VT) && IS_ENABLED(CONFIG_DUMMY_CONSOLE))
+		conswitchp = &dummy_con;
 }
 
 #ifdef CONFIG_CRASH_DUMP
@@ -355,6 +355,7 @@ early_initcall(async_stack_realloc);
 
 void __init arch_call_rest_init(void)
 {
+	struct stack_frame *frame;
 	unsigned long stack;
 
 	stack = stack_alloc();
@@ -367,7 +368,13 @@ void __init arch_call_rest_init(void)
 	set_task_stack_end_magic(current);
 	stack += STACK_INIT_OFFSET;
 	S390_lowcore.kernel_stack = stack;
-	CALL_ON_STACK_NORETURN(rest_init, stack);
+	frame = (struct stack_frame *) stack;
+	memset(frame, 0, sizeof(*frame));
+	/* Branch to rest_init on the new stack, never returns */
+	asm volatile(
+		"	la	15,0(%[_frame])\n"
+		"	jg	rest_init\n"
+		: : [_frame] "a" (frame));
 }
 
 static void __init setup_lowcore_dat_off(void)
@@ -761,6 +768,14 @@ static void __init free_mem_detect_info(void)
 		memblock_free(start, size);
 }
 
+static void __init memblock_physmem_add(phys_addr_t start, phys_addr_t size)
+{
+	memblock_dbg("memblock_physmem_add: [%#016llx-%#016llx]\n",
+		     start, start + size - 1);
+	memblock_add_range(&memblock.memory, start, size, 0, 0);
+	memblock_add_range(&memblock.physmem, start, size, 0, 0);
+}
+
 static const char * __init get_mem_info_source(void)
 {
 	switch (mem_detect.info_source) {
@@ -785,10 +800,8 @@ static void __init memblock_add_mem_detect_info(void)
 		     get_mem_info_source(), mem_detect.info_source);
 	/* keep memblock lists close to the kernel */
 	memblock_set_bottom_up(true);
-	for_each_mem_detect_block(i, &start, &end) {
-		memblock_add(start, end - start);
+	for_each_mem_detect_block(i, &start, &end)
 		memblock_physmem_add(start, end - start);
-	}
 	memblock_set_bottom_up(false);
 	memblock_dump_all();
 }
@@ -1046,7 +1059,7 @@ static void __init log_component_list(void)
 
 	if (!early_ipl_comp_list_addr)
 		return;
-	if (ipl_block.hdr.flags & IPL_PL_FLAG_SIPL)
+	if (ipl_block.hdr.flags & IPL_PL_FLAG_IPLSR)
 		pr_info("Linux is running with Secure-IPL enabled\n");
 	else
 		pr_info("Linux is running with Secure-IPL disabled\n");

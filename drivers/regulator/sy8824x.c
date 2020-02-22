@@ -112,7 +112,8 @@ static const struct regmap_config sy8824_regmap_config = {
 	.val_bits = 8,
 };
 
-static int sy8824_i2c_probe(struct i2c_client *client)
+static int sy8824_i2c_probe(struct i2c_client *client,
+			    const struct i2c_device_id *id)
 {
 	struct device *dev = &client->dev;
 	struct device_node *np = dev->of_node;
@@ -221,7 +222,7 @@ static struct i2c_driver sy8824_regulator_driver = {
 		.name = "sy8824-regulator",
 		.of_match_table = of_match_ptr(sy8824_dt_ids),
 	},
-	.probe_new = sy8824_i2c_probe,
+	.probe = sy8824_i2c_probe,
 	.id_table = sy8824_id,
 };
 module_i2c_driver(sy8824_regulator_driver);

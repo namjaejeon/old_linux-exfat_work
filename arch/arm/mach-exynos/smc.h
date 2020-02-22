@@ -2,7 +2,7 @@
 /*
  *  Copyright (c) 2012 Samsung Electronics.
  *
- * Exynos - SMC Call
+ * EXYNOS - SMC Call
  */
 
 #ifndef __ASM_ARCH_EXYNOS_SMC_H

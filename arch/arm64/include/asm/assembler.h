@@ -40,6 +40,12 @@
 	msr	daif, \flags
 	.endm
 
+	/* Only on aarch64 pstate, PSR_D_BIT is different for aarch32 */
+	.macro	inherit_daif, pstate:req, tmp:req
+	and	\tmp, \pstate, #(PSR_D_BIT | PSR_A_BIT | PSR_I_BIT | PSR_F_BIT)
+	msr	daif, \tmp
+	.endm
+
 	/* IRQ is the lowest priority flag, unconditionally unmask the rest. */
 	.macro enable_da_f
 	msr	daifclr, #(8 | 4 | 1)
@@ -77,6 +83,13 @@
 	orr	\tmp, \tmp, #DBG_MDSCR_SS
 	msr	mdscr_el1, \tmp
 9990:
+	.endm
+
+/*
+ * SMP data memory barrier
+ */
+	.macro	smp_dmb, opt
+	dmb	\opt
 	.endm
 
 /*
@@ -449,6 +462,17 @@ USER(\label, ic	ivau, \tmp2)			// invalidate I line PoU
 	.endm
 
 /*
+ * Annotate a function as position independent, i.e., safe to be called before
+ * the kernel virtual mapping is activated.
+ */
+#define ENDPIPROC(x)			\
+	.globl	__pi_##x;		\
+	.type 	__pi_##x, %function;	\
+	.set	__pi_##x, x;		\
+	.size	__pi_##x, . - x;	\
+	ENDPROC(x)
+
+/*
  * Annotate a function as being unsuitable for kprobes.
  */
 #ifdef CONFIG_KPROBES
@@ -675,8 +699,8 @@ USER(\label, ic	ivau, \tmp2)			// invalidate I line PoU
  * where <label> is optional, and marks the point where execution will resume
  * after a yield has been performed. If omitted, execution resumes right after
  * the endif_yield_neon invocation. Note that the entire sequence, including
- * the provided patchup code, will be omitted from the image if
- * CONFIG_PREEMPTION is not defined.
+ * the provided patchup code, will be omitted from the image if CONFIG_PREEMPT
+ * is not defined.
  *
  * As a convenience, in the case where no patchup code is required, the above
  * sequence may be abbreviated to
@@ -704,7 +728,7 @@ USER(\label, ic	ivau, \tmp2)			// invalidate I line PoU
 	.endm
 
 	.macro		if_will_cond_yield_neon
-#ifdef CONFIG_PREEMPTION
+#ifdef CONFIG_PREEMPT
 	get_current_task	x0
 	ldr		x0, [x0, #TSK_TI_PREEMPT]
 	sub		x0, x0, #PREEMPT_DISABLE_OFFSET

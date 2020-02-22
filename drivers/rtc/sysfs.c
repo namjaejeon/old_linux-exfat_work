@@ -103,11 +103,8 @@ static DEVICE_ATTR_RW(max_user_freq);
 
 /**
  * rtc_sysfs_show_hctosys - indicate if the given RTC set the system time
- * @dev: The device that the attribute belongs to.
- * @attr: The attribute being read.
- * @buf: The result buffer.
  *
- * buf is "1" if the system clock was set by this RTC at the last
+ * Returns 1 if the system clock was set by this RTC at the last
  * boot or resume event.
  */
 static ssize_t

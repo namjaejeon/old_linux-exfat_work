@@ -69,7 +69,6 @@
 		mod-def0-gpio = <&gpiosb 3 GPIO_ACTIVE_LOW>;
 		tx-disable-gpio = <&gpiosb 4 GPIO_ACTIVE_HIGH>;
 		tx-fault-gpio = <&gpiosb 5 GPIO_ACTIVE_HIGH>;
-		maximum-power-milliwatt = <3000>;
 	};
 
 	sfp_eth1: sfp-eth1 {
@@ -79,7 +78,6 @@
 		mod-def0-gpio = <&gpiosb 8 GPIO_ACTIVE_LOW>;
 		tx-disable-gpio = <&gpiosb 9 GPIO_ACTIVE_HIGH>;
 		tx-fault-gpio = <&gpiosb 10 GPIO_ACTIVE_HIGH>;
-		maximum-power-milliwatt = <3000>;
 	};
 };
 
@@ -121,14 +119,12 @@
 	status = "okay";
 	pinctrl-names = "default";
 	pinctrl-0 = <&i2c1_pins>;
-	/delete-property/mrvl,i2c-fast-mode;
 };
 
 &i2c1 {
 	status = "okay";
 	pinctrl-names = "default";
 	pinctrl-0 = <&i2c2_pins>;
-	/delete-property/mrvl,i2c-fast-mode;
 
 	lm75@48 {
 		status = "okay";
@@ -147,7 +143,6 @@
 	phy-mode = "sgmii";
 	status = "okay";
 	managed = "in-band-status";
-	phys = <&comphy1 0>;
 	sfp = <&sfp_eth0>;
 };
 
@@ -155,14 +150,11 @@
 	phy-mode = "sgmii";
 	status = "okay";
 	managed = "in-band-status";
-	phys = <&comphy0 1>;
 	sfp = <&sfp_eth1>;
 };
 
 &usb3 {
 	status = "okay";
-	phys = <&usb2_utmi_otg_phy>;
-	phy-names = "usb2-utmi-otg-phy";
 };
 
 &uart0 {

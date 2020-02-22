@@ -4,6 +4,7 @@
 
 #include <linux/io.h>
 #include <linux/scatterlist.h>
+#include <linux/gpio.h>
 
 /* Register offsets */
 #define DW_SPI_CTRL0			0x00
@@ -119,7 +120,6 @@ struct dw_spi {
 	size_t			len;
 	void			*tx;
 	void			*tx_end;
-	spinlock_t		buf_lock;
 	void			*rx;
 	void			*rx_end;
 	int			dma_mapped;

@@ -307,6 +307,7 @@ int btrfs_delalloc_reserve_metadata(struct btrfs_inode *inode, u64 num_bytes)
 	unsigned nr_extents;
 	enum btrfs_reserve_flush_enum flush = BTRFS_RESERVE_FLUSH_ALL;
 	int ret = 0;
+	bool delalloc_lock = true;
 
 	/*
 	 * If we are a free space inode we need to not flush since we will be in
@@ -319,6 +320,7 @@ int btrfs_delalloc_reserve_metadata(struct btrfs_inode *inode, u64 num_bytes)
 	 */
 	if (btrfs_is_free_space_inode(inode)) {
 		flush = BTRFS_RESERVE_NO_FLUSH;
+		delalloc_lock = false;
 	} else {
 		if (current->journal_info)
 			flush = BTRFS_RESERVE_FLUSH_LIMIT;
@@ -326,6 +328,9 @@ int btrfs_delalloc_reserve_metadata(struct btrfs_inode *inode, u64 num_bytes)
 		if (btrfs_transaction_in_commit(fs_info))
 			schedule_timeout(1);
 	}
+
+	if (delalloc_lock)
+		mutex_lock(&inode->delalloc_mutex);
 
 	num_bytes = ALIGN(num_bytes, fs_info->sectorsize);
 
@@ -343,12 +348,10 @@ int btrfs_delalloc_reserve_metadata(struct btrfs_inode *inode, u64 num_bytes)
 				&qgroup_reserve);
 	ret = btrfs_qgroup_reserve_meta_prealloc(root, qgroup_reserve, true);
 	if (ret)
-		return ret;
+		goto out_fail;
 	ret = btrfs_reserve_metadata_bytes(root, block_rsv, meta_reserve, flush);
-	if (ret) {
-		btrfs_qgroup_free_meta_prealloc(root, qgroup_reserve);
-		return ret;
-	}
+	if (ret)
+		goto out_qgroup;
 
 	/*
 	 * Now we need to update our outstanding extents and csum bytes _first_
@@ -372,7 +375,15 @@ int btrfs_delalloc_reserve_metadata(struct btrfs_inode *inode, u64 num_bytes)
 	block_rsv->qgroup_rsv_reserved += qgroup_reserve;
 	spin_unlock(&block_rsv->lock);
 
+	if (delalloc_lock)
+		mutex_unlock(&inode->delalloc_mutex);
 	return 0;
+out_qgroup:
+	btrfs_qgroup_free_meta_prealloc(root, qgroup_reserve);
+out_fail:
+	if (delalloc_lock)
+		mutex_unlock(&inode->delalloc_mutex);
+	return ret;
 }
 
 /**

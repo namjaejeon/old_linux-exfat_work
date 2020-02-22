@@ -76,8 +76,7 @@ static int iomap_swapfile_add_extent(struct iomap_swapfile_info *isi)
  * distinction between written and unwritten extents.
  */
 static loff_t iomap_swapfile_activate_actor(struct inode *inode, loff_t pos,
-		loff_t count, void *data, struct iomap *iomap,
-		struct iomap *srcmap)
+		loff_t count, void *data, struct iomap *iomap)
 {
 	struct iomap_swapfile_info *isi = data;
 	int error;

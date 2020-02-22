@@ -30,6 +30,7 @@ int vnt_download_firmware(struct vnt_private *priv)
 {
 	struct device *dev = &priv->usb->dev;
 	const struct firmware *fw;
+	void *buffer = NULL;
 	u16 length;
 	int ii;
 	int ret = 0;
@@ -43,17 +44,26 @@ int vnt_download_firmware(struct vnt_private *priv)
 		goto end;
 	}
 
+	buffer = kmalloc(FIRMWARE_CHUNK_SIZE, GFP_KERNEL);
+	if (!buffer) {
+		ret = -ENOMEM;
+		goto free_fw;
+	}
+
 	for (ii = 0; ii < fw->size; ii += FIRMWARE_CHUNK_SIZE) {
 		length = min_t(int, fw->size - ii, FIRMWARE_CHUNK_SIZE);
+		memcpy(buffer, fw->data + ii, length);
 
 		ret = vnt_control_out(priv, 0, 0x1200 + ii, 0x0000, length,
-				      fw->data + ii);
+				      buffer);
 		if (ret)
-			goto free_fw;
+			goto free_buffer;
 
 		dev_dbg(dev, "Download firmware...%d %zu\n", ii, fw->size);
 	}
 
+free_buffer:
+	kfree(buffer);
 free_fw:
 	release_firmware(fw);
 end:

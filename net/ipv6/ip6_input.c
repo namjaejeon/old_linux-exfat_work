@@ -86,27 +86,11 @@ static void ip6_sublist_rcv_finish(struct list_head *head)
 	}
 }
 
-static bool ip6_can_use_hint(const struct sk_buff *skb,
-			     const struct sk_buff *hint)
-{
-	return hint && !skb_dst(skb) &&
-	       ipv6_addr_equal(&ipv6_hdr(hint)->daddr, &ipv6_hdr(skb)->daddr);
-}
-
-static struct sk_buff *ip6_extract_route_hint(const struct net *net,
-					      struct sk_buff *skb)
-{
-	if (fib6_routes_require_src(net) || fib6_has_custom_rules(net))
-		return NULL;
-
-	return skb;
-}
-
 static void ip6_list_rcv_finish(struct net *net, struct sock *sk,
 				struct list_head *head)
 {
-	struct sk_buff *skb, *next, *hint = NULL;
 	struct dst_entry *curr_dst = NULL;
+	struct sk_buff *skb, *next;
 	struct list_head sublist;
 
 	INIT_LIST_HEAD(&sublist);
@@ -120,15 +104,9 @@ static void ip6_list_rcv_finish(struct net *net, struct sock *sk,
 		skb = l3mdev_ip6_rcv(skb);
 		if (!skb)
 			continue;
-
-		if (ip6_can_use_hint(skb, hint))
-			skb_dst_copy(skb, hint);
-		else
-			ip6_rcv_finish_core(net, sk, skb);
+		ip6_rcv_finish_core(net, sk, skb);
 		dst = skb_dst(skb);
 		if (curr_dst != dst) {
-			hint = ip6_extract_route_hint(net, skb);
-
 			/* dispatch old sublist */
 			if (!list_empty(&sublist))
 				ip6_sublist_rcv_finish(&sublist);
@@ -347,8 +325,7 @@ void ipv6_list_rcv(struct list_head *head, struct packet_type *pt,
 		list_add_tail(&skb->list, &sublist);
 	}
 	/* dispatch final sublist */
-	if (!list_empty(&sublist))
-		ip6_sublist_rcv(&sublist, curr_dev, curr_net);
+	ip6_sublist_rcv(&sublist, curr_dev, curr_net);
 }
 
 INDIRECT_CALLABLE_DECLARE(int udpv6_rcv(struct sk_buff *));

@@ -34,7 +34,8 @@ static int twl6040gpo_get(struct gpio_chip *chip, unsigned offset)
 
 static int twl6040gpo_get_direction(struct gpio_chip *chip, unsigned offset)
 {
-	return GPIO_LINE_DIRECTION_OUT;
+	/* This means "out" */
+	return 0;
 }
 
 static int twl6040gpo_direction_out(struct gpio_chip *chip, unsigned offset,

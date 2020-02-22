@@ -9,51 +9,11 @@
 #include <linux/mailbox_controller.h>
 #include <linux/soc/mediatek/mtk-cmdq.h>
 
+#define CMDQ_ARG_A_WRITE_MASK	0xffff
 #define CMDQ_WRITE_ENABLE_MASK	BIT(0)
-#define CMDQ_POLL_ENABLE_MASK	BIT(0)
 #define CMDQ_EOC_IRQ_EN		BIT(0)
-
-struct cmdq_instruction {
-	union {
-		u32 value;
-		u32 mask;
-	};
-	union {
-		u16 offset;
-		u16 event;
-	};
-	u8 subsys;
-	u8 op;
-};
-
-int cmdq_dev_get_client_reg(struct device *dev,
-			    struct cmdq_client_reg *client_reg, int idx)
-{
-	struct of_phandle_args spec;
-	int err;
-
-	if (!client_reg)
-		return -ENOENT;
-
-	err = of_parse_phandle_with_fixed_args(dev->of_node,
-					       "mediatek,gce-client-reg",
-					       3, idx, &spec);
-	if (err < 0) {
-		dev_err(dev,
-			"error %d can't parse gce-client-reg property (%d)",
-			err, idx);
-
-		return err;
-	}
-
-	client_reg->subsys = (u8)spec.args[0];
-	client_reg->offset = (u16)spec.args[1];
-	client_reg->size = (u16)spec.args[2];
-	of_node_put(spec.np);
-
-	return 0;
-}
-EXPORT_SYMBOL(cmdq_dev_get_client_reg);
+#define CMDQ_EOC_CMD		((u64)((CMDQ_CODE_EOC << CMDQ_OP_CODE_SHIFT)) \
+				<< 32 | CMDQ_EOC_IRQ_EN)
 
 static void cmdq_client_timeout(struct timer_list *t)
 {
@@ -150,10 +110,10 @@ void cmdq_pkt_destroy(struct cmdq_pkt *pkt)
 }
 EXPORT_SYMBOL(cmdq_pkt_destroy);
 
-static int cmdq_pkt_append_command(struct cmdq_pkt *pkt,
-				   struct cmdq_instruction inst)
+static int cmdq_pkt_append_command(struct cmdq_pkt *pkt, enum cmdq_code code,
+				   u32 arg_a, u32 arg_b)
 {
-	struct cmdq_instruction *cmd_ptr;
+	u64 *cmd_ptr;
 
 	if (unlikely(pkt->cmd_buf_size + CMDQ_INST_SIZE > pkt->buf_size)) {
 		/*
@@ -169,9 +129,8 @@ static int cmdq_pkt_append_command(struct cmdq_pkt *pkt,
 			__func__, (u32)pkt->buf_size);
 		return -ENOMEM;
 	}
-
 	cmd_ptr = pkt->va_base + pkt->cmd_buf_size;
-	*cmd_ptr = inst;
+	(*cmd_ptr) = (u64)((code << CMDQ_OP_CODE_SHIFT) | arg_a) << 32 | arg_b;
 	pkt->cmd_buf_size += CMDQ_INST_SIZE;
 
 	return 0;
@@ -179,34 +138,24 @@ static int cmdq_pkt_append_command(struct cmdq_pkt *pkt,
 
 int cmdq_pkt_write(struct cmdq_pkt *pkt, u8 subsys, u16 offset, u32 value)
 {
-	struct cmdq_instruction inst;
+	u32 arg_a = (offset & CMDQ_ARG_A_WRITE_MASK) |
+		    (subsys << CMDQ_SUBSYS_SHIFT);
 
-	inst.op = CMDQ_CODE_WRITE;
-	inst.value = value;
-	inst.offset = offset;
-	inst.subsys = subsys;
-
-	return cmdq_pkt_append_command(pkt, inst);
+	return cmdq_pkt_append_command(pkt, CMDQ_CODE_WRITE, arg_a, value);
 }
 EXPORT_SYMBOL(cmdq_pkt_write);
 
 int cmdq_pkt_write_mask(struct cmdq_pkt *pkt, u8 subsys,
 			u16 offset, u32 value, u32 mask)
 {
-	struct cmdq_instruction inst = { {0} };
-	u16 offset_mask = offset;
-	int err;
+	u32 offset_mask = offset;
+	int err = 0;
 
 	if (mask != 0xffffffff) {
-		inst.op = CMDQ_CODE_MASK;
-		inst.mask = ~mask;
-		err = cmdq_pkt_append_command(pkt, inst);
-		if (err < 0)
-			return err;
-
+		err = cmdq_pkt_append_command(pkt, CMDQ_CODE_MASK, 0, ~mask);
 		offset_mask |= CMDQ_WRITE_ENABLE_MASK;
 	}
-	err = cmdq_pkt_write(pkt, subsys, offset_mask, value);
+	err |= cmdq_pkt_write(pkt, value, subsys, offset_mask);
 
 	return err;
 }
@@ -214,85 +163,43 @@ EXPORT_SYMBOL(cmdq_pkt_write_mask);
 
 int cmdq_pkt_wfe(struct cmdq_pkt *pkt, u16 event)
 {
-	struct cmdq_instruction inst = { {0} };
+	u32 arg_b;
 
 	if (event >= CMDQ_MAX_EVENT)
 		return -EINVAL;
 
-	inst.op = CMDQ_CODE_WFE;
-	inst.value = CMDQ_WFE_OPTION;
-	inst.event = event;
+	/*
+	 * WFE arg_b
+	 * bit 0-11: wait value
+	 * bit 15: 1 - wait, 0 - no wait
+	 * bit 16-27: update value
+	 * bit 31: 1 - update, 0 - no update
+	 */
+	arg_b = CMDQ_WFE_UPDATE | CMDQ_WFE_WAIT | CMDQ_WFE_WAIT_VALUE;
 
-	return cmdq_pkt_append_command(pkt, inst);
+	return cmdq_pkt_append_command(pkt, CMDQ_CODE_WFE, event, arg_b);
 }
 EXPORT_SYMBOL(cmdq_pkt_wfe);
 
 int cmdq_pkt_clear_event(struct cmdq_pkt *pkt, u16 event)
 {
-	struct cmdq_instruction inst = { {0} };
-
 	if (event >= CMDQ_MAX_EVENT)
 		return -EINVAL;
 
-	inst.op = CMDQ_CODE_WFE;
-	inst.value = CMDQ_WFE_UPDATE;
-	inst.event = event;
-
-	return cmdq_pkt_append_command(pkt, inst);
+	return cmdq_pkt_append_command(pkt, CMDQ_CODE_WFE, event,
+				       CMDQ_WFE_UPDATE);
 }
 EXPORT_SYMBOL(cmdq_pkt_clear_event);
 
-int cmdq_pkt_poll(struct cmdq_pkt *pkt, u8 subsys,
-		  u16 offset, u32 value)
-{
-	struct cmdq_instruction inst = { {0} };
-	int err;
-
-	inst.op = CMDQ_CODE_POLL;
-	inst.value = value;
-	inst.offset = offset;
-	inst.subsys = subsys;
-	err = cmdq_pkt_append_command(pkt, inst);
-
-	return err;
-}
-EXPORT_SYMBOL(cmdq_pkt_poll);
-
-int cmdq_pkt_poll_mask(struct cmdq_pkt *pkt, u8 subsys,
-		       u16 offset, u32 value, u32 mask)
-{
-	struct cmdq_instruction inst = { {0} };
-	int err;
-
-	inst.op = CMDQ_CODE_MASK;
-	inst.mask = ~mask;
-	err = cmdq_pkt_append_command(pkt, inst);
-	if (err < 0)
-		return err;
-
-	offset = offset | CMDQ_POLL_ENABLE_MASK;
-	err = cmdq_pkt_poll(pkt, subsys, offset, value);
-
-	return err;
-}
-EXPORT_SYMBOL(cmdq_pkt_poll_mask);
-
 static int cmdq_pkt_finalize(struct cmdq_pkt *pkt)
 {
-	struct cmdq_instruction inst = { {0} };
 	int err;
 
 	/* insert EOC and generate IRQ for each command iteration */
-	inst.op = CMDQ_CODE_EOC;
-	inst.value = CMDQ_EOC_IRQ_EN;
-	err = cmdq_pkt_append_command(pkt, inst);
-	if (err < 0)
-		return err;
+	err = cmdq_pkt_append_command(pkt, CMDQ_CODE_EOC, 0, CMDQ_EOC_IRQ_EN);
 
 	/* JUMP to end */
-	inst.op = CMDQ_CODE_JUMP;
-	inst.value = CMDQ_JUMP_PASS;
-	err = cmdq_pkt_append_command(pkt, inst);
+	err |= cmdq_pkt_append_command(pkt, CMDQ_CODE_JUMP, 0, CMDQ_JUMP_PASS);
 
 	return err;
 }

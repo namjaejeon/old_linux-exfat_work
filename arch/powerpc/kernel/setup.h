@@ -35,7 +35,7 @@ void exc_lvl_early_init(void);
 static inline void exc_lvl_early_init(void) { };
 #endif
 
-#if defined(CONFIG_PPC64) || defined(CONFIG_VMAP_STACK)
+#ifdef CONFIG_PPC64
 void emergency_stack_init(void);
 #else
 static inline void emergency_stack_init(void) { };

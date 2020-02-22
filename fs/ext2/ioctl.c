@@ -145,13 +145,10 @@ setversion_out:
 		if (ei->i_block_alloc_info){
 			struct ext2_reserve_window_node *rsv = &ei->i_block_alloc_info->rsv_window_node;
 			rsv->rsv_goal_size = rsv_window_size;
-		} else {
-			ret = -ENOMEM;
 		}
-
 		mutex_unlock(&ei->truncate_mutex);
 		mnt_drop_write_file(filp);
-		return ret;
+		return 0;
 	}
 	default:
 		return -ENOTTY;

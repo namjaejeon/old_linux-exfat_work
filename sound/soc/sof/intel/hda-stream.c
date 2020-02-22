@@ -20,7 +20,6 @@
 #include <sound/hda_register.h>
 #include <sound/sof.h>
 #include "../ops.h"
-#include "../sof-audio.h"
 #include "hda.h"
 
 /*
@@ -191,7 +190,7 @@ hda_dsp_stream_get(struct snd_sof_dev *sdev, int direction)
 	 * Workaround to address a known issue with host DMA that results
 	 * in xruns during pause/release in capture scenarios.
 	 */
-	if (!IS_ENABLED(CONFIG_SND_SOC_SOF_HDA_ALWAYS_ENABLE_DMI_L1))
+	if (!IS_ENABLED(SND_SOC_SOF_HDA_ALWAYS_ENABLE_DMI_L1))
 		if (stream && direction == SNDRV_PCM_STREAM_CAPTURE)
 			snd_sof_dsp_update_bits(sdev, HDA_DSP_HDA_BAR,
 						HDA_VS_INTEL_EM2,
@@ -229,7 +228,7 @@ int hda_dsp_stream_put(struct snd_sof_dev *sdev, int direction, int stream_tag)
 	spin_unlock_irq(&bus->reg_lock);
 
 	/* Enable DMI L1 entry if there are no capture streams open */
-	if (!IS_ENABLED(CONFIG_SND_SOC_SOF_HDA_ALWAYS_ENABLE_DMI_L1))
+	if (!IS_ENABLED(SND_SOC_SOF_HDA_ALWAYS_ENABLE_DMI_L1))
 		if (!active_capture_stream)
 			snd_sof_dsp_update_bits(sdev, HDA_DSP_HDA_BAR,
 						HDA_VS_INTEL_EM2,
@@ -276,12 +275,8 @@ int hda_dsp_stream_trigger(struct snd_sof_dev *sdev,
 					HDA_DSP_REG_POLL_INTERVAL_US,
 					HDA_DSP_STREAM_RUN_TIMEOUT);
 
-		if (ret < 0) {
-			dev_err(sdev->dev,
-				"error: %s: cmd %d: timeout on STREAM_SD_OFFSET read\n",
-				__func__, cmd);
+		if (ret)
 			return ret;
-		}
 
 		hstream->running = true;
 		break;
@@ -299,12 +294,8 @@ int hda_dsp_stream_trigger(struct snd_sof_dev *sdev,
 						HDA_DSP_REG_POLL_INTERVAL_US,
 						HDA_DSP_STREAM_RUN_TIMEOUT);
 
-		if (ret < 0) {
-			dev_err(sdev->dev,
-				"error: %s: cmd %d: timeout on STREAM_SD_OFFSET read\n",
-				__func__, cmd);
+		if (ret)
 			return ret;
-		}
 
 		snd_sof_dsp_write(sdev, HDA_DSP_HDA_BAR, sd_offset +
 				  SOF_HDA_ADSP_REG_CL_SD_STS,
@@ -365,12 +356,8 @@ int hda_dsp_stream_hw_params(struct snd_sof_dev *sdev,
 					    HDA_DSP_REG_POLL_INTERVAL_US,
 					    HDA_DSP_STREAM_RUN_TIMEOUT);
 
-	if (ret < 0) {
-		dev_err(sdev->dev,
-			"error: %s: timeout on STREAM_SD_OFFSET read1\n",
-			__func__);
+	if (ret)
 		return ret;
-	}
 
 	snd_sof_dsp_update_bits(sdev, HDA_DSP_HDA_BAR,
 				sd_offset + SOF_HDA_ADSP_REG_CL_SD_STS,
@@ -431,12 +418,8 @@ int hda_dsp_stream_hw_params(struct snd_sof_dev *sdev,
 					    HDA_DSP_REG_POLL_INTERVAL_US,
 					    HDA_DSP_STREAM_RUN_TIMEOUT);
 
-	if (ret < 0) {
-		dev_err(sdev->dev,
-			"error: %s: timeout on STREAM_SD_OFFSET read2\n",
-			__func__);
+	if (ret)
 		return ret;
-	}
 
 	snd_sof_dsp_update_bits(sdev, HDA_DSP_HDA_BAR,
 				sd_offset + SOF_HDA_ADSP_REG_CL_SD_STS,
@@ -550,23 +533,22 @@ int hda_dsp_stream_hw_free(struct snd_sof_dev *sdev,
 	return 0;
 }
 
-bool hda_dsp_check_stream_irq(struct snd_sof_dev *sdev)
+irqreturn_t hda_dsp_stream_interrupt(int irq, void *context)
 {
-	struct hdac_bus *bus = sof_to_bus(sdev);
-	bool ret = false;
+	struct hdac_bus *bus = context;
+	int ret = IRQ_WAKE_THREAD;
 	u32 status;
 
-	/* The function can be called at irq thread, so use spin_lock_irq */
-	spin_lock_irq(&bus->reg_lock);
+	spin_lock(&bus->reg_lock);
 
 	status = snd_hdac_chip_readl(bus, INTSTS);
 	dev_vdbg(bus->dev, "stream irq, INTSTS status: 0x%x\n", status);
 
-	/* if Register inaccessible, ignore it.*/
-	if (status != 0xffffffff)
-		ret = true;
+	/* Register inaccessible, ignore it.*/
+	if (status == 0xffffffff)
+		ret = IRQ_NONE;
 
-	spin_unlock_irq(&bus->reg_lock);
+	spin_unlock(&bus->reg_lock);
 
 	return ret;
 }
@@ -604,8 +586,7 @@ static bool hda_dsp_stream_check(struct hdac_bus *bus, u32 status)
 
 irqreturn_t hda_dsp_stream_threaded_handler(int irq, void *context)
 {
-	struct snd_sof_dev *sdev = context;
-	struct hdac_bus *bus = sof_to_bus(sdev);
+	struct hdac_bus *bus = context;
 #if IS_ENABLED(CONFIG_SND_SOC_SOF_HDA)
 	u32 rirb_status;
 #endif

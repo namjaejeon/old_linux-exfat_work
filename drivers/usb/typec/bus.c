@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0
-/*
+/**
  * Bus for USB Type-C Alternate Modes
  *
  * Copyright (C) 2018 Intel Corporation
@@ -10,23 +10,12 @@
 
 #include "bus.h"
 
-static inline int
-typec_altmode_set_mux(struct altmode *alt, unsigned long conf, void *data)
+static inline int typec_altmode_set_mux(struct altmode *alt, u8 state)
 {
-	struct typec_mux_state state;
-
-	if (!alt->mux)
-		return 0;
-
-	state.alt = &alt->adev;
-	state.mode = conf;
-	state.data = data;
-
-	return alt->mux->set(alt->mux, &state);
+	return alt->mux ? alt->mux->set(alt->mux, state) : 0;
 }
 
-static int typec_altmode_set_state(struct typec_altmode *adev,
-				   unsigned long conf, void *data)
+static int typec_altmode_set_state(struct typec_altmode *adev, int state)
 {
 	bool is_port = is_typec_port(adev->dev.parent);
 	struct altmode *port_altmode;
@@ -34,11 +23,11 @@ static int typec_altmode_set_state(struct typec_altmode *adev,
 
 	port_altmode = is_port ? to_altmode(adev) : to_altmode(adev)->partner;
 
-	ret = typec_altmode_set_mux(port_altmode, conf, data);
+	ret = typec_altmode_set_mux(port_altmode, state);
 	if (ret)
 		return ret;
 
-	blocking_notifier_call_chain(&port_altmode->nh, conf, NULL);
+	blocking_notifier_call_chain(&port_altmode->nh, state, NULL);
 
 	return 0;
 }
@@ -78,7 +67,7 @@ int typec_altmode_notify(struct typec_altmode *adev,
 	is_port = is_typec_port(adev->dev.parent);
 	partner = altmode->partner;
 
-	ret = typec_altmode_set_mux(is_port ? altmode : partner, conf, data);
+	ret = typec_altmode_set_mux(is_port ? altmode : partner, (u8)conf);
 	if (ret)
 		return ret;
 
@@ -95,14 +84,12 @@ EXPORT_SYMBOL_GPL(typec_altmode_notify);
 /**
  * typec_altmode_enter - Enter Mode
  * @adev: The alternate mode
- * @vdo: VDO for the Enter Mode command
  *
  * The alternate mode drivers use this function to enter mode. The port drivers
  * use this to inform the alternate mode drivers that the partner has initiated
- * Enter Mode command. If the alternate mode does not require VDO, @vdo must be
- * NULL.
+ * Enter Mode command.
  */
-int typec_altmode_enter(struct typec_altmode *adev, u32 *vdo)
+int typec_altmode_enter(struct typec_altmode *adev)
 {
 	struct altmode *partner = to_altmode(adev)->partner;
 	struct typec_altmode *pdev = &partner->adev;
@@ -114,16 +101,13 @@ int typec_altmode_enter(struct typec_altmode *adev, u32 *vdo)
 	if (!pdev->ops || !pdev->ops->enter)
 		return -EOPNOTSUPP;
 
-	if (is_typec_port(pdev->dev.parent) && !pdev->active)
-		return -EPERM;
-
 	/* Moving to USB Safe State */
-	ret = typec_altmode_set_state(adev, TYPEC_STATE_SAFE, NULL);
+	ret = typec_altmode_set_state(adev, TYPEC_STATE_SAFE);
 	if (ret)
 		return ret;
 
 	/* Enter Mode */
-	return pdev->ops->enter(pdev, vdo);
+	return pdev->ops->enter(pdev);
 }
 EXPORT_SYMBOL_GPL(typec_altmode_enter);
 
@@ -146,7 +130,7 @@ int typec_altmode_exit(struct typec_altmode *adev)
 		return -EOPNOTSUPP;
 
 	/* Moving to USB Safe State */
-	ret = typec_altmode_set_state(adev, TYPEC_STATE_SAFE, NULL);
+	ret = typec_altmode_set_state(adev, TYPEC_STATE_SAFE);
 	if (ret)
 		return ret;
 
@@ -399,7 +383,7 @@ static int typec_remove(struct device *dev)
 		drv->remove(to_typec_altmode(dev));
 
 	if (adev->active) {
-		WARN_ON(typec_altmode_set_state(adev, TYPEC_STATE_SAFE, NULL));
+		WARN_ON(typec_altmode_set_state(adev, TYPEC_STATE_SAFE));
 		typec_altmode_update_active(adev, false);
 	}
 

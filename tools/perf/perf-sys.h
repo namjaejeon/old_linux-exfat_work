@@ -15,9 +15,7 @@ void test_attr__init(void);
 void test_attr__open(struct perf_event_attr *attr, pid_t pid, int cpu,
 		     int fd, int group_fd, unsigned long flags);
 
-#ifndef HAVE_ATTR_TEST
-#define HAVE_ATTR_TEST 1
-#endif
+#define HAVE_ATTR_TEST
 
 static inline int
 sys_perf_event_open(struct perf_event_attr *attr,
@@ -29,7 +27,7 @@ sys_perf_event_open(struct perf_event_attr *attr,
 	fd = syscall(__NR_perf_event_open, attr, pid, cpu,
 		     group_fd, flags);
 
-#if HAVE_ATTR_TEST
+#ifdef HAVE_ATTR_TEST
 	if (unlikely(test_attr__enabled))
 		test_attr__open(attr, pid, cpu, fd, group_fd, flags);
 #endif

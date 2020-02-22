@@ -131,7 +131,7 @@ static u32 meson_rtc_get_data(struct meson_rtc *rtc)
 
 static int meson_rtc_get_bus(struct meson_rtc *rtc)
 {
-	int ret, retries;
+	int ret, retries = 3;
 	u32 val;
 
 	/* prepare bus for transfers, set all lines low */
@@ -292,6 +292,7 @@ static int meson_rtc_probe(struct platform_device *pdev)
 	};
 	struct device *dev = &pdev->dev;
 	struct meson_rtc *rtc;
+	struct resource *res;
 	void __iomem *base;
 	int ret;
 	u32 tm;
@@ -311,7 +312,8 @@ static int meson_rtc_probe(struct platform_device *pdev)
 	rtc->rtc->ops = &meson_rtc_ops;
 	rtc->rtc->range_max = U32_MAX;
 
-	base = devm_platform_ioremap_resource(pdev, 0);
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	base = devm_ioremap_resource(dev, res);
 	if (IS_ERR(base))
 		return PTR_ERR(base);
 

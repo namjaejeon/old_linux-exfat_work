@@ -857,35 +857,70 @@ static void adp5589_report_switch_state(struct adp5589_kpad *kpad)
 	input_sync(kpad->input);
 }
 
-static int adp5589_keypad_add(struct adp5589_kpad *kpad, unsigned int revid)
+static int adp5589_probe(struct i2c_client *client,
+			 const struct i2c_device_id *id)
 {
-	struct i2c_client *client = kpad->client;
+	struct adp5589_kpad *kpad;
 	const struct adp5589_kpad_platform_data *pdata =
 		dev_get_platdata(&client->dev);
 	struct input_dev *input;
-	unsigned int i;
+	unsigned int revid;
+	int ret, i;
 	int error;
+
+	if (!i2c_check_functionality(client->adapter,
+				     I2C_FUNC_SMBUS_BYTE_DATA)) {
+		dev_err(&client->dev, "SMBUS Byte Data not Supported\n");
+		return -EIO;
+	}
+
+	if (!pdata) {
+		dev_err(&client->dev, "no platform data?\n");
+		return -EINVAL;
+	}
+
+	kpad = kzalloc(sizeof(*kpad), GFP_KERNEL);
+	if (!kpad)
+		return -ENOMEM;
+
+	switch (id->driver_data) {
+	case ADP5585_02:
+		kpad->support_row5 = true;
+		/* fall through */
+	case ADP5585_01:
+		kpad->is_adp5585 = true;
+		kpad->var = &const_adp5585;
+		break;
+	case ADP5589:
+		kpad->support_row5 = true;
+		kpad->var = &const_adp5589;
+		break;
+	}
 
 	if (!((pdata->keypad_en_mask & kpad->var->row_mask) &&
 			(pdata->keypad_en_mask >> kpad->var->col_shift)) ||
 			!pdata->keymap) {
 		dev_err(&client->dev, "no rows, cols or keymap from pdata\n");
-		return -EINVAL;
+		error = -EINVAL;
+		goto err_free_mem;
 	}
 
 	if (pdata->keymapsize != kpad->var->keymapsize) {
 		dev_err(&client->dev, "invalid keymapsize\n");
-		return -EINVAL;
+		error = -EINVAL;
+		goto err_free_mem;
 	}
 
 	if (!pdata->gpimap && pdata->gpimapsize) {
 		dev_err(&client->dev, "invalid gpimap from pdata\n");
-		return -EINVAL;
+		error = -EINVAL;
+		goto err_free_mem;
 	}
 
 	if (pdata->gpimapsize > kpad->var->gpimapsize_max) {
 		dev_err(&client->dev, "invalid gpimapsize\n");
-		return -EINVAL;
+		error = -EINVAL;
+		goto err_free_mem;
 	}
 
 	for (i = 0; i < pdata->gpimapsize; i++) {
@@ -894,26 +929,40 @@ static int adp5589_keypad_add(struct adp5589_kpad *kpad, unsigned int revid)
 		if (pin < kpad->var->gpi_pin_base ||
 				pin > kpad->var->gpi_pin_end) {
 			dev_err(&client->dev, "invalid gpi pin data\n");
-			return -EINVAL;
+			error = -EINVAL;
+			goto err_free_mem;
 		}
 
 		if ((1 << (pin - kpad->var->gpi_pin_row_base)) &
 				pdata->keypad_en_mask) {
 			dev_err(&client->dev, "invalid gpi row/col data\n");
-			return -EINVAL;
+			error = -EINVAL;
+			goto err_free_mem;
 		}
 	}
 
 	if (!client->irq) {
 		dev_err(&client->dev, "no IRQ?\n");
-		return -EINVAL;
+		error = -EINVAL;
+		goto err_free_mem;
 	}
 
 	input = input_allocate_device();
-	if (!input)
-		return -ENOMEM;
+	if (!input) {
+		error = -ENOMEM;
+		goto err_free_mem;
+	}
 
+	kpad->client = client;
 	kpad->input = input;
+
+	ret = adp5589_read(client, ADP5589_5_ID);
+	if (ret < 0) {
+		error = ret;
+		goto err_free_input;
+	}
+
+	revid = (u8) ret & ADP5589_5_DEVICE_ID_MASK;
 
 	input->name = client->name;
 	input->phys = "adp5589-keys/input0";
@@ -966,99 +1015,30 @@ static int adp5589_keypad_add(struct adp5589_kpad *kpad, unsigned int revid)
 		goto err_unreg_dev;
 	}
 
-	device_init_wakeup(&client->dev, 1);
-
-	return 0;
-
-err_unreg_dev:
-	input_unregister_device(input);
-	input = NULL;
-err_free_input:
-	input_free_device(input);
-
-	return error;
-}
-
-static void adp5589_keypad_remove(struct adp5589_kpad *kpad)
-{
-	if (kpad->input) {
-		free_irq(kpad->client->irq, kpad);
-		input_unregister_device(kpad->input);
-	}
-}
-
-static int adp5589_probe(struct i2c_client *client,
-			 const struct i2c_device_id *id)
-{
-	struct adp5589_kpad *kpad;
-	const struct adp5589_kpad_platform_data *pdata =
-		dev_get_platdata(&client->dev);
-	unsigned int revid;
-	int error, ret;
-
-	if (!i2c_check_functionality(client->adapter,
-				     I2C_FUNC_SMBUS_BYTE_DATA)) {
-		dev_err(&client->dev, "SMBUS Byte Data not Supported\n");
-		return -EIO;
-	}
-
-	if (!pdata) {
-		dev_err(&client->dev, "no platform data?\n");
-		return -EINVAL;
-	}
-
-	kpad = kzalloc(sizeof(*kpad), GFP_KERNEL);
-	if (!kpad)
-		return -ENOMEM;
-
-	kpad->client = client;
-
-	switch (id->driver_data) {
-	case ADP5585_02:
-		kpad->support_row5 = true;
-		/* fall through */
-	case ADP5585_01:
-		kpad->is_adp5585 = true;
-		kpad->var = &const_adp5585;
-		break;
-	case ADP5589:
-		kpad->support_row5 = true;
-		kpad->var = &const_adp5589;
-		break;
-	}
-
-	ret = adp5589_read(client, ADP5589_5_ID);
-	if (ret < 0) {
-		error = ret;
-		goto err_free_mem;
-	}
-
-	revid = (u8) ret & ADP5589_5_DEVICE_ID_MASK;
-
-	if (pdata->keymapsize) {
-		error = adp5589_keypad_add(kpad, revid);
-		if (error)
-			goto err_free_mem;
-	}
-
 	error = adp5589_setup(kpad);
 	if (error)
-		goto err_keypad_remove;
+		goto err_free_irq;
 
 	if (kpad->gpimapsize)
 		adp5589_report_switch_state(kpad);
 
 	error = adp5589_gpio_add(kpad);
 	if (error)
-		goto err_keypad_remove;
+		goto err_free_irq;
 
+	device_init_wakeup(&client->dev, 1);
 	i2c_set_clientdata(client, kpad);
 
 	dev_info(&client->dev, "Rev.%d keypad, irq %d\n", revid, client->irq);
 	return 0;
 
-err_keypad_remove:
-	adp5589_keypad_remove(kpad);
+err_free_irq:
+	free_irq(client->irq, kpad);
+err_unreg_dev:
+	input_unregister_device(input);
+	input = NULL;
+err_free_input:
+	input_free_device(input);
 err_free_mem:
 	kfree(kpad);
 
@@ -1070,7 +1050,8 @@ static int adp5589_remove(struct i2c_client *client)
 	struct adp5589_kpad *kpad = i2c_get_clientdata(client);
 
 	adp5589_write(client, kpad->var->reg(ADP5589_GENERAL_CFG), 0);
-	adp5589_keypad_remove(kpad);
+	free_irq(client->irq, kpad);
+	input_unregister_device(kpad->input);
 	adp5589_gpio_remove(kpad);
 	kfree(kpad);
 
@@ -1082,9 +1063,6 @@ static int adp5589_suspend(struct device *dev)
 {
 	struct adp5589_kpad *kpad = dev_get_drvdata(dev);
 	struct i2c_client *client = kpad->client;
-
-	if (!kpad->input)
-		return 0;
 
 	disable_irq(client->irq);
 
@@ -1098,9 +1076,6 @@ static int adp5589_resume(struct device *dev)
 {
 	struct adp5589_kpad *kpad = dev_get_drvdata(dev);
 	struct i2c_client *client = kpad->client;
-
-	if (!kpad->input)
-		return 0;
 
 	if (device_may_wakeup(&client->dev))
 		disable_irq_wake(client->irq);

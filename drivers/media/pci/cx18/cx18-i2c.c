@@ -88,7 +88,7 @@ static int cx18_i2c_new_ir(struct cx18 *cx, struct i2c_adapter *adap, u32 hw,
 		break;
 	}
 
-	return IS_ERR(i2c_new_scanned_device(adap, &info, addr_list, NULL)) ?
+	return i2c_new_probed_device(adap, &info, addr_list, NULL) == NULL ?
 	       -1 : 0;
 }
 

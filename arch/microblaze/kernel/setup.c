@@ -65,6 +65,10 @@ void __init setup_arch(char **cmdline_p)
 	microblaze_cache_init();
 
 	xilinx_pci_init();
+
+#if defined(CONFIG_DUMMY_CONSOLE)
+	conswitchp = &dummy_con;
+#endif
 }
 
 #ifdef CONFIG_MTD_UCLINUX

@@ -223,9 +223,8 @@ void ttm_tt_destroy(struct ttm_tt *ttm)
 	ttm->func->destroy(ttm);
 }
 
-static void ttm_tt_init_fields(struct ttm_tt *ttm,
-			       struct ttm_buffer_object *bo,
-			       uint32_t page_flags)
+void ttm_tt_init_fields(struct ttm_tt *ttm, struct ttm_buffer_object *bo,
+			uint32_t page_flags)
 {
 	ttm->bdev = bo->bdev;
 	ttm->num_pages = bo->num_pages;

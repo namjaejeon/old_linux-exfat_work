@@ -53,8 +53,6 @@ struct mdp5_kms {
 	struct clk *ahb_clk;
 	struct clk *core_clk;
 	struct clk *lut_clk;
-	struct clk *tbu_clk;
-	struct clk *tbu_rt_clk;
 	struct clk *vsync_clk;
 
 	/*

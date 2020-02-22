@@ -335,22 +335,13 @@ class NetdevSimDev:
     """
     Class for netdevsim bus device and its attributes.
     """
-    @staticmethod
-    def ctrl_write(path, val):
-        fullpath = os.path.join("/sys/bus/netdevsim/", path)
-        try:
-            with open(fullpath, "w") as f:
-                f.write(val)
-        except OSError as e:
-            log("WRITE %s: %r" % (fullpath, val), -e.errno)
-            raise e
-        log("WRITE %s: %r" % (fullpath, val), 0)
 
     def __init__(self, port_count=1):
         addr = 0
         while True:
             try:
-                self.ctrl_write("new_device", "%u %u" % (addr, port_count))
+                with open("/sys/bus/netdevsim/new_device", "w") as f:
+                    f.write("%u %u" % (addr, port_count))
             except OSError as e:
                 if e.errno == errno.ENOSPC:
                     addr += 1
@@ -412,13 +403,14 @@ class NetdevSimDev:
         return progs
 
     def remove(self):
-        self.ctrl_write("del_device", "%u" % (self.addr, ))
+        with open("/sys/bus/netdevsim/del_device", "w") as f:
+            f.write("%u" % self.addr)
         devs.remove(self)
 
     def remove_nsim(self, nsim):
         self.nsims.remove(nsim)
-        self.ctrl_write("devices/netdevsim%u/del_port" % (self.addr, ),
-                        "%u" % (nsim.port_index, ))
+        with open("/sys/bus/netdevsim/devices/netdevsim%u/del_port" % self.addr ,"w") as f:
+            f.write("%u" % nsim.port_index)
 
 class NetdevSim:
     """

@@ -126,7 +126,6 @@ struct rvin_group_route {
  * struct rvin_info - Information about the particular VIN implementation
  * @model:		VIN model
  * @use_mc:		use media controller instead of controlling subdevice
- * @nv12:		support outputing NV12 pixel format
  * @max_width:		max input width the VIN supports
  * @max_height:		max input height the VIN supports
  * @routes:		list of possible routes from the CSI-2 recivers to
@@ -135,7 +134,6 @@ struct rvin_group_route {
 struct rvin_info {
 	enum model_id model;
 	bool use_mc;
-	bool nv12;
 
 	unsigned int max_width;
 	unsigned int max_height;
@@ -178,7 +176,7 @@ struct rvin_info {
  *
  * @crop:		active cropping
  * @compose:		active composing
- * @src_rect:		active size of the video source
+ * @source:		active size of the video source
  * @std:		active video standard of the video source
  *
  * @alpha:		Alpha component to fill in for supported pixel formats
@@ -217,7 +215,7 @@ struct rvin_dev {
 
 	struct v4l2_rect crop;
 	struct v4l2_rect compose;
-	struct v4l2_rect src_rect;
+	struct v4l2_rect source;
 	v4l2_std_id std;
 
 	unsigned int alpha;

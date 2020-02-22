@@ -13,7 +13,6 @@
 #include <linux/leds.h>
 #include <linux/irq.h>
 #include <linux/pm.h>
-#include <linux/property.h>
 #include <linux/gpio.h>
 #include <linux/gpio/machine.h>
 #include <linux/serial_8250.h>
@@ -28,6 +27,7 @@
 #include <linux/platform_data/i2c-pxa.h>
 #include <linux/platform_data/pca953x.h>
 #include <linux/apm-emulation.h>
+#include <linux/can/platform/mcp251x.h>
 #include <linux/regulator/fixed.h>
 #include <linux/regulator/machine.h>
 
@@ -428,15 +428,14 @@ static struct gpiod_lookup_table can_regulator_gpiod_table = {
 	},
 };
 
-static const struct property_entry mcp251x_properties[] = {
-	PROPERTY_ENTRY_U32("clock-frequency", 16000000),
-	{}
+static struct mcp251x_platform_data zeus_mcp2515_pdata = {
+	.oscillator_frequency	= 16*1000*1000,
 };
 
 static struct spi_board_info zeus_spi_board_info[] = {
 	[0] = {
 		.modalias	= "mcp2515",
-		.properties	= mcp251x_properties,
+		.platform_data	= &zeus_mcp2515_pdata,
 		.irq		= PXA_GPIO_TO_IRQ(ZEUS_CAN_GPIO),
 		.max_speed_hz	= 1*1000*1000,
 		.bus_num	= 3,

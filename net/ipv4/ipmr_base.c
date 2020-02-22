@@ -386,17 +386,15 @@ EXPORT_SYMBOL(mr_rtm_dumproute);
 
 int mr_dump(struct net *net, struct notifier_block *nb, unsigned short family,
 	    int (*rules_dump)(struct net *net,
-			      struct notifier_block *nb,
-			      struct netlink_ext_ack *extack),
+			      struct notifier_block *nb),
 	    struct mr_table *(*mr_iter)(struct net *net,
 					struct mr_table *mrt),
-	    rwlock_t *mrt_lock,
-	    struct netlink_ext_ack *extack)
+	    rwlock_t *mrt_lock)
 {
 	struct mr_table *mrt;
 	int err;
 
-	err = rules_dump(net, nb, extack);
+	err = rules_dump(net, nb);
 	if (err)
 		return err;
 
@@ -411,25 +409,17 @@ int mr_dump(struct net *net, struct notifier_block *nb, unsigned short family,
 			if (!v->dev)
 				continue;
 
-			err = mr_call_vif_notifier(nb, family,
-						   FIB_EVENT_VIF_ADD,
-						   v, vifi, mrt->id, extack);
-			if (err)
-				break;
+			mr_call_vif_notifier(nb, net, family,
+					     FIB_EVENT_VIF_ADD,
+					     v, vifi, mrt->id);
 		}
 		read_unlock(mrt_lock);
 
-		if (err)
-			return err;
-
 		/* Notify on table MFC entries */
-		list_for_each_entry_rcu(mfc, &mrt->mfc_cache_list, list) {
-			err = mr_call_mfc_notifier(nb, family,
-						   FIB_EVENT_ENTRY_ADD,
-						   mfc, mrt->id, extack);
-			if (err)
-				return err;
-		}
+		list_for_each_entry_rcu(mfc, &mrt->mfc_cache_list, list)
+			mr_call_mfc_notifier(nb, net, family,
+					     FIB_EVENT_ENTRY_ADD,
+					     mfc, mrt->id);
 	}
 
 	return 0;

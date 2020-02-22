@@ -26,8 +26,6 @@ DECLARE_PER_CPU(bool, fpsimd_context_busy);
 static __must_check inline bool may_use_simd(void)
 {
 	/*
-	 * We must make sure that the SVE has been initialized properly
-	 * before using the SIMD in kernel.
 	 * fpsimd_context_busy is only set while preemption is disabled,
 	 * and is clear whenever preemption is enabled. Since
 	 * this_cpu_read() is atomic w.r.t. preemption, fpsimd_context_busy
@@ -35,10 +33,8 @@ static __must_check inline bool may_use_simd(void)
 	 * migrated, and if it's clear we cannot be migrated to a CPU
 	 * where it is set.
 	 */
-	return !WARN_ON(!system_capabilities_finalized()) &&
-	       system_supports_fpsimd() &&
-	       !in_irq() && !irqs_disabled() && !in_nmi() &&
-	       !this_cpu_read(fpsimd_context_busy);
+	return !in_irq() && !irqs_disabled() && !in_nmi() &&
+		!this_cpu_read(fpsimd_context_busy);
 }
 
 #else /* ! CONFIG_KERNEL_MODE_NEON */

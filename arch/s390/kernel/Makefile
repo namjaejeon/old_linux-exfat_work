@@ -81,3 +81,4 @@ obj-$(CONFIG_TRACEPOINTS)	+= trace.o
 
 # vdso
 obj-y				+= vdso64/
+obj-$(CONFIG_COMPAT_VDSO)	+= vdso32/

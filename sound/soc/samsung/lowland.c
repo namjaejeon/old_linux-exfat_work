@@ -126,7 +126,7 @@ static struct snd_soc_dai_link lowland_dai[] = {
 
 static struct snd_soc_codec_conf lowland_codec_conf[] = {
 	{
-		.dlc = COMP_CODEC_CONF("wm9081.1-006c"),
+		.dev_name = "wm9081.1-006c",
 		.name_prefix = "Sub",
 	},
 };

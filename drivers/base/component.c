@@ -11,6 +11,7 @@
 #include <linux/device.h>
 #include <linux/kref.h>
 #include <linux/list.h>
+#include <linux/module.h>
 #include <linux/mutex.h>
 #include <linux/slab.h>
 #include <linux/debugfs.h>
@@ -101,11 +102,11 @@ static int component_devices_show(struct seq_file *s, void *data)
 	seq_printf(s, "%-40s %20s\n", "device name", "status");
 	seq_puts(s, "-------------------------------------------------------------\n");
 	for (i = 0; i < match->num; i++) {
-		struct component *component = match->compare[i].component;
+		struct device *d = (struct device *)match->compare[i].data;
 
-		seq_printf(s, "%-40s %20s\n",
-			   component ? dev_name(component->dev) : "(unknown)",
-			   component ? (component->bound ? "bound" : "not bound") : "not registered");
+		seq_printf(s, "%-40s %20s\n", dev_name(d),
+			   match->compare[i].component ?
+			   "registered" : "not registered");
 	}
 	mutex_unlock(&component_mutex);
 
@@ -774,3 +775,5 @@ void component_del(struct device *dev, const struct component_ops *ops)
 	kfree(component);
 }
 EXPORT_SYMBOL_GPL(component_del);
+
+MODULE_LICENSE("GPL v2");

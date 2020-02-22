@@ -7,7 +7,6 @@
  * for more details.
  */
 
-#include <linux/dma-contiguous.h>
 #include <linux/memblock.h>
 #include <linux/init.h>
 #include <linux/kernel.h>
@@ -54,11 +53,8 @@ EXPORT_SYMBOL(kmap_prot);
 
 static inline pte_t *virt_to_kpte(unsigned long vaddr)
 {
-	pgd_t *pgd = pgd_offset_k(vaddr);
-	p4d_t *p4d = p4d_offset(pgd, vaddr);
-	pud_t *pud = pud_offset(p4d, vaddr);
-
-	return pte_offset_kernel(pmd_offset(pud, vaddr), vaddr);
+	return pte_offset_kernel(pmd_offset(pgd_offset_k(vaddr),
+			vaddr), vaddr);
 }
 
 static void __init highmem_init(void)
@@ -346,9 +342,6 @@ asmlinkage void __init mmu_init(void)
 	/* This will also cause that unflatten device tree will be allocated
 	 * inside 768MB limit */
 	memblock_set_current_limit(memory_start + lowmem_size - 1);
-
-	/* CMA initialization */
-	dma_contiguous_reserve(memory_start + lowmem_size - 1);
 }
 
 /* This is only called until mem_init is done. */

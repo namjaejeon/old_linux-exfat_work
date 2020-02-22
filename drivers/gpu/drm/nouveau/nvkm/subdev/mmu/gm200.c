@@ -27,7 +27,7 @@
 #include <nvif/class.h>
 
 const u8 *
-gm200_mmu_kind(struct nvkm_mmu *mmu, int *count, u8 *invalid)
+gm200_mmu_kind(struct nvkm_mmu *mmu, int *count)
 {
 	static const u8
 	kind[256] = {
@@ -65,7 +65,6 @@ gm200_mmu_kind(struct nvkm_mmu *mmu, int *count, u8 *invalid)
 		0xfe, 0xfe, 0xfe, 0xfe, 0xff, 0xfd, 0xfe, 0xff
 	};
 	*count = ARRAY_SIZE(kind);
-	*invalid = 0xff;
 	return kind;
 }
 

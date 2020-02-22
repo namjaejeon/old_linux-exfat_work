@@ -154,7 +154,7 @@ static inline void exit_tasks_rcu_finish(void) { }
  *
  * This macro resembles cond_resched(), except that it is defined to
  * report potential quiescent states to RCU-tasks even if the cond_resched()
- * machinery were to be shut off, as some advocate for PREEMPTION kernels.
+ * machinery were to be shut off, as some advocate for PREEMPT kernels.
  */
 #define cond_resched_tasks_rcu_qs() \
 do { \
@@ -167,7 +167,7 @@ do { \
  * TREE_RCU and rcu_barrier_() primitives in TINY_RCU.
  */
 
-#if defined(CONFIG_TREE_RCU)
+#if defined(CONFIG_TREE_RCU) || defined(CONFIG_PREEMPT_RCU)
 #include <linux/rcutree.h>
 #elif defined(CONFIG_TINY_RCU)
 #include <linux/rcutiny.h>
@@ -210,7 +210,7 @@ static inline void rcu_lock_acquire(struct lockdep_map *map)
 
 static inline void rcu_lock_release(struct lockdep_map *map)
 {
-	lock_release(map, _THIS_IP_);
+	lock_release(map, 1, _THIS_IP_);
 }
 
 extern struct lockdep_map rcu_lock_map;
@@ -383,22 +383,20 @@ do {									      \
 } while (0)
 
 /**
- * rcu_replace_pointer() - replace an RCU pointer, returning its old value
- * @rcu_ptr: RCU pointer, whose old value is returned
+ * rcu_swap_protected() - swap an RCU and a regular pointer
+ * @rcu_ptr: RCU pointer
  * @ptr: regular pointer
- * @c: the lockdep conditions under which the dereference will take place
+ * @c: the conditions under which the dereference will take place
  *
- * Perform a replacement, where @rcu_ptr is an RCU-annotated
- * pointer and @c is the lockdep argument that is passed to the
- * rcu_dereference_protected() call used to read that pointer.  The old
- * value of @rcu_ptr is returned, and @rcu_ptr is set to @ptr.
+ * Perform swap(@rcu_ptr, @ptr) where @rcu_ptr is an RCU-annotated pointer and
+ * @c is the argument that is passed to the rcu_dereference_protected() call
+ * used to read that pointer.
  */
-#define rcu_replace_pointer(rcu_ptr, ptr, c)				\
-({									\
+#define rcu_swap_protected(rcu_ptr, ptr, c) do {			\
 	typeof(ptr) __tmp = rcu_dereference_protected((rcu_ptr), (c));	\
 	rcu_assign_pointer((rcu_ptr), (ptr));				\
-	__tmp;								\
-})
+	(ptr) = __tmp;							\
+} while (0)
 
 /**
  * rcu_access_pointer() - fetch RCU pointer with no dereferencing
@@ -582,10 +580,10 @@ do {									      \
  *
  * You can avoid reading and understanding the next paragraph by
  * following this rule: don't put anything in an rcu_read_lock() RCU
- * read-side critical section that would block in a !PREEMPTION kernel.
+ * read-side critical section that would block in a !PREEMPT kernel.
  * But if you want the full story, read on!
  *
- * In non-preemptible RCU implementations (pure TREE_RCU and TINY_RCU),
+ * In non-preemptible RCU implementations (TREE_RCU and TINY_RCU),
  * it is illegal to block while in an RCU read-side critical section.
  * In preemptible RCU implementations (PREEMPT_RCU) in CONFIG_PREEMPTION
  * kernel builds, RCU read-side critical sections may be preempted,
@@ -895,9 +893,5 @@ rcu_head_after_call_rcu(struct rcu_head *rhp, rcu_callback_t f)
 	WARN_ON_ONCE(func != (rcu_callback_t)~0L);
 	return false;
 }
-
-/* kernel/ksysfs.c definitions */
-extern int rcu_expedited;
-extern int rcu_normal;
 
 #endif /* __LINUX_RCUPDATE_H */

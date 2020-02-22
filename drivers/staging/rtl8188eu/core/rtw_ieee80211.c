@@ -98,7 +98,7 @@ bool rtw_is_cckratesonly_included(u8 *rate)
 	return true;
 }
 
-int rtw_check_network_type(unsigned char *rate)
+int rtw_check_network_type(unsigned char *rate, int ratelen, int channel)
 {
 	/*  could be pure B, pure G, or B/G */
 	if (rtw_is_cckratesonly_included(rate))
@@ -157,10 +157,11 @@ u8 *rtw_get_ie(u8 *pbuf, int index, uint *len, int limit)
 		if (*p == index) {
 			*len = *(p + 1);
 			return p;
+		} else {
+			tmp = *(p + 1);
+			p += (tmp + 2);
+			i += (tmp + 2);
 		}
-		tmp = *(p + 1);
-		p += (tmp + 2);
-		i += (tmp + 2);
 		if (i >= limit)
 			break;
 	}
@@ -294,9 +295,10 @@ unsigned char *rtw_get_wpa_ie(unsigned char *pie, uint *wpa_ie_len, int limit)
 				goto check_next_ie;
 			*wpa_ie_len = *(pbuf + 1);
 			return pbuf;
+		} else {
+			*wpa_ie_len = 0;
+			return NULL;
 		}
-		*wpa_ie_len = 0;
-		return NULL;
 
 check_next_ie:
 		limit_new = limit - (pbuf - pie) - 2 - len;
@@ -594,8 +596,9 @@ u8 *rtw_get_wps_ie(u8 *in_ie, uint in_len, u8 *wps_ie, uint *wps_ielen)
 			cnt += in_ie[cnt + 1] + 2;
 
 			break;
+		} else {
+			cnt += in_ie[cnt + 1] + 2; /* goto next */
 		}
-		cnt += in_ie[cnt + 1] + 2; /* goto next */
 	}
 	return wpsie_ptr;
 }
@@ -639,8 +642,9 @@ u8 *rtw_get_wps_attr(u8 *wps_ie, uint wps_ielen, u16 target_attr_id, u8 *buf_att
 			if (len_attr)
 				*len_attr = attr_len;
 			break;
+		} else {
+			attr_ptr += attr_len; /* goto next */
 		}
-		attr_ptr += attr_len; /* goto next */
 	}
 	return target_attr_ptr;
 }

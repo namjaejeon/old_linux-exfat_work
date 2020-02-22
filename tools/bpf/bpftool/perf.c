@@ -13,7 +13,7 @@
 #include <unistd.h>
 #include <ftw.h>
 
-#include <bpf/bpf.h>
+#include <bpf.h>
 
 #include "main.h"
 

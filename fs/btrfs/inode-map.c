@@ -107,7 +107,7 @@ again:
 
 		if (last != (u64)-1 && last + 1 != key.objectid) {
 			__btrfs_add_free_space(fs_info, ctl, last + 1,
-					       key.objectid - last - 1, 0);
+					       key.objectid - last - 1);
 			wake_up(&root->ino_cache_wait);
 		}
 
@@ -118,7 +118,7 @@ next:
 
 	if (last < root->highest_objectid - 1) {
 		__btrfs_add_free_space(fs_info, ctl, last + 1,
-				       root->highest_objectid - last - 1, 0);
+				       root->highest_objectid - last - 1);
 	}
 
 	spin_lock(&root->ino_cache_lock);
@@ -175,8 +175,7 @@ static void start_caching(struct btrfs_root *root)
 	ret = btrfs_find_free_objectid(root, &objectid);
 	if (!ret && objectid <= BTRFS_LAST_FREE_OBJECTID) {
 		__btrfs_add_free_space(fs_info, ctl, objectid,
-				       BTRFS_LAST_FREE_OBJECTID - objectid + 1,
-				       0);
+				       BTRFS_LAST_FREE_OBJECTID - objectid + 1);
 		wake_up(&root->ino_cache_wait);
 	}
 
@@ -222,7 +221,7 @@ void btrfs_return_ino(struct btrfs_root *root, u64 objectid)
 		return;
 again:
 	if (root->ino_cache_state == BTRFS_CACHE_FINISHED) {
-		__btrfs_add_free_space(fs_info, pinned, objectid, 1, 0);
+		__btrfs_add_free_space(fs_info, pinned, objectid, 1);
 	} else {
 		down_write(&fs_info->commit_root_sem);
 		spin_lock(&root->ino_cache_lock);
@@ -235,7 +234,7 @@ again:
 
 		start_caching(root);
 
-		__btrfs_add_free_space(fs_info, pinned, objectid, 1, 0);
+		__btrfs_add_free_space(fs_info, pinned, objectid, 1);
 
 		up_write(&fs_info->commit_root_sem);
 	}
@@ -282,7 +281,7 @@ void btrfs_unpin_free_ino(struct btrfs_root *root)
 		spin_unlock(rbroot_lock);
 		if (count)
 			__btrfs_add_free_space(root->fs_info, ctl,
-					       info->offset, count, 0);
+					       info->offset, count);
 		kmem_cache_free(btrfs_free_space_cachep, info);
 	}
 }

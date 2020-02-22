@@ -28,12 +28,6 @@ extern unsigned int admin_timeout;
 #define NVME_DEFAULT_KATO	5
 #define NVME_KATO_GRACE		10
 
-#ifdef CONFIG_ARCH_NO_SG_CHAIN
-#define  NVME_INLINE_SG_CNT  0
-#else
-#define  NVME_INLINE_SG_CNT  2
-#endif
-
 extern struct workqueue_struct *nvme_wq;
 extern struct workqueue_struct *nvme_reset_wq;
 extern struct workqueue_struct *nvme_delete_wq;
@@ -121,11 +115,6 @@ enum nvme_quirks {
 	 * Prevent tag overlap between queues
 	 */
 	NVME_QUIRK_SHARED_TAGS                  = (1 << 13),
-
-	/*
-	 * Don't change the value of the temperature threshold feature
-	 */
-	NVME_QUIRK_NO_TEMP_THRESH_CHANGE	= (1 << 14),
 };
 
 /*
@@ -242,8 +231,6 @@ struct nvme_ctrl {
 	u16 kas;
 	u8 npss;
 	u8 apsta;
-	u16 wctemp;
-	u16 cctemp;
 	u32 oaes;
 	u32 aen_result;
 	u32 ctratt;
@@ -432,20 +419,9 @@ static inline int nvme_reset_subsystem(struct nvme_ctrl *ctrl)
 	return ctrl->ops->reg_write32(ctrl, NVME_REG_NSSR, 0x4E564D65);
 }
 
-/*
- * Convert a 512B sector number to a device logical block number.
- */
-static inline u64 nvme_sect_to_lba(struct nvme_ns *ns, sector_t sector)
+static inline u64 nvme_block_nr(struct nvme_ns *ns, sector_t sector)
 {
-	return sector >> (ns->lba_shift - SECTOR_SHIFT);
-}
-
-/*
- * Convert a device logical block number to a 512B sector number.
- */
-static inline sector_t nvme_lba_to_sect(struct nvme_ns *ns, u64 lba)
-{
-	return lba << (ns->lba_shift - SECTOR_SHIFT);
+	return (sector >> (ns->lba_shift - 9));
 }
 
 static inline void nvme_end_request(struct request *req, __le16 status,
@@ -468,11 +444,6 @@ static inline void nvme_get_ctrl(struct nvme_ctrl *ctrl)
 static inline void nvme_put_ctrl(struct nvme_ctrl *ctrl)
 {
 	put_device(ctrl->device);
-}
-
-static inline bool nvme_is_aen_req(u16 qid, __u16 command_id)
-{
-	return !qid && command_id >= NVME_AQ_BLK_MQ_DEPTH;
 }
 
 void nvme_complete_rq(struct request *req);
@@ -680,11 +651,5 @@ static inline struct nvme_ns *nvme_get_ns_from_dev(struct device *dev)
 {
 	return dev_to_disk(dev)->private_data;
 }
-
-#ifdef CONFIG_NVME_HWMON
-void nvme_hwmon_init(struct nvme_ctrl *ctrl);
-#else
-static inline void nvme_hwmon_init(struct nvme_ctrl *ctrl) { }
-#endif
 
 #endif /* _NVME_H */

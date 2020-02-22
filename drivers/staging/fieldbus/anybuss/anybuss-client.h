@@ -12,9 +12,6 @@
 #include <linux/types.h>
 #include <linux/poll.h>
 
-/* move to <linux/fieldbus_dev.h> when taking this out of staging */
-#include "../fieldbus_dev.h"
-
 struct anybuss_host;
 
 struct anybuss_client {
@@ -64,6 +61,12 @@ anybuss_set_drvdata(struct anybuss_client *client, void *data)
 
 int anybuss_set_power(struct anybuss_client *client, bool power_on);
 
+enum anybuss_offl_mode {
+	AB_OFFL_MODE_CLEAR = 0,
+	AB_OFFL_MODE_FREEZE,
+	AB_OFFL_MODE_SET
+};
+
 struct anybuss_memcfg {
 	u16 input_io;
 	u16 input_dpram;
@@ -73,7 +76,7 @@ struct anybuss_memcfg {
 	u16 output_dpram;
 	u16 output_total;
 
-	enum fieldbus_dev_offl_mode offl_mode;
+	enum anybuss_offl_mode offl_mode;
 };
 
 int anybuss_start_init(struct anybuss_client *client,

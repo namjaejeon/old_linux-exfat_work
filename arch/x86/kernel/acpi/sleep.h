@@ -3,7 +3,7 @@
  *	Variables and functions used by the code in sleep.c
  */
 
-#include <linux/linkage.h>
+#include <asm/realmode.h>
 
 extern unsigned long saved_video_mode;
 extern long saved_magic;

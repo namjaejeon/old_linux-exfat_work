@@ -841,7 +841,10 @@ struct mtd_info *mtd_concat_create(struct mtd_info *subdev[],	/* subdevices to c
 	return &concat->mtd;
 }
 
-/* Cleans the context obtained from mtd_concat_create() */
+/*
+ * This function destroys an MTD object obtained from concat_mtd_devs()
+ */
+
 void mtd_concat_destroy(struct mtd_info *mtd)
 {
 	struct mtd_concat *concat = CONCAT(mtd);

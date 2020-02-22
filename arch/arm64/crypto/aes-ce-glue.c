@@ -143,8 +143,14 @@ int ce_aes_setkey(struct crypto_tfm *tfm, const u8 *in_key,
 		  unsigned int key_len)
 {
 	struct crypto_aes_ctx *ctx = crypto_tfm_ctx(tfm);
+	int ret;
 
-	return ce_aes_expandkey(ctx, in_key, key_len);
+	ret = ce_aes_expandkey(ctx, in_key, key_len);
+	if (!ret)
+		return 0;
+
+	tfm->crt_flags |= CRYPTO_TFM_RES_BAD_KEY_LEN;
+	return -EINVAL;
 }
 EXPORT_SYMBOL(ce_aes_setkey);
 

@@ -454,7 +454,8 @@ static inline unsigned long timeout_to_jiffies(const ktime_t *timeout)
 		remaining_jiffies = 0;
 	} else {
 		ktime_t rem = ktime_sub(*timeout, now);
-		remaining_jiffies = ktime_divns(rem, NSEC_PER_SEC / HZ);
+		struct timespec ts = ktime_to_timespec(rem);
+		remaining_jiffies = timespec_to_jiffies(&ts);
 	}
 
 	return remaining_jiffies;

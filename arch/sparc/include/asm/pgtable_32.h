@@ -12,7 +12,7 @@
 #include <linux/const.h>
 
 #ifndef __ASSEMBLY__
-#include <asm-generic/pgtable-nopud.h>
+#include <asm-generic/4level-fixup.h>
 
 #include <linux/spinlock.h>
 #include <linux/mm_types.h>
@@ -132,12 +132,12 @@ static inline struct page *pmd_page(pmd_t pmd)
 	return pfn_to_page((pmd_val(pmd) & SRMMU_PTD_PMASK) >> (PAGE_SHIFT-4));
 }
 
-static inline unsigned long pud_page_vaddr(pud_t pud)
+static inline unsigned long pgd_page_vaddr(pgd_t pgd)
 {
-	if (srmmu_device_memory(pud_val(pud))) {
+	if (srmmu_device_memory(pgd_val(pgd))) {
 		return ~0;
 	} else {
-		unsigned long v = pud_val(pud) & SRMMU_PTD_PMASK;
+		unsigned long v = pgd_val(pgd) & SRMMU_PTD_PMASK;
 		return (unsigned long)__nocache_va(v << 4);
 	}
 }
@@ -184,24 +184,24 @@ static inline void pmd_clear(pmd_t *pmdp)
 		set_pte((pte_t *)&pmdp->pmdv[i], __pte(0));
 }
 
-static inline int pud_none(pud_t pud)
+static inline int pgd_none(pgd_t pgd)          
 {
-	return !(pud_val(pud) & 0xFFFFFFF);
+	return !(pgd_val(pgd) & 0xFFFFFFF);
 }
 
-static inline int pud_bad(pud_t pud)
+static inline int pgd_bad(pgd_t pgd)
 {
-	return (pud_val(pud) & SRMMU_ET_MASK) != SRMMU_ET_PTD;
+	return (pgd_val(pgd) & SRMMU_ET_MASK) != SRMMU_ET_PTD;
 }
 
-static inline int pud_present(pud_t pud)
+static inline int pgd_present(pgd_t pgd)
 {
-	return ((pud_val(pud) & SRMMU_ET_MASK) == SRMMU_ET_PTD);
+	return ((pgd_val(pgd) & SRMMU_ET_MASK) == SRMMU_ET_PTD);
 }
 
-static inline void pud_clear(pud_t *pudp)
+static inline void pgd_clear(pgd_t *pgdp)
 {
-	set_pte((pte_t *)pudp, __pte(0));
+	set_pte((pte_t *)pgdp, __pte(0));
 }
 
 /*
@@ -319,9 +319,9 @@ static inline pte_t pte_modify(pte_t pte, pgprot_t newprot)
 #define pgd_offset_k(address) pgd_offset(&init_mm, address)
 
 /* Find an entry in the second-level page table.. */
-static inline pmd_t *pmd_offset(pud_t * dir, unsigned long address)
+static inline pmd_t *pmd_offset(pgd_t * dir, unsigned long address)
 {
-	return (pmd_t *) pud_page_vaddr(*dir) +
+	return (pmd_t *) pgd_page_vaddr(*dir) +
 		((address >> PMD_SHIFT) & (PTRS_PER_PMD - 1));
 }
 

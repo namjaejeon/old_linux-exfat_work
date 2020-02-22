@@ -797,7 +797,10 @@ static int bcm2835_dma_terminate_all(struct dma_chan *chan)
 
 	/* stop DMA activity */
 	if (c->desc) {
-		vchan_terminate_vdesc(&c->desc->vd);
+		if (c->desc->vd.tx.flags & DMA_PREP_INTERRUPT)
+			vchan_terminate_vdesc(&c->desc->vd);
+		else
+			vchan_vdesc_fini(&c->desc->vd);
 		c->desc = NULL;
 		bcm2835_dma_abort(c);
 	}

@@ -790,7 +790,9 @@ static int octeon_mgmt_ioctl(struct net_device *netdev,
 	case SIOCSHWTSTAMP:
 		return octeon_mgmt_ioctl_hwtstamp(netdev, rq, cmd);
 	default:
-		return phy_do_ioctl(netdev, rq, cmd);
+		if (netdev->phydev)
+			return phy_mii_ioctl(netdev->phydev, rq, cmd);
+		return -EINVAL;
 	}
 }
 
@@ -1497,7 +1499,7 @@ static int octeon_mgmt_probe(struct platform_device *pdev)
 	netdev->ethtool_ops = &octeon_mgmt_ethtool_ops;
 
 	netdev->min_mtu = 64 - OCTEON_MGMT_RX_HEADROOM;
-	netdev->max_mtu = 16383 - OCTEON_MGMT_RX_HEADROOM - VLAN_HLEN;
+	netdev->max_mtu = 16383 - OCTEON_MGMT_RX_HEADROOM;
 
 	mac = of_get_mac_address(pdev->dev.of_node);
 

@@ -63,48 +63,38 @@
 
 #include <mm/mmu_decl.h>
 
+phys_addr_t memstart_addr = ~0;
+EXPORT_SYMBOL_GPL(memstart_addr);
+phys_addr_t kernstart_addr;
+EXPORT_SYMBOL_GPL(kernstart_addr);
+
 #ifdef CONFIG_SPARSEMEM_VMEMMAP
 /*
- * Given an address within the vmemmap, determine the page that
- * represents the start of the subsection it is within.  Note that we have to
+ * Given an address within the vmemmap, determine the pfn of the page that
+ * represents the start of the section it is within.  Note that we have to
  * do this by hand as the proffered address may not be correctly aligned.
  * Subtraction of non-aligned pointers produces undefined results.
  */
-static struct page * __meminit vmemmap_subsection_start(unsigned long vmemmap_addr)
+static unsigned long __meminit vmemmap_section_start(unsigned long page)
 {
-	unsigned long start_pfn;
-	unsigned long offset = vmemmap_addr - ((unsigned long)(vmemmap));
+	unsigned long offset = page - ((unsigned long)(vmemmap));
 
 	/* Return the pfn of the start of the section. */
-	start_pfn = (offset / sizeof(struct page)) & PAGE_SUBSECTION_MASK;
-	return pfn_to_page(start_pfn);
+	return (offset / sizeof(struct page)) & PAGE_SECTION_MASK;
 }
 
 /*
- * Since memory is added in sub-section chunks, before creating a new vmemmap
- * mapping, the kernel should check whether there is an existing memmap mapping
- * covering the new subsection added. This is needed because kernel can map
- * vmemmap area using 16MB pages which will cover a memory range of 16G. Such
- * a range covers multiple subsections (2M)
- *
- * If any subsection in the 16G range mapped by vmemmap is valid we consider the
- * vmemmap populated (There is a page table entry already present). We can't do
- * a page table lookup here because with the hash translation we don't keep
- * vmemmap details in linux page table.
+ * Check if this vmemmap page is already initialised.  If any section
+ * which overlaps this vmemmap page is initialised then this page is
+ * initialised already.
  */
-static int __meminit vmemmap_populated(unsigned long vmemmap_addr, int vmemmap_map_size)
+static int __meminit vmemmap_populated(unsigned long start, int page_size)
 {
-	struct page *start;
-	unsigned long vmemmap_end = vmemmap_addr + vmemmap_map_size;
-	start = vmemmap_subsection_start(vmemmap_addr);
+	unsigned long end = start + page_size;
+	start = (unsigned long)(pfn_to_page(vmemmap_section_start(start)));
 
-	for (; (unsigned long)start < vmemmap_end; start += PAGES_PER_SUBSECTION)
-		/*
-		 * pfn valid check here is intended to really check
-		 * whether we have any subsection already initialized
-		 * in this range.
-		 */
-		if (pfn_valid(page_to_pfn(start)))
+	for (; start < end; start += (PAGES_PER_SECTION * sizeof(struct page)))
+		if (pfn_valid(page_to_pfn((struct page *)start)))
 			return 1;
 
 	return 0;
@@ -211,12 +201,6 @@ int __meminit vmemmap_populate(unsigned long start, unsigned long end, int node,
 		void *p = NULL;
 		int rc;
 
-		/*
-		 * This vmemmap range is backing different subsections. If any
-		 * of that subsection is marked valid, that means we already
-		 * have initialized a page table covering this range and hence
-		 * the vmemmap range is populated.
-		 */
 		if (vmemmap_populated(start, page_size))
 			continue;
 
@@ -306,10 +290,9 @@ void __ref vmemmap_free(unsigned long start, unsigned long end,
 		struct page *page;
 
 		/*
-		 * We have already marked the subsection we are trying to remove
-		 * invalid. So if we want to remove the vmemmap range, we
-		 * need to make sure there is no subsection marked valid
-		 * in this range.
+		 * the section has already be marked as invalid, so
+		 * vmemmap_populated() true means some other sections still
+		 * in this page, so skip it.
 		 */
 		if (vmemmap_populated(start, page_size))
 			continue;

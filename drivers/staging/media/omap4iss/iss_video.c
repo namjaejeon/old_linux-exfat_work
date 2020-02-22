@@ -671,7 +671,7 @@ iss_video_get_selection(struct file *file, void *fh, struct v4l2_selection *sel)
 		return -EINVAL;
 	}
 	subdev = iss_video_remote_subdev(video, &pad);
-	if (!subdev)
+	if (subdev == NULL)
 		return -EINVAL;
 
 	/*
@@ -726,7 +726,7 @@ iss_video_set_selection(struct file *file, void *fh, struct v4l2_selection *sel)
 		return -EINVAL;
 	}
 	subdev = iss_video_remote_subdev(video, &pad);
-	if (!subdev)
+	if (subdev == NULL)
 		return -EINVAL;
 
 	sdsel.pad = pad;

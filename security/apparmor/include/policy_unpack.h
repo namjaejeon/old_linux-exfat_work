@@ -41,7 +41,6 @@ enum {
 	AAFS_LOADDATA_REVISION,
 	AAFS_LOADDATA_HASH,
 	AAFS_LOADDATA_DATA,
-	AAFS_LOADDATA_COMPRESSED_SIZE,
 	AAFS_LOADDATA_DIR,		/* must be last actual entry */
 	AAFS_LOADDATA_NDENTS		/* count of entries */
 };
@@ -62,16 +61,11 @@ struct aa_loaddata {
 	struct dentry *dents[AAFS_LOADDATA_NDENTS];
 	struct aa_ns *ns;
 	char *name;
-	size_t size;			/* the original size of the payload */
-	size_t compressed_size;		/* the compressed size of the payload */
+	size_t size;
 	long revision;			/* the ns policy revision this caused */
 	int abi;
 	unsigned char *hash;
 
-	/* Pointer to payload. If @compressed_size > 0, then this is the
-	 * compressed version of the payload, else it is the uncompressed
-	 * version (with the size indicated by @size).
-	 */
 	char *data;
 };
 

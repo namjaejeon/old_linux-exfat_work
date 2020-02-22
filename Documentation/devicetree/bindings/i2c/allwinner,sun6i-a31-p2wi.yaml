@@ -8,7 +8,7 @@ title: Allwinner A31 P2WI (Push/Pull 2 Wires Interface) Device Tree Bindings
 
 maintainers:
   - Chen-Yu Tsai <wens@csie.org>
-  - Maxime Ripard <mripard@kernel.org>
+  - Maxime Ripard <maxime.ripard@bootlin.com>
 
 allOf:
   - $ref: /schemas/i2c/i2c-controller.yaml#
@@ -40,7 +40,9 @@ required:
   - clocks
   - resets
 
-unevaluatedProperties: false
+# FIXME: We should set it, but it would report all the generic
+# properties as additional properties.
+# additionalProperties: false
 
 examples:
   - |

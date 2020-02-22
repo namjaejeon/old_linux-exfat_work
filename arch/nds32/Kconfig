@@ -20,7 +20,6 @@ config NDS32
 	select GENERIC_CLOCKEVENTS
 	select GENERIC_IRQ_CHIP
 	select GENERIC_IRQ_SHOW
-	select GENERIC_IOREMAP
 	select GENERIC_LIB_ASHLDI3
 	select GENERIC_LIB_ASHRDI3
 	select GENERIC_LIB_CMPDI2
@@ -62,7 +61,7 @@ config GENERIC_HWEIGHT
 
 config GENERIC_LOCKBREAK
 	def_bool y
-	depends on PREEMPTION
+	depends on PREEMPT
 
 config TRACE_IRQFLAGS_SUPPORT
 	def_bool y

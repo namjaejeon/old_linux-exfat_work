@@ -37,20 +37,16 @@
  * is on, and remove the appropriate bits from attr->ia_mode (attr is a
  * "struct iattr *"). -BlaisorBlade
  */
-struct hostfs_timespec {
-	long long tv_sec;
-	long long tv_nsec;
-};
 
 struct hostfs_iattr {
-	unsigned int		ia_valid;
-	unsigned short		ia_mode;
-	uid_t			ia_uid;
-	gid_t			ia_gid;
-	loff_t			ia_size;
-	struct hostfs_timespec	ia_atime;
-	struct hostfs_timespec	ia_mtime;
-	struct hostfs_timespec	ia_ctime;
+	unsigned int	ia_valid;
+	unsigned short	ia_mode;
+	uid_t		ia_uid;
+	gid_t		ia_gid;
+	loff_t		ia_size;
+	struct timespec	ia_atime;
+	struct timespec	ia_mtime;
+	struct timespec	ia_ctime;
 };
 
 struct hostfs_stat {
@@ -60,7 +56,7 @@ struct hostfs_stat {
 	unsigned int uid;
 	unsigned int gid;
 	unsigned long long size;
-	struct hostfs_timespec atime, mtime, ctime;
+	struct timespec atime, mtime, ctime;
 	unsigned int blksize;
 	unsigned long long blocks;
 	unsigned int maj;

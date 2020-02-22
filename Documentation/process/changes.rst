@@ -383,8 +383,7 @@ Mkinitrd
 E2fsprogs
 ---------
 
-- <https://www.kernel.org/pub/linux/kernel/people/tytso/e2fsprogs/>
-- <https://git.kernel.org/pub/scm/fs/ext2/e2fsprogs.git/>
+- <http://prdownloads.sourceforge.net/e2fsprogs/e2fsprogs-1.29.tar.gz>
 
 JFSutils
 --------
@@ -394,13 +393,12 @@ JFSutils
 Reiserfsprogs
 -------------
 
-- <https://git.kernel.org/pub/scm/linux/kernel/git/jeffm/reiserfsprogs.git/>
+- <http://www.kernel.org/pub/linux/utils/fs/reiserfs/>
 
 Xfsprogs
 --------
 
-- <https://git.kernel.org/pub/scm/fs/xfs/xfsprogs-dev.git>
-- <https://www.kernel.org/pub/linux/utils/fs/xfs/xfsprogs/>
+- <ftp://oss.sgi.com/projects/xfs/>
 
 Pcmciautils
 -----------
@@ -439,9 +437,7 @@ Networking
 PPP
 ---
 
-- <https://download.samba.org/pub/ppp/>
-- <https://git.ozlabs.org/?p=ppp.git>
-- <https://github.com/paulusmack/ppp/>
+- <ftp://ftp.samba.org/pub/ppp/>
 
 NFS-utils
 ---------
@@ -451,7 +447,7 @@ NFS-utils
 Iptables
 --------
 
-- <https://netfilter.org/projects/iptables/index.html>
+- <http://www.iptables.org/downloads.html>
 
 Ip-route2
 ---------

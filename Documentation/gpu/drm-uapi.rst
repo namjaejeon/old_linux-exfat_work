@@ -254,45 +254,36 @@ Validating changes with IGT
 There's a collection of tests that aims to cover the whole functionality of
 DRM drivers and that can be used to check that changes to DRM drivers or the
 core don't regress existing functionality. This test suite is called IGT and
-its code and instructions to build and run can be found in
-https://gitlab.freedesktop.org/drm/igt-gpu-tools/.
+its code can be found in https://cgit.freedesktop.org/drm/igt-gpu-tools/.
 
-Using VKMS to test DRM API
---------------------------
+To build IGT, start by installing its build dependencies. In Debian-based
+systems::
 
-VKMS is a software-only model of a KMS driver that is useful for testing
-and for running compositors. VKMS aims to enable a virtual display without
-the need for a hardware display capability. These characteristics made VKMS
-a perfect tool for validating the DRM core behavior and also support the
-compositor developer. VKMS makes it possible to test DRM functions in a
-virtual machine without display, simplifying the validation of some of the
-core changes.
+	# apt-get build-dep intel-gpu-tools
 
-To Validate changes in DRM API with VKMS, start setting the kernel: make
-sure to enable VKMS module; compile the kernel with the VKMS enabled and
-install it in the target machine. VKMS can be run in a Virtual Machine
-(QEMU, virtme or similar). It's recommended the use of KVM with the minimum
-of 1GB of RAM and four cores.
+And in Fedora-based systems::
 
-It's possible to run the IGT-tests in a VM in two ways:
+	# dnf builddep intel-gpu-tools
 
-	1. Use IGT inside a VM
-	2. Use IGT from the host machine and write the results in a shared directory.
+Then clone the repository::
 
-As follow, there is an example of using a VM with a shared directory with
-the host machine to run igt-tests. As an example it's used virtme::
+	$ git clone git://anongit.freedesktop.org/drm/igt-gpu-tools
 
-	$ virtme-run --rwdir /path/for/shared_dir --kdir=path/for/kernel/directory --mods=auto
+Configure the build system and start the build::
 
-Run the igt-tests in the guest machine, as example it's ran the 'kms_flip'
-tests::
+	$ cd igt-gpu-tools && ./autogen.sh && make -j6
 
-	$ /path/for/igt-gpu-tools/scripts/run-tests.sh -p -s -t "kms_flip.*" -v
+Download the piglit dependency::
 
-In this example, instead of build the igt_runner, Piglit is used
-(-p option); it's created html summary of the tests results and it's saved
-in the folder "igt-gpu-tools/results"; it's executed only the igt-tests
-matching the -t option.
+	$ ./scripts/run-tests.sh -d
+
+And run the tests::
+
+	$ ./scripts/run-tests.sh -t kms -t core -s
+
+run-tests.sh is a wrapper around piglit that will execute the tests matching
+the -t options. A report in HTML format will be available in
+./results/html/index.html. Results can be compared with piglit.
 
 Display CRC Support
 -------------------

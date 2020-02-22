@@ -40,5 +40,4 @@ int gm107_ltc_new(struct nvkm_device *, int, struct nvkm_ltc **);
 int gm200_ltc_new(struct nvkm_device *, int, struct nvkm_ltc **);
 int gp100_ltc_new(struct nvkm_device *, int, struct nvkm_ltc **);
 int gp102_ltc_new(struct nvkm_device *, int, struct nvkm_ltc **);
-int gp10b_ltc_new(struct nvkm_device *, int, struct nvkm_ltc **);
 #endif

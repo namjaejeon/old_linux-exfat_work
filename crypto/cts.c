@@ -78,11 +78,15 @@ static int crypto_cts_setkey(struct crypto_skcipher *parent, const u8 *key,
 {
 	struct crypto_cts_ctx *ctx = crypto_skcipher_ctx(parent);
 	struct crypto_skcipher *child = ctx->child;
+	int err;
 
 	crypto_skcipher_clear_flags(child, CRYPTO_TFM_REQ_MASK);
 	crypto_skcipher_set_flags(child, crypto_skcipher_get_flags(parent) &
 					 CRYPTO_TFM_REQ_MASK);
-	return crypto_skcipher_setkey(child, key, keylen);
+	err = crypto_skcipher_setkey(child, key, keylen);
+	crypto_skcipher_set_flags(parent, crypto_skcipher_get_flags(child) &
+					  CRYPTO_TFM_RES_MASK);
+	return err;
 }
 
 static void cts_cbc_crypt_done(struct crypto_async_request *areq, int err)
@@ -328,7 +332,6 @@ static int crypto_cts_create(struct crypto_template *tmpl, struct rtattr **tb)
 	struct crypto_attr_type *algt;
 	struct skcipher_alg *alg;
 	const char *cipher_name;
-	u32 mask;
 	int err;
 
 	algt = crypto_get_attr_type(tb);
@@ -337,8 +340,6 @@ static int crypto_cts_create(struct crypto_template *tmpl, struct rtattr **tb)
 
 	if ((algt->type ^ CRYPTO_ALG_TYPE_SKCIPHER) & algt->mask)
 		return -EINVAL;
-
-	mask = crypto_requires_sync(algt->type, algt->mask);
 
 	cipher_name = crypto_attr_alg_name(tb[1]);
 	if (IS_ERR(cipher_name))
@@ -350,8 +351,10 @@ static int crypto_cts_create(struct crypto_template *tmpl, struct rtattr **tb)
 
 	spawn = skcipher_instance_ctx(inst);
 
-	err = crypto_grab_skcipher(spawn, skcipher_crypto_instance(inst),
-				   cipher_name, 0, mask);
+	crypto_set_skcipher_spawn(spawn, skcipher_crypto_instance(inst));
+	err = crypto_grab_skcipher(spawn, cipher_name, 0,
+				   crypto_requires_sync(algt->type,
+							algt->mask));
 	if (err)
 		goto err_free_inst;
 

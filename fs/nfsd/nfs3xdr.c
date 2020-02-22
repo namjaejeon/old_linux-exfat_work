@@ -32,14 +32,14 @@ static u32	nfs3_ftypes[] = {
  * XDR functions for basic NFS types
  */
 static __be32 *
-encode_time3(__be32 *p, struct timespec64 *time)
+encode_time3(__be32 *p, struct timespec *time)
 {
 	*p++ = htonl((u32) time->tv_sec); *p++ = htonl(time->tv_nsec);
 	return p;
 }
 
 static __be32 *
-decode_time3(__be32 *p, struct timespec64 *time)
+decode_time3(__be32 *p, struct timespec *time)
 {
 	time->tv_sec = ntohl(*p++);
 	time->tv_nsec = ntohl(*p++);
@@ -167,6 +167,7 @@ encode_fattr3(struct svc_rqst *rqstp, __be32 *p, struct svc_fh *fhp,
 	      struct kstat *stat)
 {
 	struct user_namespace *userns = nfsd_user_namespace(rqstp);
+	struct timespec ts;
 	*p++ = htonl(nfs3_ftypes[(stat->mode & S_IFMT) >> 12]);
 	*p++ = htonl((u32) (stat->mode & S_IALLUGO));
 	*p++ = htonl((u32) stat->nlink);
@@ -182,9 +183,12 @@ encode_fattr3(struct svc_rqst *rqstp, __be32 *p, struct svc_fh *fhp,
 	*p++ = htonl((u32) MINOR(stat->rdev));
 	p = encode_fsid(p, fhp);
 	p = xdr_encode_hyper(p, stat->ino);
-	p = encode_time3(p, &stat->atime);
-	p = encode_time3(p, &stat->mtime);
-	p = encode_time3(p, &stat->ctime);
+	ts = timespec64_to_timespec(stat->atime);
+	p = encode_time3(p, &ts);
+	ts = timespec64_to_timespec(stat->mtime);
+	p = encode_time3(p, &ts);
+	ts = timespec64_to_timespec(stat->ctime);
+	p = encode_time3(p, &ts);
 
 	return p;
 }
@@ -273,8 +277,8 @@ void fill_pre_wcc(struct svc_fh *fhp)
 		stat.size  = inode->i_size;
 	}
 
-	fhp->fh_pre_mtime = stat.mtime;
-	fhp->fh_pre_ctime = stat.ctime;
+	fhp->fh_pre_mtime = timespec64_to_timespec(stat.mtime);
+	fhp->fh_pre_ctime = timespec64_to_timespec(stat.ctime);
 	fhp->fh_pre_size  = stat.size;
 	fhp->fh_pre_change = nfsd4_change_attribute(&stat, inode);
 	fhp->fh_pre_saved = true;
@@ -326,7 +330,7 @@ nfs3svc_decode_sattrargs(struct svc_rqst *rqstp, __be32 *p)
 	p = decode_sattr3(p, &args->attrs, nfsd_user_namespace(rqstp));
 
 	if ((args->check_guard = ntohl(*p++)) != 0) { 
-		struct timespec64 time;
+		struct timespec time; 
 		p = decode_time3(p, &time);
 		args->guardtime = time.tv_sec;
 	}
@@ -747,13 +751,17 @@ int
 nfs3svc_encode_writeres(struct svc_rqst *rqstp, __be32 *p)
 {
 	struct nfsd3_writeres *resp = rqstp->rq_resp;
+	struct nfsd_net *nn = net_generic(SVC_NET(rqstp), nfsd_net_id);
+	__be32 verf[2];
 
 	p = encode_wcc_data(rqstp, p, &resp->fh);
 	if (resp->status == 0) {
 		*p++ = htonl(resp->count);
 		*p++ = htonl(resp->committed);
-		*p++ = resp->verf[0];
-		*p++ = resp->verf[1];
+		/* unique identifier, y2038 overflow can be ignored */
+		nfsd_copy_boot_verifier(verf, nn);
+		*p++ = verf[0];
+		*p++ = verf[1];
 	}
 	return xdr_ressize_check(rqstp, p);
 }
@@ -855,10 +863,12 @@ compose_entry_fh(struct nfsd3_readdirres *cd, struct svc_fh *fhp,
 		} else
 			dchild = dget(dparent);
 	} else
-		dchild = lookup_positive_unlocked(name, dparent, namlen);
+		dchild = lookup_one_len_unlocked(name, dparent, namlen);
 	if (IS_ERR(dchild))
 		return rv;
 	if (d_mountpoint(dchild))
+		goto out;
+	if (d_really_is_negative(dchild))
 		goto out;
 	if (dchild->d_inode->i_ino != ino)
 		goto out;
@@ -1117,12 +1127,16 @@ int
 nfs3svc_encode_commitres(struct svc_rqst *rqstp, __be32 *p)
 {
 	struct nfsd3_commitres *resp = rqstp->rq_resp;
+	struct nfsd_net *nn = net_generic(SVC_NET(rqstp), nfsd_net_id);
+	__be32 verf[2];
 
 	p = encode_wcc_data(rqstp, p, &resp->fh);
 	/* Write verifier */
 	if (resp->status == 0) {
-		*p++ = resp->verf[0];
-		*p++ = resp->verf[1];
+		/* unique identifier, y2038 overflow can be ignored */
+		nfsd_copy_boot_verifier(verf, nn);
+		*p++ = verf[0];
+		*p++ = verf[1];
 	}
 	return xdr_ressize_check(rqstp, p);
 }

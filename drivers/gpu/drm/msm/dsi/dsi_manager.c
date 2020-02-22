@@ -329,7 +329,7 @@ static int dsi_mgr_connector_get_modes(struct drm_connector *connector)
 	 * attached to the drm_panel.
 	 */
 	drm_panel_attach(panel, connector);
-	num = drm_panel_get_modes(panel, connector);
+	num = drm_panel_get_modes(panel);
 	if (!num)
 		return 0;
 
@@ -432,8 +432,20 @@ static void dsi_mgr_bridge_pre_enable(struct drm_bridge *bridge)
 		}
 	}
 
+	if (panel) {
+		ret = drm_panel_enable(panel);
+		if (ret) {
+			pr_err("%s: enable panel %d failed, %d\n", __func__, id,
+									ret);
+			goto panel_en_fail;
+		}
+	}
+
 	return;
 
+panel_en_fail:
+	if (is_dual_dsi && msm_dsi1)
+		msm_dsi_host_disable(msm_dsi1->host);
 host1_en_fail:
 	msm_dsi_host_disable(host);
 host_en_fail:
@@ -452,51 +464,12 @@ phy_en_fail:
 
 static void dsi_mgr_bridge_enable(struct drm_bridge *bridge)
 {
-	int id = dsi_mgr_bridge_get_id(bridge);
-	struct msm_dsi *msm_dsi = dsi_mgr_get_dsi(id);
-	struct drm_panel *panel = msm_dsi->panel;
-	bool is_dual_dsi = IS_DUAL_DSI();
-	int ret;
-
-	DBG("id=%d", id);
-	if (!msm_dsi_device_connected(msm_dsi))
-		return;
-
-	/* Do nothing with the host if it is slave-DSI in case of dual DSI */
-	if (is_dual_dsi && !IS_MASTER_DSI_LINK(id))
-		return;
-
-	if (panel) {
-		ret = drm_panel_enable(panel);
-		if (ret) {
-			pr_err("%s: enable panel %d failed, %d\n", __func__, id,
-									ret);
-		}
-	}
+	DBG("");
 }
 
 static void dsi_mgr_bridge_disable(struct drm_bridge *bridge)
 {
-	int id = dsi_mgr_bridge_get_id(bridge);
-	struct msm_dsi *msm_dsi = dsi_mgr_get_dsi(id);
-	struct drm_panel *panel = msm_dsi->panel;
-	bool is_dual_dsi = IS_DUAL_DSI();
-	int ret;
-
-	DBG("id=%d", id);
-	if (!msm_dsi_device_connected(msm_dsi))
-		return;
-
-	/* Do nothing with the host if it is slave-DSI in case of dual DSI */
-	if (is_dual_dsi && !IS_MASTER_DSI_LINK(id))
-		return;
-
-	if (panel) {
-		ret = drm_panel_disable(panel);
-		if (ret)
-			pr_err("%s: Panel %d OFF failed, %d\n", __func__, id,
-									ret);
-	}
+	DBG("");
 }
 
 static void dsi_mgr_bridge_post_disable(struct drm_bridge *bridge)
@@ -521,6 +494,13 @@ static void dsi_mgr_bridge_post_disable(struct drm_bridge *bridge)
 	 */
 	if (is_dual_dsi && !IS_MASTER_DSI_LINK(id))
 		goto disable_phy;
+
+	if (panel) {
+		ret = drm_panel_disable(panel);
+		if (ret)
+			pr_err("%s: Panel %d OFF failed, %d\n", __func__, id,
+									ret);
+	}
 
 	ret = msm_dsi_host_disable(host);
 	if (ret)

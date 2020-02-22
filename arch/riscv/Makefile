@@ -83,18 +83,13 @@ PHONY += vdso_install
 vdso_install:
 	$(Q)$(MAKE) $(build)=arch/riscv/kernel/vdso $@
 
-ifeq ($(CONFIG_RISCV_M_MODE),y)
-KBUILD_IMAGE := $(boot)/loader
-else
-KBUILD_IMAGE := $(boot)/Image.gz
-endif
-BOOT_TARGETS := Image Image.gz loader
+all: Image.gz
 
-all:	$(notdir $(KBUILD_IMAGE))
-
-$(BOOT_TARGETS): vmlinux
+Image: vmlinux
 	$(Q)$(MAKE) $(build)=$(boot) $(boot)/$@
-	@$(kecho) '  Kernel: $(boot)/$@ is ready'
+
+Image.%: Image
+	$(Q)$(MAKE) $(build)=$(boot) $(boot)/$@
 
 zinstall install:
 	$(Q)$(MAKE) $(build)=$(boot) $@

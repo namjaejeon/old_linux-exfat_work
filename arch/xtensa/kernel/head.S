@@ -260,13 +260,6 @@ ENTRY(_startup)
 	___invalidate_icache_all a2 a3
 	isync
 
-#ifdef CONFIG_XIP_KERNEL
-	/* Setup bootstrap CPU stack in XIP kernel */
-
-	movi	a1, start_info
-	l32i	a1, a1, 0
-#endif
-
 	movi	a6, 0
 	xsr	a6, excsave1
 
@@ -362,10 +355,10 @@ ENDPROC(cpu_restart)
  * DATA section
  */
 
-	__REFDATA
-	.align  4
+        .section ".data.init.refok"
+        .align  4
 ENTRY(start_info)
-	.long	init_thread_union + KERNEL_STACK_SIZE
+        .long   init_thread_union + KERNEL_STACK_SIZE
 
 /*
  * BSS section

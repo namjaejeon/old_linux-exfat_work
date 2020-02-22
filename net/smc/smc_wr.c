@@ -50,26 +50,6 @@ struct smc_wr_tx_pend {	/* control data for a pending send request */
 
 /*------------------------------- completion --------------------------------*/
 
-/* returns true if at least one tx work request is pending on the given link */
-static inline bool smc_wr_is_tx_pend(struct smc_link *link)
-{
-	if (find_first_bit(link->wr_tx_mask, link->wr_tx_cnt) !=
-							link->wr_tx_cnt) {
-		return true;
-	}
-	return false;
-}
-
-/* wait till all pending tx work requests on the given link are completed */
-static inline int smc_wr_tx_wait_no_pending_sends(struct smc_link *link)
-{
-	if (wait_event_timeout(link->wr_tx_wait, !smc_wr_is_tx_pend(link),
-			       SMC_WR_TX_WAIT_PENDING_TIME))
-		return 0;
-	else /* timeout */
-		return -EPIPE;
-}
-
 static inline int smc_wr_tx_find_pending_index(struct smc_link *link, u64 wr_id)
 {
 	u32 i;
@@ -95,7 +75,7 @@ static inline void smc_wr_tx_process_cqe(struct ib_wc *wc)
 			link->wr_reg_state = FAILED;
 		else
 			link->wr_reg_state = CONFIRMED;
-		smc_wr_wakeup_reg_wait(link);
+		wake_up(&link->wr_reg_wait);
 		return;
 	}
 
@@ -121,7 +101,7 @@ static inline void smc_wr_tx_process_cqe(struct ib_wc *wc)
 			clear_bit(i, link->wr_tx_mask);
 		}
 		/* terminate connections of this link group abnormally */
-		smc_lgr_terminate_sched(smc_get_lgr(link));
+		smc_lgr_terminate(smc_get_lgr(link));
 	}
 	if (pnd_snd.handler)
 		pnd_snd.handler(&pnd_snd.priv, link, wc->status);
@@ -191,7 +171,6 @@ int smc_wr_tx_get_free_slot(struct smc_link *link,
 			    struct smc_rdma_wr **wr_rdma_buf,
 			    struct smc_wr_tx_pend_priv **wr_pend_priv)
 {
-	struct smc_link_group *lgr = smc_get_lgr(link);
 	struct smc_wr_tx_pend *wr_pend;
 	u32 idx = link->wr_tx_cnt;
 	struct ib_send_wr *wr_ib;
@@ -200,20 +179,19 @@ int smc_wr_tx_get_free_slot(struct smc_link *link,
 
 	*wr_buf = NULL;
 	*wr_pend_priv = NULL;
-	if (in_softirq() || lgr->terminating) {
+	if (in_softirq()) {
 		rc = smc_wr_tx_get_free_slot_index(link, &idx);
 		if (rc)
 			return rc;
 	} else {
-		rc = wait_event_interruptible_timeout(
+		rc = wait_event_timeout(
 			link->wr_tx_wait,
 			link->state == SMC_LNK_INACTIVE ||
-			lgr->terminating ||
 			(smc_wr_tx_get_free_slot_index(link, &idx) != -EBUSY),
 			SMC_WR_TX_WAIT_FREE_SLOT_TIME);
 		if (!rc) {
 			/* timeout - terminate connections */
-			smc_lgr_terminate_sched(lgr);
+			smc_lgr_terminate(smc_get_lgr(link));
 			return -EPIPE;
 		}
 		if (idx == link->wr_tx_cnt)
@@ -249,7 +227,6 @@ int smc_wr_tx_put_slot(struct smc_link *link,
 		memset(&link->wr_tx_bufs[idx], 0,
 		       sizeof(link->wr_tx_bufs[idx]));
 		test_and_clear_bit(idx, link->wr_tx_mask);
-		wake_up(&link->wr_tx_wait);
 		return 1;
 	}
 
@@ -270,7 +247,7 @@ int smc_wr_tx_send(struct smc_link *link, struct smc_wr_tx_pend_priv *priv)
 	rc = ib_post_send(link->roce_qp, &link->wr_tx_ibs[pend->idx], NULL);
 	if (rc) {
 		smc_wr_tx_put_slot(link, priv);
-		smc_lgr_terminate_sched(smc_get_lgr(link));
+		smc_lgr_terminate(smc_get_lgr(link));
 	}
 	return rc;
 }
@@ -295,7 +272,7 @@ int smc_wr_reg_send(struct smc_link *link, struct ib_mr *mr)
 					      SMC_WR_REG_MR_WAIT_TIME);
 	if (!rc) {
 		/* timeout - terminate connections */
-		smc_lgr_terminate_sched(smc_get_lgr(link));
+		smc_lgr_terminate(smc_get_lgr(link));
 		return -EPIPE;
 	}
 	if (rc == -ERESTARTSYS)
@@ -396,7 +373,7 @@ static inline void smc_wr_rx_process_cqes(struct ib_wc wc[], int num)
 				/* terminate connections of this link group
 				 * abnormally
 				 */
-				smc_lgr_terminate_sched(smc_get_lgr(link));
+				smc_lgr_terminate(smc_get_lgr(link));
 				break;
 			default:
 				smc_wr_rx_post(link); /* refill WR RX */
@@ -533,10 +510,8 @@ void smc_wr_free_link(struct smc_link *lnk)
 {
 	struct ib_device *ibdev;
 
-	if (smc_wr_tx_wait_no_pending_sends(lnk))
-		memset(lnk->wr_tx_mask, 0,
-		       BITS_TO_LONGS(SMC_WR_BUF_CNT) *
-						sizeof(*lnk->wr_tx_mask));
+	memset(lnk->wr_tx_mask, 0,
+	       BITS_TO_LONGS(SMC_WR_BUF_CNT) * sizeof(*lnk->wr_tx_mask));
 
 	if (!lnk->smcibdev)
 		return;

@@ -39,9 +39,9 @@ MAP COMMANDS
 |	**bpftool** **map freeze**     *MAP*
 |	**bpftool** **map help**
 |
-|	*MAP* := { **id** *MAP_ID* | **pinned** *FILE* | **name** *MAP_NAME* }
+|	*MAP* := { **id** *MAP_ID* | **pinned** *FILE* }
 |	*DATA* := { [**hex**] *BYTES* }
-|	*PROG* := { **id** *PROG_ID* | **pinned** *FILE* | **tag** *PROG_TAG* | **name** *PROG_NAME* }
+|	*PROG* := { **id** *PROG_ID* | **pinned** *FILE* | **tag** *PROG_TAG* }
 |	*VALUE* := { *DATA* | *MAP* | *PROG* }
 |	*UPDATE_FLAGS* := { **any** | **exist** | **noexist** }
 |	*TYPE* := { **hash** | **array** | **prog_array** | **perf_event_array** | **percpu_hash**
@@ -55,9 +55,8 @@ DESCRIPTION
 ===========
 	**bpftool map { show | list }**   [*MAP*]
 		  Show information about loaded maps.  If *MAP* is specified
-		  show information only about given maps, otherwise list all
-		  maps currently loaded on the system.  In case of **name**,
-		  *MAP* may match several maps which will all be shown.
+		  show information only about given map, otherwise list all
+		  maps currently loaded on the system.
 
 		  Output will start with map ID followed by map type and
 		  zero or more named attributes (depending on kernel version).
@@ -67,8 +66,7 @@ DESCRIPTION
 		  as *FILE*.
 
 	**bpftool map dump**    *MAP*
-		  Dump all entries in a given *MAP*.  In case of **name**,
-		  *MAP* may match several maps which will all be dumped.
+		  Dump all entries in a given *MAP*.
 
 	**bpftool map update**  *MAP* [**key** *DATA*] [**value** *VALUE*] [*UPDATE_FLAGS*]
 		  Update map entry for a given *KEY*.

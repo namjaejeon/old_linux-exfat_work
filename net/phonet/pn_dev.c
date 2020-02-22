@@ -35,6 +35,8 @@ static unsigned int phonet_net_id __read_mostly;
 
 static struct phonet_net *phonet_pernet(struct net *net)
 {
+	BUG_ON(!net);
+
 	return net_generic(net, phonet_net_id);
 }
 

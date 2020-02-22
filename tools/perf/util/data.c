@@ -76,13 +76,6 @@ int perf_data__open_dir(struct perf_data *data)
 	DIR *dir;
 	int nr = 0;
 
-	/*
-	 * Directory containing a single regular perf data file which is already
-	 * open, means there is nothing more to do here.
-	 */
-	if (perf_data__is_single_file(data))
-		return 0;
-
 	if (WARN_ON(!data->is_dir))
 		return -EINVAL;
 
@@ -103,7 +96,7 @@ int perf_data__open_dir(struct perf_data *data)
 		if (stat(path, &st))
 			continue;
 
-		if (!S_ISREG(st.st_mode) || strncmp(dent->d_name, "data.", 5))
+		if (!S_ISREG(st.st_mode) || strncmp(dent->d_name, "data", 4))
 			continue;
 
 		ret = -ENOMEM;
@@ -313,7 +306,7 @@ static int open_dir(struct perf_data *data)
 	 * So far we open only the header, so we can read the data version and
 	 * layout.
 	 */
-	if (asprintf(&data->file.path, "%s/data", data->path) < 0)
+	if (asprintf(&data->file.path, "%s/header", data->path) < 0)
 		return -1;
 
 	if (perf_data__is_write(data) &&
@@ -413,7 +406,7 @@ unsigned long perf_data__size(struct perf_data *data)
 	u64 size = data->file.size;
 	int i;
 
-	if (perf_data__is_single_file(data))
+	if (!data->is_dir)
 		return size;
 
 	for (i = 0; i < data->dir.nr; i++) {
@@ -423,37 +416,4 @@ unsigned long perf_data__size(struct perf_data *data)
 	}
 
 	return size;
-}
-
-int perf_data__make_kcore_dir(struct perf_data *data, char *buf, size_t buf_sz)
-{
-	int ret;
-
-	if (!data->is_dir)
-		return -1;
-
-	ret = snprintf(buf, buf_sz, "%s/kcore_dir", data->path);
-	if (ret < 0 || (size_t)ret >= buf_sz)
-		return -1;
-
-	return mkdir(buf, S_IRWXU);
-}
-
-char *perf_data__kallsyms_name(struct perf_data *data)
-{
-	char *kallsyms_name;
-	struct stat st;
-
-	if (!data->is_dir)
-		return NULL;
-
-	if (asprintf(&kallsyms_name, "%s/kcore_dir/kallsyms", data->path) < 0)
-		return NULL;
-
-	if (stat(kallsyms_name, &st)) {
-		free(kallsyms_name);
-		return NULL;
-	}
-
-	return kallsyms_name;
 }

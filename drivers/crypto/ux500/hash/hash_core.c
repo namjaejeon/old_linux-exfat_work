@@ -140,6 +140,7 @@ static int hash_set_dma_transfer(struct hash_ctx *ctx, struct scatterlist *sg,
 {
 	struct dma_async_tx_descriptor *desc = NULL;
 	struct dma_chan *channel = NULL;
+	dma_cookie_t cookie;
 
 	if (direction != DMA_TO_DEVICE) {
 		dev_err(ctx->device->dev, "%s: Invalid DMA direction\n",
@@ -175,7 +176,7 @@ static int hash_set_dma_transfer(struct hash_ctx *ctx, struct scatterlist *sg,
 	desc->callback = hash_dma_callback;
 	desc->callback_param = ctx;
 
-	dmaengine_submit(desc);
+	cookie = dmaengine_submit(desc);
 	dma_async_issue_pending(channel);
 
 	return 0;

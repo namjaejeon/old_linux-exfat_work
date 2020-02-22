@@ -363,12 +363,8 @@ static int madvise_cold_or_pageout_pte_range(pmd_t *pmd,
 		ClearPageReferenced(page);
 		test_and_clear_page_young(page);
 		if (pageout) {
-			if (!isolate_lru_page(page)) {
-				if (PageUnevictable(page))
-					putback_lru_page(page);
-				else
-					list_add(&page->lru, &page_list);
-			}
+			if (!isolate_lru_page(page))
+				list_add(&page->lru, &page_list);
 		} else
 			deactivate_page(page);
 huge_unlock:
@@ -445,12 +441,8 @@ regular_page:
 		ClearPageReferenced(page);
 		test_and_clear_page_young(page);
 		if (pageout) {
-			if (!isolate_lru_page(page)) {
-				if (PageUnevictable(page))
-					putback_lru_page(page);
-				else
-					list_add(&page->lru, &page_list);
-			}
+			if (!isolate_lru_page(page))
+				list_add(&page->lru, &page_list);
 		} else
 			deactivate_page(page);
 	}
@@ -864,13 +856,13 @@ static int madvise_inject_error(int behavior,
 {
 	struct page *page;
 	struct zone *zone;
-	unsigned long size;
+	unsigned int order;
 
 	if (!capable(CAP_SYS_ADMIN))
 		return -EPERM;
 
 
-	for (; start < end; start += size) {
+	for (; start < end; start += PAGE_SIZE << order) {
 		unsigned long pfn;
 		int ret;
 
@@ -882,9 +874,9 @@ static int madvise_inject_error(int behavior,
 		/*
 		 * When soft offlining hugepages, after migrating the page
 		 * we dissolve it, therefore in the second loop "page" will
-		 * no longer be a compound page.
+		 * no longer be a compound page, and order will be 0.
 		 */
-		size = page_size(compound_head(page));
+		order = compound_order(compound_head(page));
 
 		if (PageHWPoison(page)) {
 			put_page(page);
@@ -895,7 +887,7 @@ static int madvise_inject_error(int behavior,
 			pr_info("Soft offlining pfn %#lx at process virtual address %#lx\n",
 					pfn, start);
 
-			ret = soft_offline_page(pfn, MF_COUNT_INCREASED);
+			ret = soft_offline_page(page, MF_COUNT_INCREASED);
 			if (ret)
 				return ret;
 			continue;
@@ -1044,7 +1036,7 @@ madvise_behavior_valid(int behavior)
  *  -EBADF  - map exists, but area maps something that isn't a file.
  *  -EAGAIN - a kernel resource was temporarily unavailable.
  */
-int do_madvise(unsigned long start, size_t len_in, int behavior)
+SYSCALL_DEFINE3(madvise, unsigned long, start, size_t, len_in, int, behavior)
 {
 	unsigned long end, tmp;
 	struct vm_area_struct *vma, *prev;
@@ -1059,9 +1051,9 @@ int do_madvise(unsigned long start, size_t len_in, int behavior)
 	if (!madvise_behavior_valid(behavior))
 		return error;
 
-	if (!PAGE_ALIGNED(start))
+	if (start & ~PAGE_MASK)
 		return error;
-	len = PAGE_ALIGN(len_in);
+	len = (len_in + ~PAGE_MASK) & PAGE_MASK;
 
 	/* Check to see whether len was rounded up from small -ve to zero */
 	if (len_in && !len)
@@ -1140,9 +1132,4 @@ out:
 		up_read(&current->mm->mmap_sem);
 
 	return error;
-}
-
-SYSCALL_DEFINE3(madvise, unsigned long, start, size_t, len_in, int, behavior)
-{
-	return do_madvise(start, len_in, behavior);
 }

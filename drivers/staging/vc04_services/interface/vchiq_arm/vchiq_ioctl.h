@@ -28,11 +28,11 @@ struct vchiq_queue_bulk_transfer {
 	void *data;
 	unsigned int size;
 	void *userdata;
-	enum vchiq_bulk_mode mode;
+	VCHIQ_BULK_MODE_T mode;
 };
 
 struct vchiq_completion_data {
-	enum vchiq_reason reason;
+	VCHIQ_REASON_T reason;
 	struct vchiq_header *header;
 	void *service_userdata;
 	void *bulk_userdata;
@@ -60,7 +60,7 @@ struct vchiq_get_config {
 
 struct vchiq_set_service_option {
 	unsigned int handle;
-	enum vchiq_service_option option;
+	VCHIQ_SERVICE_OPTION_T option;
 	int value;
 };
 

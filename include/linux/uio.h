@@ -45,8 +45,8 @@ struct iov_iter {
 	union {
 		unsigned long nr_segs;
 		struct {
-			unsigned int head;
-			unsigned int start_head;
+			int idx;
+			int start_idx;
 		};
 	};
 };

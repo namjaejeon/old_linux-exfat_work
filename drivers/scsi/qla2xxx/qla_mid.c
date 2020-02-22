@@ -76,11 +76,9 @@ qla24xx_deallocate_vp_id(scsi_qla_host_t *vha)
 	 * ensures no active vp_list traversal while the vport is removed
 	 * from the queue)
 	 */
-	for (i = 0; i < 10; i++) {
-		if (wait_event_timeout(vha->vref_waitq,
-		    !atomic_read(&vha->vref_count), HZ) > 0)
-			break;
-	}
+	for (i = 0; i < 10 && atomic_read(&vha->vref_count); i++)
+		wait_event_timeout(vha->vref_waitq,
+		    atomic_read(&vha->vref_count), HZ);
 
 	spin_lock_irqsave(&ha->vport_slock, flags);
 	if (atomic_read(&vha->vref_count)) {
@@ -147,7 +145,7 @@ qla2x00_mark_vp_devices_dead(scsi_qla_host_t *vha)
 		    "Marking port dead, loop_id=0x%04x : %x.\n",
 		    fcport->loop_id, fcport->vha->vp_idx);
 
-		qla2x00_mark_device_lost(vha, fcport, 0);
+		qla2x00_mark_device_lost(vha, fcport, 0, 0);
 		qla2x00_set_fcport_state(fcport, FCS_UNCONFIGURED);
 	}
 }
@@ -167,7 +165,7 @@ qla24xx_disable_vp(scsi_qla_host_t *vha)
 	list_for_each_entry(fcport, &vha->vp_fcports, list)
 		fcport->logout_on_delete = 0;
 
-	qla2x00_mark_all_devices_lost(vha);
+	qla2x00_mark_all_devices_lost(vha, 0);
 
 	/* Remove port id from vp target map */
 	spin_lock_irqsave(&vha->hw->hardware_lock, flags);
@@ -327,7 +325,7 @@ qla2x00_vp_abort_isp(scsi_qla_host_t *vha)
 	 */
 	if (atomic_read(&vha->loop_state) != LOOP_DOWN) {
 		atomic_set(&vha->loop_state, LOOP_DOWN);
-		qla2x00_mark_all_devices_lost(vha);
+		qla2x00_mark_all_devices_lost(vha, 0);
 	} else {
 		if (!atomic_read(&vha->loop_down_timer))
 			atomic_set(&vha->loop_down_timer, LOOP_DOWN_TIME);
@@ -946,7 +944,7 @@ int qla24xx_control_vp(scsi_qla_host_t *vha, int cmd)
 
 	sp = qla2x00_get_sp(base_vha, NULL, GFP_KERNEL);
 	if (!sp)
-		return rval;
+		goto done;
 
 	sp->type = SRB_CTRL_VP;
 	sp->name = "ctrl_vp";
@@ -962,7 +960,7 @@ int qla24xx_control_vp(scsi_qla_host_t *vha, int cmd)
 		ql_dbg(ql_dbg_async, vha, 0xffff,
 		    "%s: %s Failed submission. %x.\n",
 		    __func__, sp->name, rval);
-		goto done;
+		goto done_free_sp;
 	}
 
 	ql_dbg(ql_dbg_vport, vha, 0x113f, "%s hndl %x submitted\n",
@@ -980,13 +978,16 @@ int qla24xx_control_vp(scsi_qla_host_t *vha, int cmd)
 	case QLA_SUCCESS:
 		ql_dbg(ql_dbg_vport, vha, 0xffff, "%s: %s done.\n",
 		    __func__, sp->name);
-		break;
+		goto done_free_sp;
 	default:
 		ql_dbg(ql_dbg_vport, vha, 0xffff, "%s: %s Failed. %x.\n",
 		    __func__, sp->name, rval);
-		break;
+		goto done_free_sp;
 	}
 done:
+	return rval;
+
+done_free_sp:
 	sp->free(sp);
 	return rval;
 }

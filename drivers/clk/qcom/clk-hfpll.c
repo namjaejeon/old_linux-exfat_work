@@ -196,7 +196,7 @@ static unsigned long clk_hfpll_recalc_rate(struct clk_hw *hw,
 	return l_val * parent_rate;
 }
 
-static int clk_hfpll_init(struct clk_hw *hw)
+static void clk_hfpll_init(struct clk_hw *hw)
 {
 	struct clk_hfpll *h = to_clk_hfpll(hw);
 	struct hfpll_data const *hd = h->d;
@@ -206,7 +206,7 @@ static int clk_hfpll_init(struct clk_hw *hw)
 	regmap_read(regmap, hd->mode_reg, &mode);
 	if (mode != (PLL_BYPASSNL | PLL_RESET_N | PLL_OUTCTRL)) {
 		__clk_hfpll_init_once(hw);
-		return 0;
+		return;
 	}
 
 	if (hd->status_reg) {
@@ -218,8 +218,6 @@ static int clk_hfpll_init(struct clk_hw *hw)
 			__clk_hfpll_init_once(hw);
 		}
 	}
-
-	return 0;
 }
 
 static int hfpll_is_enabled(struct clk_hw *hw)

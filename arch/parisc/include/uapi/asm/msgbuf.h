@@ -3,7 +3,6 @@
 #define _PARISC_MSGBUF_H
 
 #include <asm/bitsperlong.h>
-#include <asm/ipcbuf.h>
 
 /* 
  * The msqid64_ds structure for parisc architecture, copied from sparc.
@@ -17,9 +16,9 @@
 struct msqid64_ds {
 	struct ipc64_perm msg_perm;
 #if __BITS_PER_LONG == 64
-	long		 msg_stime;	/* last msgsnd time */
-	long		 msg_rtime;	/* last msgrcv time */
-	long		 msg_ctime;	/* last change time */
+	__kernel_time_t msg_stime;	/* last msgsnd time */
+	__kernel_time_t msg_rtime;	/* last msgrcv time */
+	__kernel_time_t msg_ctime;	/* last change time */
 #else
 	unsigned long	msg_stime_high;
 	unsigned long	msg_stime;	/* last msgsnd time */

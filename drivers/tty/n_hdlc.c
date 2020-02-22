@@ -115,8 +115,10 @@
 struct n_hdlc_buf {
 	struct list_head  list_item;
 	int		  count;
-	char		  buf[];
+	char		  buf[1];
 };
+
+#define	N_HDLC_BUF_SIZE	(sizeof(struct n_hdlc_buf) + maxframe)
 
 struct n_hdlc_buf_list {
 	struct list_head  list;
@@ -522,8 +524,7 @@ static void n_hdlc_tty_receive(struct tty_struct *tty, const __u8 *data,
 		/* no buffers in free list, attempt to allocate another rx buffer */
 		/* unless the maximum count has been reached */
 		if (n_hdlc->rx_buf_list.count < MAX_RX_BUF_COUNT)
-			buf = kmalloc(struct_size(buf, buf, maxframe),
-				      GFP_ATOMIC);
+			buf = kmalloc(N_HDLC_BUF_SIZE, GFP_ATOMIC);
 	}
 	
 	if (!buf) {
@@ -852,7 +853,7 @@ static struct n_hdlc *n_hdlc_alloc(void)
 
 	/* allocate free rx buffer list */
 	for(i=0;i<DEFAULT_RX_BUF_COUNT;i++) {
-		buf = kmalloc(struct_size(buf, buf, maxframe), GFP_KERNEL);
+		buf = kmalloc(N_HDLC_BUF_SIZE, GFP_KERNEL);
 		if (buf)
 			n_hdlc_buf_put(&n_hdlc->rx_free_buf_list,buf);
 		else if (debuglevel >= DEBUG_LEVEL_INFO)	
@@ -861,7 +862,7 @@ static struct n_hdlc *n_hdlc_alloc(void)
 	
 	/* allocate free tx buffer list */
 	for(i=0;i<DEFAULT_TX_BUF_COUNT;i++) {
-		buf = kmalloc(struct_size(buf, buf, maxframe), GFP_KERNEL);
+		buf = kmalloc(N_HDLC_BUF_SIZE, GFP_KERNEL);
 		if (buf)
 			n_hdlc_buf_put(&n_hdlc->tx_free_buf_list,buf);
 		else if (debuglevel >= DEBUG_LEVEL_INFO)	

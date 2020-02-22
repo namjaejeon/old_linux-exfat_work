@@ -310,7 +310,7 @@ kern_rtt_restore:
 		retry
 
 to_kernel:
-#ifdef CONFIG_PREEMPTION
+#ifdef CONFIG_PREEMPT
 		ldsw			[%g6 + TI_PRE_COUNT], %l5
 		brnz			%l5, kern_fpucheck
 		 ldx			[%g6 + TI_FLAGS], %l5

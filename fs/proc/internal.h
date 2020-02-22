@@ -39,10 +39,7 @@ struct proc_dir_entry {
 	spinlock_t pde_unload_lock;
 	struct completion *pde_unload_completion;
 	const struct inode_operations *proc_iops;
-	union {
-		const struct proc_ops *proc_ops;
-		const struct file_operations *proc_dir_ops;
-	};
+	const struct file_operations *proc_fops;
 	const struct dentry_operations *proc_dops;
 	union {
 		const struct seq_operations *seq_ops;
@@ -200,8 +197,8 @@ extern ssize_t proc_simple_write(struct file *, const char __user *, size_t, lof
  * inode.c
  */
 struct pde_opener {
-	struct list_head lh;
 	struct file *file;
+	struct list_head lh;
 	bool closing;
 	struct completion *c;
 } __randomize_layout;

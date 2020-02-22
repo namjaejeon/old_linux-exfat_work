@@ -47,6 +47,8 @@
 /* Total number of Tx queues */
 #define DPAA_ETH_TXQ_NUM	(DPAA_TC_NUM * DPAA_TC_TXQ_NUM)
 
+#define DPAA_BPS_NUM 3 /* number of bpools per interface */
+
 /* More detailed FQ types - used for fine-grained WQ assignments */
 enum dpaa_fq_type {
 	FQ_TYPE_RX_DEFAULT = 1, /* Rx Default FQs */
@@ -78,11 +80,9 @@ struct dpaa_fq_cbs {
 	struct qman_fq egress_ern;
 };
 
-struct dpaa_priv;
-
 struct dpaa_bp {
-	/* used in the DMA mapping operations */
-	struct dpaa_priv *priv;
+	/* device used in the DMA mapping operations */
+	struct device *dev;
 	/* current number of buffers in the buffer pool alloted to each CPU */
 	int __percpu *percpu_count;
 	/* all buffers allocated for this pool have this raw size */
@@ -146,15 +146,13 @@ struct dpaa_buffer_layout {
 
 struct dpaa_priv {
 	struct dpaa_percpu_priv __percpu *percpu_priv;
-	struct dpaa_bp *dpaa_bp;
+	struct dpaa_bp *dpaa_bps[DPAA_BPS_NUM];
 	/* Store here the needed Tx headroom for convenience and speed
 	 * (even though it can be computed based on the fields of buf_layout)
 	 */
 	u16 tx_headroom;
 	struct net_device *net_dev;
 	struct mac_device *mac_dev;
-	struct device *rx_dma_dev;
-	struct device *tx_dma_dev;
 	struct qman_fq *egress_fqs[DPAA_ETH_TXQ_NUM];
 	struct qman_fq *conf_fqs[DPAA_ETH_TXQ_NUM];
 

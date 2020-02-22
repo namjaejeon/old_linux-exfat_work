@@ -8,7 +8,7 @@
 #include <stdio.h>
 #include <errno.h>
 #include <linux/err.h>
-#include "bpf/hashmap.h"
+#include "hashmap.h"
 
 #define CHECK(condition, format...) ({					\
 	int __ret = !!(condition);					\

@@ -229,8 +229,6 @@ enum {
 #define KSEL_BYPASS_25 6
 #define KSEL_BYPASS_83_100 7
 
-struct drm_fb_helper;
-
 struct opregion_header;
 struct opregion_acpi;
 struct opregion_swsci;
@@ -434,7 +432,7 @@ struct drm_psb_private {
 	struct pci_dev *lpc_pdev; /* Currently only used by mrst */
 	const struct psb_ops *ops;
 	const struct psb_offset *regmap;
-
+	
 	struct child_device_config *child_dev;
 	int child_dev_num;
 
@@ -542,7 +540,7 @@ struct drm_psb_private {
 
 	/* Oaktrail HDMI state */
 	struct oaktrail_hdmi_dev *hdmi_priv;
-
+	
 	/* Register state */
 	struct psb_save_area regs;
 
@@ -574,7 +572,7 @@ struct drm_psb_private {
 	uint32_t blc_adj1;
 	uint32_t blc_adj2;
 
-	struct drm_fb_helper *fb_helper;
+	void *fbdev;
 
 	/* 2D acceleration */
 	spinlock_t lock_2d;

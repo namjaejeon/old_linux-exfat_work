@@ -8,7 +8,7 @@
 #include <linux/fs.h>
 #include "exfat.h"
 
-void exfat_bdev_open(struct super_block *sb)
+void bdev_open(struct super_block *sb)
 {
 	struct bd_info_t *p_bd = &(EXFAT_SB(sb)->bd_info);
 
@@ -23,28 +23,28 @@ void exfat_bdev_open(struct super_block *sb)
 	p_bd->opened = true;
 }
 
-void exfat_bdev_close(struct super_block *sb)
+void bdev_close(struct super_block *sb)
 {
 	struct bd_info_t *p_bd = &(EXFAT_SB(sb)->bd_info);
 
 	p_bd->opened = false;
 }
 
-int exfat_bdev_read(struct super_block *sb, sector_t secno, struct buffer_head **bh,
-		    u32 num_secs, bool read)
+int bdev_read(struct super_block *sb, sector_t secno, struct buffer_head **bh,
+	      u32 num_secs, bool read)
 {
 	struct bd_info_t *p_bd = &(EXFAT_SB(sb)->bd_info);
 	struct fs_info_t *p_fs = &(EXFAT_SB(sb)->fs_info);
-#ifdef CONFIG_STAGING_EXFAT_KERNEL_DEBUG
+#ifdef CONFIG_EXFAT_KERNEL_DEBUG
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 	long flags = sbi->debug_flags;
 
 	if (flags & EXFAT_DEBUGFLAGS_ERROR_RW)
-		return -EIO;
-#endif /* CONFIG_STAGING_EXFAT_KERNEL_DEBUG */
+		return FFS_MEDIAERR;
+#endif /* CONFIG_EXFAT_KERNEL_DEBUG */
 
 	if (!p_bd->opened)
-		return -ENODEV;
+		return FFS_MEDIAERR;
 
 	if (*bh)
 		__brelse(*bh);
@@ -62,26 +62,26 @@ int exfat_bdev_read(struct super_block *sb, sector_t secno, struct buffer_head *
 	WARN(!p_fs->dev_ejected,
 	     "[EXFAT] No bh, device seems wrong or to be ejected.\n");
 
-	return -EIO;
+	return FFS_MEDIAERR;
 }
 
-int exfat_bdev_write(struct super_block *sb, sector_t secno, struct buffer_head *bh,
-		     u32 num_secs, bool sync)
+int bdev_write(struct super_block *sb, sector_t secno, struct buffer_head *bh,
+	       u32 num_secs, bool sync)
 {
 	s32 count;
 	struct buffer_head *bh2;
 	struct bd_info_t *p_bd = &(EXFAT_SB(sb)->bd_info);
 	struct fs_info_t *p_fs = &(EXFAT_SB(sb)->fs_info);
-#ifdef CONFIG_STAGING_EXFAT_KERNEL_DEBUG
+#ifdef CONFIG_EXFAT_KERNEL_DEBUG
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 	long flags = sbi->debug_flags;
 
 	if (flags & EXFAT_DEBUGFLAGS_ERROR_RW)
-		return -EIO;
-#endif /* CONFIG_STAGING_EXFAT_KERNEL_DEBUG */
+		return FFS_MEDIAERR;
+#endif /* CONFIG_EXFAT_KERNEL_DEBUG */
 
 	if (!p_bd->opened)
-		return -ENODEV;
+		return FFS_MEDIAERR;
 
 	if (secno == bh->b_blocknr) {
 		lock_buffer(bh);
@@ -89,7 +89,7 @@ int exfat_bdev_write(struct super_block *sb, sector_t secno, struct buffer_head 
 		mark_buffer_dirty(bh);
 		unlock_buffer(bh);
 		if (sync && (sync_dirty_buffer(bh) != 0))
-			return -EIO;
+			return FFS_MEDIAERR;
 	} else {
 		count = num_secs << p_bd->sector_size_bits;
 
@@ -115,22 +115,22 @@ no_bh:
 	WARN(!p_fs->dev_ejected,
 	     "[EXFAT] No bh, device seems wrong or to be ejected.\n");
 
-	return -EIO;
+	return FFS_MEDIAERR;
 }
 
-int exfat_bdev_sync(struct super_block *sb)
+int bdev_sync(struct super_block *sb)
 {
 	struct bd_info_t *p_bd = &(EXFAT_SB(sb)->bd_info);
-#ifdef CONFIG_STAGING_EXFAT_KERNEL_DEBUG
+#ifdef CONFIG_EXFAT_KERNEL_DEBUG
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
 	long flags = sbi->debug_flags;
 
 	if (flags & EXFAT_DEBUGFLAGS_ERROR_RW)
-		return -EIO;
-#endif /* CONFIG_STAGING_EXFAT_KERNEL_DEBUG */
+		return FFS_MEDIAERR;
+#endif /* CONFIG_EXFAT_KERNEL_DEBUG */
 
 	if (!p_bd->opened)
-		return -ENODEV;
+		return FFS_MEDIAERR;
 
 	return sync_blockdev(sb->s_bdev);
 }

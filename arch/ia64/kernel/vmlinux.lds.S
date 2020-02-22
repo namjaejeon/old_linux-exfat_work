@@ -5,9 +5,6 @@
 #include <asm/pgtable.h>
 #include <asm/thread_info.h>
 
-#define EMITS_PT_NOTE
-#define RO_EXCEPTION_TABLE_ALIGN	16
-
 #include <asm-generic/vmlinux.lds.h>
 
 OUTPUT_FORMAT("elf64-ia64-little")
@@ -16,7 +13,7 @@ ENTRY(phys_start)
 jiffies = jiffies_64;
 
 PHDRS {
-	text   PT_LOAD;
+	code   PT_LOAD;
 	percpu PT_LOAD;
 	data   PT_LOAD;
 	note   PT_NOTE;
@@ -39,7 +36,7 @@ SECTIONS {
 	phys_start = _start - LOAD_OFFSET;
 
 	code : {
-	} :text
+	} :code
 	. = KERNEL_START;
 
 	_text = .;
@@ -71,6 +68,11 @@ SECTIONS {
 	/*
 	 * Read-only data
 	 */
+	NOTES :code :note       /* put .notes in text and mark in PT_NOTE  */
+	code_continues : {
+	} : code               /* switch back to regular program...  */
+
+	EXCEPTION_TABLE(16)
 
 	/* MCA table */
 	. = ALIGN(16);
@@ -100,11 +102,11 @@ SECTIONS {
 		__start_unwind = .;
 		*(.IA_64.unwind*)
 		__end_unwind = .;
-	} :text :unwind
+	} :code :unwind
 	code_continues2 : {
-	} :text
+	} : code
 
-	RO_DATA(4096)
+	RODATA
 
 	.opd : AT(ADDR(.opd) - LOAD_OFFSET) {
 		__start_opd = .;
@@ -212,7 +214,7 @@ SECTIONS {
 	_end = .;
 
 	code : {
-	} :text
+	} :code
 
 	STABS_DEBUG
 	DWARF_DEBUG

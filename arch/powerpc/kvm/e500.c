@@ -433,16 +433,31 @@ static int kvmppc_set_one_reg_e500(struct kvm_vcpu *vcpu, u64 id,
 	return r;
 }
 
-static int kvmppc_core_vcpu_create_e500(struct kvm_vcpu *vcpu)
+static struct kvm_vcpu *kvmppc_core_vcpu_create_e500(struct kvm *kvm,
+						     unsigned int id)
 {
 	struct kvmppc_vcpu_e500 *vcpu_e500;
+	struct kvm_vcpu *vcpu;
 	int err;
 
-	BUILD_BUG_ON(offsetof(struct kvmppc_vcpu_e500, vcpu) != 0);
-	vcpu_e500 = to_e500(vcpu);
+	BUILD_BUG_ON_MSG(offsetof(struct kvmppc_vcpu_e500, vcpu) != 0,
+		"struct kvm_vcpu must be at offset 0 for arch usercopy region");
 
-	if (kvmppc_e500_id_table_alloc(vcpu_e500) == NULL)
-		return -ENOMEM;
+	vcpu_e500 = kmem_cache_zalloc(kvm_vcpu_cache, GFP_KERNEL);
+	if (!vcpu_e500) {
+		err = -ENOMEM;
+		goto out;
+	}
+
+	vcpu = &vcpu_e500->vcpu;
+	err = kvm_vcpu_init(vcpu, kvm, id);
+	if (err)
+		goto free_vcpu;
+
+	if (kvmppc_e500_id_table_alloc(vcpu_e500) == NULL) {
+		err = -ENOMEM;
+		goto uninit_vcpu;
+	}
 
 	err = kvmppc_e500_tlb_init(vcpu_e500);
 	if (err)
@@ -454,13 +469,18 @@ static int kvmppc_core_vcpu_create_e500(struct kvm_vcpu *vcpu)
 		goto uninit_tlb;
 	}
 
-	return 0;
+	return vcpu;
 
 uninit_tlb:
 	kvmppc_e500_tlb_uninit(vcpu_e500);
 uninit_id:
 	kvmppc_e500_id_table_free(vcpu_e500);
-	return err;
+uninit_vcpu:
+	kvm_vcpu_uninit(vcpu);
+free_vcpu:
+	kmem_cache_free(kvm_vcpu_cache, vcpu_e500);
+out:
+	return ERR_PTR(err);
 }
 
 static void kvmppc_core_vcpu_free_e500(struct kvm_vcpu *vcpu)
@@ -470,6 +490,8 @@ static void kvmppc_core_vcpu_free_e500(struct kvm_vcpu *vcpu)
 	free_page((unsigned long)vcpu->arch.shared);
 	kvmppc_e500_tlb_uninit(vcpu_e500);
 	kvmppc_e500_id_table_free(vcpu_e500);
+	kvm_vcpu_uninit(vcpu);
+	kmem_cache_free(kvm_vcpu_cache, vcpu_e500);
 }
 
 static int kvmppc_core_init_vm_e500(struct kvm *kvm)

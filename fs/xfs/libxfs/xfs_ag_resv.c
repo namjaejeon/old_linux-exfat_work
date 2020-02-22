@@ -19,8 +19,6 @@
 #include "xfs_btree.h"
 #include "xfs_refcount_btree.h"
 #include "xfs_ialloc_btree.h"
-#include "xfs_sb.h"
-#include "xfs_ag_resv.h"
 
 /*
  * Per-AG Block Reservations

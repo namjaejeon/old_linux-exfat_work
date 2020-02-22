@@ -63,17 +63,11 @@ static int init_display(struct fbtft_par *par)
 {
 	int ret;
 
-	/*
-	 * Set CS active inverse polarity: just setting SPI_CS_HIGH does not
-	 * work with GPIO based chip selects that are logically active high
-	 * but inverted inside the GPIO library, so enforce inverted
-	 * semantics.
-	 */
-	par->spi->mode ^= SPI_CS_HIGH;
+	/* Set CS active high */
+	par->spi->mode |= SPI_CS_HIGH;
 	ret = spi_setup(par->spi);
 	if (ret) {
-		dev_err(par->info->device,
-			"Could not set inverse CS polarity\n");
+		dev_err(par->info->device, "Could not set SPI_CS_HIGH\n");
 		return ret;
 	}
 
@@ -97,7 +91,7 @@ static int init_display(struct fbtft_par *par)
 	write_reg(par, 0x2C | (pump & 0x03));
 
 	/* Set inverse display */
-	write_reg(par, 0xA6 | 0x01);
+	write_reg(par, 0xA6 | (0x01 & 0x01));
 
 	/* Set 4-bit grayscale mode */
 	write_reg(par, 0xD0 | (0x02 & 0x03));
@@ -163,8 +157,8 @@ static int set_var(struct fbtft_par *par)
 		/* Set RAM address control */
 		write_reg(par, 0x88
 			| (0x0 & 0x1) << 2 /* Increment positively */
-			| (0x1 << 1)	   /* Increment page first */
-			| 0x1);		   /* Wrap around (default) */
+			| (0x1 & 0x1) << 1 /* Increment page first */
+			| (0x1 & 0x1));    /* Wrap around (default) */
 
 		/* Set LCD mapping */
 		write_reg(par, 0xC0
@@ -177,11 +171,11 @@ static int set_var(struct fbtft_par *par)
 		write_reg(par, 0x88
 			| (0x0 & 0x1) << 2 /* Increment positively */
 			| (0x0 & 0x1) << 1 /* Increment column first */
-			| 0x1);		   /* Wrap around (default) */
+			| (0x1 & 0x1));    /* Wrap around (default) */
 
 		/* Set LCD mapping */
 		write_reg(par, 0xC0
-			| (0x1 << 2)	   /* Mirror Y ON */
+			| (0x1 & 0x1) << 2 /* Mirror Y ON */
 			| (0x0 & 0x1) << 1 /* Mirror X OFF */
 			| (0x0 & 0x1));    /* MS nibble last (default) */
 		break;
@@ -189,13 +183,13 @@ static int set_var(struct fbtft_par *par)
 		/* Set RAM address control */
 		write_reg(par, 0x88
 			| (0x0 & 0x1) << 2 /* Increment positively */
-			| (0x1 << 1)	   /* Increment page first */
-			| 0x1);		   /* Wrap around (default) */
+			| (0x1 & 0x1) << 1 /* Increment page first */
+			| (0x1 & 0x1));    /* Wrap around (default) */
 
 		/* Set LCD mapping */
 		write_reg(par, 0xC0
-			| (0x1 << 2)	   /* Mirror Y ON */
-			| (0x1 << 1)	   /* Mirror X ON */
+			| (0x1 & 0x1) << 2 /* Mirror Y ON */
+			| (0x1 & 0x1) << 1 /* Mirror X ON */
 			| (0x0 & 0x1));    /* MS nibble last (default) */
 		break;
 	default:
@@ -203,12 +197,12 @@ static int set_var(struct fbtft_par *par)
 		write_reg(par, 0x88
 			| (0x0 & 0x1) << 2 /* Increment positively */
 			| (0x0 & 0x1) << 1 /* Increment column first */
-			| 0x1);		   /* Wrap around (default) */
+			| (0x1 & 0x1));    /* Wrap around (default) */
 
 		/* Set LCD mapping */
 		write_reg(par, 0xC0
 			| (0x0 & 0x1) << 2 /* Mirror Y OFF */
-			| (0x1 << 1)	   /* Mirror X ON */
+			| (0x1 & 0x1) << 1 /* Mirror X ON */
 			| (0x0 & 0x1));    /* MS nibble last (default) */
 		break;
 	}

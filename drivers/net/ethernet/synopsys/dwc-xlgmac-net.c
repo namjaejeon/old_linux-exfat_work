@@ -689,7 +689,7 @@ static int xlgmac_close(struct net_device *netdev)
 	return 0;
 }
 
-static void xlgmac_tx_timeout(struct net_device *netdev, unsigned int txqueue)
+static void xlgmac_tx_timeout(struct net_device *netdev)
 {
 	struct xlgmac_pdata *pdata = netdev_priv(netdev);
 

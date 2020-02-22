@@ -35,28 +35,44 @@ struct intel_guc_ct_buffer {
 	u32 *cmds;
 };
 
-
-/** Top-level structure for Command Transport related data
+/** Represents pair of command transport buffers.
  *
- * Includes a pair of CT buffers for bi-directional communication and tracking
- * for the H2G and G2H requests sent and received through the buffers.
+ * Buffers go in pairs to allow bi-directional communication.
+ * To simplify the code we place both of them in the same vma.
+ * Buffers from the same pair must share unique owner id.
+ *
+ * @vma: pointer to the vma with pair of CT buffers
+ * @ctbs: buffers for sending(0) and receiving(1) commands
+ * @owner: unique identifier
+ * @next_fence: fence to be used with next send command
+ */
+struct intel_guc_ct_channel {
+	struct i915_vma *vma;
+	struct intel_guc_ct_buffer ctbs[2];
+	u32 owner;
+	u32 next_fence;
+	bool enabled;
+};
+
+/** Holds all command transport channels.
+ *
+ * @host_channel: main channel used by the host
  */
 struct intel_guc_ct {
-	struct i915_vma *vma;
-	bool enabled;
+	struct intel_guc_ct_channel host_channel;
+	/* other channels are tbd */
 
-	/* buffers for sending(0) and receiving(1) commands */
-	struct intel_guc_ct_buffer ctbs[2];
+	/** @lock: protects pending requests list */
+	spinlock_t lock;
 
-	struct {
-		u32 next_fence; /* fence to be used with next request to send */
+	/** @pending_requests: list of requests waiting for response */
+	struct list_head pending_requests;
 
-		spinlock_t lock; /* protects pending requests list */
-		struct list_head pending; /* requests waiting for response */
+	/** @incoming_requests: list of incoming requests */
+	struct list_head incoming_requests;
 
-		struct list_head incoming; /* incoming requests */
-		struct work_struct worker; /* handler for incoming requests */
-	} requests;
+	/** @worker: worker for handling incoming requests */
+	struct work_struct worker;
 };
 
 void intel_guc_ct_init_early(struct intel_guc_ct *ct);
@@ -65,13 +81,13 @@ void intel_guc_ct_fini(struct intel_guc_ct *ct);
 int intel_guc_ct_enable(struct intel_guc_ct *ct);
 void intel_guc_ct_disable(struct intel_guc_ct *ct);
 
-static inline bool intel_guc_ct_enabled(struct intel_guc_ct *ct)
+static inline void intel_guc_ct_stop(struct intel_guc_ct *ct)
 {
-	return ct->enabled;
+	ct->host_channel.enabled = false;
 }
 
-int intel_guc_ct_send(struct intel_guc_ct *ct, const u32 *action, u32 len,
+int intel_guc_send_ct(struct intel_guc *guc, const u32 *action, u32 len,
 		      u32 *response_buf, u32 response_buf_size);
-void intel_guc_ct_event_handler(struct intel_guc_ct *ct);
+void intel_guc_to_host_event_handler_ct(struct intel_guc *guc);
 
 #endif /* _INTEL_GUC_CT_H_ */

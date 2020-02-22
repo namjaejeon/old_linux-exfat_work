@@ -30,7 +30,7 @@
 
 static inline bool is_mt7610e(struct mt76x02_dev *dev)
 {
-	if (!mt76_is_mmio(&dev->mt76))
+	if (!mt76_is_mmio(dev))
 		return false;
 
 	return mt76_chip(&dev->mt76) == 0x7610;
@@ -46,6 +46,7 @@ int mt76x0_init_hardware(struct mt76x02_dev *dev);
 int mt76x0_register_device(struct mt76x02_dev *dev);
 void mt76x0_chip_onoff(struct mt76x02_dev *dev, bool enable, bool reset);
 
+int mt76x0_mac_start(struct mt76x02_dev *dev);
 void mt76x0_mac_stop(struct mt76x02_dev *dev);
 
 int mt76x0_config(struct ieee80211_hw *hw, u32 changed);

@@ -3,7 +3,6 @@
  * Copyright 2017 IBM Corp.
  */
 
-#include <linux/bitfield.h>
 #include <linux/bitops.h>
 #include <linux/debugfs.h>
 #include <linux/device.h>
@@ -20,22 +19,15 @@
 
 #define CFFPS_FRU_CMD				0x9A
 #define CFFPS_PN_CMD				0x9B
-#define CFFPS_HEADER_CMD			0x9C
 #define CFFPS_SN_CMD				0x9E
-#define CFFPS_MAX_POWER_OUT_CMD			0xA7
 #define CFFPS_CCIN_CMD				0xBD
 #define CFFPS_FW_CMD				0xFA
 #define CFFPS1_FW_NUM_BYTES			4
 #define CFFPS2_FW_NUM_WORDS			3
 #define CFFPS_SYS_CONFIG_CMD			0xDA
-#define CFFPS_12VCS_VOUT_CMD			0xDE
 
 #define CFFPS_INPUT_HISTORY_CMD			0xD6
 #define CFFPS_INPUT_HISTORY_SIZE		100
-
-#define CFFPS_CCIN_VERSION			GENMASK(15, 8)
-#define CFFPS_CCIN_VERSION_1			 0x2b
-#define CFFPS_CCIN_VERSION_2			 0x2e
 
 /* STATUS_MFR_SPECIFIC bits */
 #define CFFPS_MFR_FAN_FAULT			BIT(0)
@@ -56,16 +48,13 @@ enum {
 	CFFPS_DEBUGFS_INPUT_HISTORY = 0,
 	CFFPS_DEBUGFS_FRU,
 	CFFPS_DEBUGFS_PN,
-	CFFPS_DEBUGFS_HEADER,
 	CFFPS_DEBUGFS_SN,
-	CFFPS_DEBUGFS_MAX_POWER_OUT,
 	CFFPS_DEBUGFS_CCIN,
 	CFFPS_DEBUGFS_FW,
-	CFFPS_DEBUGFS_ON_OFF_CONFIG,
 	CFFPS_DEBUGFS_NUM_ENTRIES
 };
 
-enum versions { cffps1, cffps2, cffps_unknown };
+enum versions { cffps1, cffps2 };
 
 struct ibm_cffps_input_history {
 	struct mutex update_lock;
@@ -138,15 +127,15 @@ static ssize_t ibm_cffps_read_input_history(struct ibm_cffps *psu,
 				       psu->input_history.byte_count);
 }
 
-static ssize_t ibm_cffps_debugfs_read(struct file *file, char __user *buf,
-				      size_t count, loff_t *ppos)
+static ssize_t ibm_cffps_debugfs_op(struct file *file, char __user *buf,
+				    size_t count, loff_t *ppos)
 {
 	u8 cmd;
 	int i, rc;
 	int *idxp = file->private_data;
 	int idx = *idxp;
 	struct ibm_cffps *psu = to_psu(idxp, idx);
-	char data[I2C_SMBUS_BLOCK_MAX + 2] = { 0 };
+	char data[I2C_SMBUS_BLOCK_MAX] = { 0 };
 
 	pmbus_set_page(psu->client, 0);
 
@@ -159,20 +148,9 @@ static ssize_t ibm_cffps_debugfs_read(struct file *file, char __user *buf,
 	case CFFPS_DEBUGFS_PN:
 		cmd = CFFPS_PN_CMD;
 		break;
-	case CFFPS_DEBUGFS_HEADER:
-		cmd = CFFPS_HEADER_CMD;
-		break;
 	case CFFPS_DEBUGFS_SN:
 		cmd = CFFPS_SN_CMD;
 		break;
-	case CFFPS_DEBUGFS_MAX_POWER_OUT:
-		rc = i2c_smbus_read_word_swapped(psu->client,
-						 CFFPS_MAX_POWER_OUT_CMD);
-		if (rc < 0)
-			return rc;
-
-		rc = snprintf(data, I2C_SMBUS_BLOCK_MAX, "%d", rc);
-		goto done;
 	case CFFPS_DEBUGFS_CCIN:
 		rc = i2c_smbus_read_word_swapped(psu->client, CFFPS_CCIN_CMD);
 		if (rc < 0)
@@ -212,14 +190,6 @@ static ssize_t ibm_cffps_debugfs_read(struct file *file, char __user *buf,
 			return -EOPNOTSUPP;
 		}
 		goto done;
-	case CFFPS_DEBUGFS_ON_OFF_CONFIG:
-		rc = i2c_smbus_read_byte_data(psu->client,
-					      PMBUS_ON_OFF_CONFIG);
-		if (rc < 0)
-			return rc;
-
-		rc = snprintf(data, 3, "%02x", rc);
-		goto done;
 	default:
 		return -EINVAL;
 	}
@@ -235,42 +205,9 @@ done:
 	return simple_read_from_buffer(buf, count, ppos, data, rc);
 }
 
-static ssize_t ibm_cffps_debugfs_write(struct file *file,
-				       const char __user *buf, size_t count,
-				       loff_t *ppos)
-{
-	u8 data;
-	ssize_t rc;
-	int *idxp = file->private_data;
-	int idx = *idxp;
-	struct ibm_cffps *psu = to_psu(idxp, idx);
-
-	switch (idx) {
-	case CFFPS_DEBUGFS_ON_OFF_CONFIG:
-		pmbus_set_page(psu->client, 0);
-
-		rc = simple_write_to_buffer(&data, 1, ppos, buf, count);
-		if (rc <= 0)
-			return rc;
-
-		rc = i2c_smbus_write_byte_data(psu->client,
-					       PMBUS_ON_OFF_CONFIG, data);
-		if (rc)
-			return rc;
-
-		rc = 1;
-		break;
-	default:
-		return -EINVAL;
-	}
-
-	return rc;
-}
-
 static const struct file_operations ibm_cffps_fops = {
 	.llseek = noop_llseek,
-	.read = ibm_cffps_debugfs_read,
-	.write = ibm_cffps_debugfs_write,
+	.read = ibm_cffps_debugfs_op,
 	.open = simple_open,
 };
 
@@ -347,9 +284,6 @@ static int ibm_cffps_read_word_data(struct i2c_client *client, int page,
 		if (mfr & CFFPS_MFR_PS_KILL)
 			rc |= PB_STATUS_OFF;
 		break;
-	case PMBUS_VIRT_READ_VMON:
-		rc = pmbus_read_word_data(client, page, CFFPS_12VCS_VOUT_CMD);
-		break;
 	default:
 		rc = -ENODATA;
 		break;
@@ -358,38 +292,28 @@ static int ibm_cffps_read_word_data(struct i2c_client *client, int page,
 	return rc;
 }
 
-static int ibm_cffps_led_brightness_set(struct led_classdev *led_cdev,
-					enum led_brightness brightness)
+static void ibm_cffps_led_brightness_set(struct led_classdev *led_cdev,
+					 enum led_brightness brightness)
 {
 	int rc;
-	u8 next_led_state;
 	struct ibm_cffps *psu = container_of(led_cdev, struct ibm_cffps, led);
 
 	if (brightness == LED_OFF) {
-		next_led_state = CFFPS_LED_OFF;
+		psu->led_state = CFFPS_LED_OFF;
 	} else {
 		brightness = LED_FULL;
-
 		if (psu->led_state != CFFPS_LED_BLINK)
-			next_led_state = CFFPS_LED_ON;
-		else
-			next_led_state = CFFPS_LED_BLINK;
+			psu->led_state = CFFPS_LED_ON;
 	}
-
-	dev_dbg(&psu->client->dev, "LED brightness set: %d. Command: %d.\n",
-		brightness, next_led_state);
 
 	pmbus_set_page(psu->client, 0);
 
 	rc = i2c_smbus_write_byte_data(psu->client, CFFPS_SYS_CONFIG_CMD,
-				       next_led_state);
+				       psu->led_state);
 	if (rc < 0)
-		return rc;
+		return;
 
-	psu->led_state = next_led_state;
 	led_cdev->brightness = brightness;
-
-	return 0;
 }
 
 static int ibm_cffps_led_blink_set(struct led_classdev *led_cdev,
@@ -399,7 +323,10 @@ static int ibm_cffps_led_blink_set(struct led_classdev *led_cdev,
 	int rc;
 	struct ibm_cffps *psu = container_of(led_cdev, struct ibm_cffps, led);
 
-	dev_dbg(&psu->client->dev, "LED blink set.\n");
+	psu->led_state = CFFPS_LED_BLINK;
+
+	if (led_cdev->brightness == LED_OFF)
+		return 0;
 
 	pmbus_set_page(psu->client, 0);
 
@@ -408,8 +335,6 @@ static int ibm_cffps_led_blink_set(struct led_classdev *led_cdev,
 	if (rc < 0)
 		return rc;
 
-	psu->led_state = CFFPS_LED_BLINK;
-	led_cdev->brightness = LED_FULL;
 	*delay_on = CFFPS_BLINK_RATE_MS;
 	*delay_off = CFFPS_BLINK_RATE_MS;
 
@@ -426,15 +351,12 @@ static void ibm_cffps_create_led_class(struct ibm_cffps *psu)
 		 client->addr);
 	psu->led.name = psu->led_name;
 	psu->led.max_brightness = LED_FULL;
-	psu->led.brightness_set_blocking = ibm_cffps_led_brightness_set;
+	psu->led.brightness_set = ibm_cffps_led_brightness_set;
 	psu->led.blink_set = ibm_cffps_led_blink_set;
 
 	rc = devm_led_classdev_register(dev, &psu->led);
 	if (rc)
 		dev_warn(dev, "failed to register led class: %d\n", rc);
-	else
-		i2c_smbus_write_byte_data(client, CFFPS_SYS_CONFIG_CMD,
-					  CFFPS_LED_OFF);
 }
 
 static struct pmbus_driver_info ibm_cffps_info[] = {
@@ -456,7 +378,7 @@ static struct pmbus_driver_info ibm_cffps_info[] = {
 			PMBUS_HAVE_TEMP2 | PMBUS_HAVE_TEMP3 |
 			PMBUS_HAVE_STATUS_VOUT | PMBUS_HAVE_STATUS_IOUT |
 			PMBUS_HAVE_STATUS_INPUT | PMBUS_HAVE_STATUS_TEMP |
-			PMBUS_HAVE_STATUS_FAN12 | PMBUS_HAVE_VMON,
+			PMBUS_HAVE_STATUS_FAN12,
 		.func[1] = PMBUS_HAVE_VOUT | PMBUS_HAVE_IOUT |
 			PMBUS_HAVE_TEMP | PMBUS_HAVE_TEMP2 | PMBUS_HAVE_TEMP3 |
 			PMBUS_HAVE_STATUS_VOUT | PMBUS_HAVE_STATUS_IOUT,
@@ -473,7 +395,7 @@ static int ibm_cffps_probe(struct i2c_client *client,
 			   const struct i2c_device_id *id)
 {
 	int i, rc;
-	enum versions vs = cffps_unknown;
+	enum versions vs;
 	struct dentry *debugfs;
 	struct dentry *ibm_cffps_dir;
 	struct ibm_cffps *psu;
@@ -483,27 +405,8 @@ static int ibm_cffps_probe(struct i2c_client *client,
 		vs = (enum versions)md;
 	else if (id)
 		vs = (enum versions)id->driver_data;
-
-	if (vs == cffps_unknown) {
-		u16 ccin_version = CFFPS_CCIN_VERSION_1;
-		int ccin = i2c_smbus_read_word_swapped(client, CFFPS_CCIN_CMD);
-
-		if (ccin > 0)
-			ccin_version = FIELD_GET(CFFPS_CCIN_VERSION, ccin);
-
-		switch (ccin_version) {
-		default:
-		case CFFPS_CCIN_VERSION_1:
-			vs = cffps1;
-			break;
-		case CFFPS_CCIN_VERSION_2:
-			vs = cffps2;
-			break;
-		}
-
-		/* Set the client name to include the version number. */
-		snprintf(client->name, I2C_NAME_SIZE, "cffps%d", vs + 1);
-	}
+	else
+		vs = cffps1;
 
 	client->dev.platform_data = &ibm_cffps_pdata;
 	rc = pmbus_do_probe(client, id, &ibm_cffps_info[vs]);
@@ -546,23 +449,14 @@ static int ibm_cffps_probe(struct i2c_client *client,
 	debugfs_create_file("part_number", 0444, ibm_cffps_dir,
 			    &psu->debugfs_entries[CFFPS_DEBUGFS_PN],
 			    &ibm_cffps_fops);
-	debugfs_create_file("header", 0444, ibm_cffps_dir,
-			    &psu->debugfs_entries[CFFPS_DEBUGFS_HEADER],
-			    &ibm_cffps_fops);
 	debugfs_create_file("serial_number", 0444, ibm_cffps_dir,
 			    &psu->debugfs_entries[CFFPS_DEBUGFS_SN],
-			    &ibm_cffps_fops);
-	debugfs_create_file("max_power_out", 0444, ibm_cffps_dir,
-			    &psu->debugfs_entries[CFFPS_DEBUGFS_MAX_POWER_OUT],
 			    &ibm_cffps_fops);
 	debugfs_create_file("ccin", 0444, ibm_cffps_dir,
 			    &psu->debugfs_entries[CFFPS_DEBUGFS_CCIN],
 			    &ibm_cffps_fops);
 	debugfs_create_file("fw_version", 0444, ibm_cffps_dir,
 			    &psu->debugfs_entries[CFFPS_DEBUGFS_FW],
-			    &ibm_cffps_fops);
-	debugfs_create_file("on_off_config", 0644, ibm_cffps_dir,
-			    &psu->debugfs_entries[CFFPS_DEBUGFS_ON_OFF_CONFIG],
 			    &ibm_cffps_fops);
 
 	return 0;
@@ -571,7 +465,6 @@ static int ibm_cffps_probe(struct i2c_client *client,
 static const struct i2c_device_id ibm_cffps_id[] = {
 	{ "ibm_cffps1", cffps1 },
 	{ "ibm_cffps2", cffps2 },
-	{ "ibm_cffps", cffps_unknown },
 	{}
 };
 MODULE_DEVICE_TABLE(i2c, ibm_cffps_id);
@@ -584,10 +477,6 @@ static const struct of_device_id ibm_cffps_of_match[] = {
 	{
 		.compatible = "ibm,cffps2",
 		.data = (void *)cffps2
-	},
-	{
-		.compatible = "ibm,cffps",
-		.data = (void *)cffps_unknown
 	},
 	{}
 };

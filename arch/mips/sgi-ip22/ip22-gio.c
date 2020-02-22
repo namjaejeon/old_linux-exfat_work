@@ -47,9 +47,8 @@ static struct device gio_bus = {
  * Used by a driver to check whether an of_device present in the
  * system is in its list of supported devices.
  */
-static const struct gio_device_id *
-gio_match_device(const struct gio_device_id *match,
-		 const struct gio_device *dev)
+const struct gio_device_id *gio_match_device(const struct gio_device_id *match,
+		     const struct gio_device *dev)
 {
 	const struct gio_device_id *ids;
 
@@ -59,6 +58,7 @@ gio_match_device(const struct gio_device_id *match,
 
 	return NULL;
 }
+EXPORT_SYMBOL_GPL(gio_match_device);
 
 struct gio_device *gio_dev_get(struct gio_device *dev)
 {

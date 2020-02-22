@@ -166,7 +166,7 @@ mt76_dma_tx_cleanup(struct mt76_dev *dev, enum mt76_txq_id qid, bool flush)
 			dev->drv->tx_complete_skb(dev, qid, &entry);
 
 		if (entry.txwi) {
-			if (!(dev->drv->drv_flags & MT_DRV_TXWI_NO_FREE))
+			if (!(dev->drv->txwi_flags & MT_TXWI_NO_FREE))
 				mt76_put_txwi(dev, entry.txwi);
 			wake = !flush;
 		}
@@ -301,7 +301,7 @@ mt76_dma_tx_queue_skb(struct mt76_dev *dev, enum mt76_txq_id qid,
 	txwi = mt76_get_txwi_ptr(dev, t);
 
 	skb->prev = skb->next = NULL;
-	if (dev->drv->drv_flags & MT_DRV_TX_ALIGNED4_SKBS)
+	if (dev->drv->tx_aligned4_skbs)
 		mt76_insert_hdr_pad(skb);
 
 	len = skb_headlen(skb);
@@ -365,6 +365,7 @@ mt76_dma_rx_fill(struct mt76_dev *dev, struct mt76_queue *q)
 	int frames = 0;
 	int len = SKB_WITH_OVERHEAD(q->buf_size);
 	int offset = q->buf_offset;
+	int idx;
 
 	spin_lock_bh(&q->lock);
 
@@ -383,7 +384,7 @@ mt76_dma_rx_fill(struct mt76_dev *dev, struct mt76_queue *q)
 
 		qbuf.addr = addr + offset;
 		qbuf.len = len - offset;
-		mt76_dma_add_buf(dev, q, &qbuf, 1, 0, buf, NULL);
+		idx = mt76_dma_add_buf(dev, q, &qbuf, 1, 0, buf, NULL);
 		frames++;
 	}
 
@@ -538,8 +539,10 @@ mt76_dma_rx_poll(struct napi_struct *napi, int budget)
 
 	rcu_read_unlock();
 
-	if (done < budget && napi_complete(napi))
+	if (done < budget) {
+		napi_complete(napi);
 		dev->drv->rx_poll_complete(dev, qid);
+	}
 
 	return done;
 }

@@ -1052,10 +1052,9 @@ static int fsl_ep_fifo_status(struct usb_ep *_ep)
 	u32 bitmask;
 	struct ep_queue_head *qh;
 
-	if (!_ep || _ep->desc || !(_ep->desc->bEndpointAddress&0xF))
-		return -ENODEV;
-
 	ep = container_of(_ep, struct fsl_ep, ep);
+	if (!_ep || (!ep->ep.desc && ep_index(ep) != 0))
+		return -ENODEV;
 
 	udc = (struct fsl_udc *)ep->udc;
 
@@ -1209,7 +1208,7 @@ static int fsl_vbus_draw(struct usb_gadget *gadget, unsigned mA)
 }
 
 /* Change Data+ pullup status
- * this func is used by usb_gadget_connect/disconnect
+ * this func is used by usb_gadget_connect/disconnet
  */
 static int fsl_pullup(struct usb_gadget *gadget, int is_on)
 {
@@ -1596,13 +1595,14 @@ static int process_ep_req(struct fsl_udc *udc, int pipe,
 		struct fsl_req *curr_req)
 {
 	struct ep_td_struct *curr_td;
-	int	actual, remaining_length, j, tmp;
+	int	td_complete, actual, remaining_length, j, tmp;
 	int	status = 0;
 	int	errors = 0;
 	struct  ep_queue_head *curr_qh = &udc->ep_qh[pipe];
 	int direction = pipe % 2;
 
 	curr_td = curr_req->head;
+	td_complete = 0;
 	actual = curr_req->req.length;
 
 	for (j = 0; j < curr_req->dtd_count; j++) {
@@ -1647,9 +1647,11 @@ static int process_ep_req(struct fsl_udc *udc, int pipe,
 				status = -EPROTO;
 				break;
 			} else {
+				td_complete++;
 				break;
 			}
 		} else {
+			td_complete++;
 			VDBG("dTD transmitted successful");
 		}
 

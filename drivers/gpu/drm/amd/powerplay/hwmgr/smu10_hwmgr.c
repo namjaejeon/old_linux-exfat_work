@@ -1026,15 +1026,12 @@ static int smu10_get_clock_by_type_with_latency(struct pp_hwmgr *hwmgr,
 
 	clocks->num_levels = 0;
 	for (i = 0; i < pclk_vol_table->count; i++) {
-		if (pclk_vol_table->entries[i].clk) {
-			clocks->data[clocks->num_levels].clocks_in_khz =
-				pclk_vol_table->entries[i].clk * 10;
-			clocks->data[clocks->num_levels].latency_in_us = latency_required ?
-				smu10_get_mem_latency(hwmgr,
-						      pclk_vol_table->entries[i].clk) :
-				0;
-			clocks->num_levels++;
-		}
+		clocks->data[i].clocks_in_khz = pclk_vol_table->entries[i].clk * 10;
+		clocks->data[i].latency_in_us = latency_required ?
+						smu10_get_mem_latency(hwmgr,
+						pclk_vol_table->entries[i].clk) :
+						0;
+		clocks->num_levels++;
 	}
 
 	return 0;
@@ -1080,11 +1077,9 @@ static int smu10_get_clock_by_type_with_voltage(struct pp_hwmgr *hwmgr,
 
 	clocks->num_levels = 0;
 	for (i = 0; i < pclk_vol_table->count; i++) {
-		if (pclk_vol_table->entries[i].clk) {
-			clocks->data[clocks->num_levels].clocks_in_khz = pclk_vol_table->entries[i].clk  * 10;
-			clocks->data[clocks->num_levels].voltage_in_mv = pclk_vol_table->entries[i].vol;
-			clocks->num_levels++;
-		}
+		clocks->data[i].clocks_in_khz = pclk_vol_table->entries[i].clk  * 10;
+		clocks->data[i].voltage_in_mv = pclk_vol_table->entries[i].vol;
+		clocks->num_levels++;
 	}
 
 	return 0;
@@ -1156,11 +1151,12 @@ static int smu10_set_watermarks_for_clocks_ranges(struct pp_hwmgr *hwmgr,
 	struct smu10_hwmgr *data = hwmgr->backend;
 	struct dm_pp_wm_sets_with_clock_ranges_soc15 *wm_with_clock_ranges = clock_ranges;
 	Watermarks_t *table = &(data->water_marks_table);
+	int result = 0;
 
 	smu_set_watermarks_for_clocks_ranges(table,wm_with_clock_ranges);
 	smum_smc_table_manager(hwmgr, (uint8_t *)table, (uint16_t)SMU10_WMTABLE, false);
 	data->water_marks_exist = true;
-	return 0;
+	return result;
 }
 
 static int smu10_smus_notify_pwe(struct pp_hwmgr *hwmgr)

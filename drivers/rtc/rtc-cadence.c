@@ -255,6 +255,7 @@ static const struct rtc_class_ops cdns_rtc_ops = {
 static int cdns_rtc_probe(struct platform_device *pdev)
 {
 	struct cdns_rtc *crtc;
+	struct resource *res;
 	int ret;
 	unsigned long ref_clk_freq;
 
@@ -262,7 +263,8 @@ static int cdns_rtc_probe(struct platform_device *pdev)
 	if (!crtc)
 		return -ENOMEM;
 
-	crtc->regs = devm_platform_ioremap_resource(pdev, 0);
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	crtc->regs = devm_ioremap_resource(&pdev->dev, res);
 	if (IS_ERR(crtc->regs))
 		return PTR_ERR(crtc->regs);
 

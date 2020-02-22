@@ -1505,9 +1505,6 @@ void __init tsc_init(void)
 		return;
 	}
 
-	if (tsc_clocksource_reliable || no_tsc_watchdog)
-		clocksource_tsc_early.flags &= ~CLOCK_SOURCE_MUST_VERIFY;
-
 	clocksource_register_khz(&clocksource_tsc_early, tsc_khz);
 	detect_art();
 }

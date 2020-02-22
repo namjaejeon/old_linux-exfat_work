@@ -5,13 +5,8 @@
 # has been done.
 #
 from docutils import nodes
-import sphinx
 from sphinx import addnodes
-if sphinx.version_info[0] < 2 or \
-   sphinx.version_info[0] == 2 and sphinx.version_info[1] < 1:
-    from sphinx.environment import NoUri
-else:
-    from sphinx.errors import NoUri
+from sphinx.environment import NoUri
 import re
 
 #

@@ -147,7 +147,7 @@ static inline int nvdimm_read_bytes(struct nd_namespace_common *ndns,
 
 /**
  * nvdimm_write_bytes() - synchronously write bytes to an nvdimm namespace
- * @ndns: device to write
+ * @ndns: device to read
  * @offset: namespace-relative starting offset
  * @buf: buffer to drain
  * @size: transfer length

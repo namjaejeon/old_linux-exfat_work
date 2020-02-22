@@ -7,7 +7,7 @@
 
 #include <linux/cpu.h>
 #include <asm/apic.h>
-#include <asm/memtype.h>
+#include <asm/pat.h>
 #include <asm/processor.h>
 
 #include "cpu.h"

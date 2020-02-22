@@ -1768,11 +1768,10 @@ static struct terms_test test__terms[] = {
 
 static int test_event(struct evlist_test *e)
 {
-	struct parse_events_error err;
+	struct parse_events_error err = { .idx = 0, };
 	struct evlist *evlist;
 	int ret;
 
-	bzero(&err, sizeof(err));
 	if (e->valid && !e->valid()) {
 		pr_debug("... SKIP");
 		return 0;

@@ -9,7 +9,7 @@
 #ifndef __ASM_PLAT_SAMSUNG_TIME_H
 #define __ASM_PLAT_SAMSUNG_TIME_H __FILE__
 
-/* Samsung HR-Timer Clock mode */
+/* SAMSUNG HR-Timer Clock mode */
 enum samsung_timer_mode {
 	SAMSUNG_PWM0,
 	SAMSUNG_PWM1,

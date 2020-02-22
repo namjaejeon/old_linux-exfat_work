@@ -46,6 +46,7 @@
 #include <linux/irqdomain.h>
 #include <linux/mfd/syscon.h>
 #include <linux/of_device.h>
+#include <linux/of_irq.h>
 #include <linux/pinctrl/consumer.h>
 #include <linux/platform_device.h>
 #include <linux/pwm.h>
@@ -383,10 +384,7 @@ static int mvebu_gpio_get_direction(struct gpio_chip *chip, unsigned int pin)
 
 	regmap_read(mvchip->regs, GPIO_IO_CONF_OFF + mvchip->offset, &u);
 
-	if (u & BIT(pin))
-		return GPIO_LINE_DIRECTION_IN;
-
-	return GPIO_LINE_DIRECTION_OUT;
+	return !!(u & BIT(pin));
 }
 
 static int mvebu_gpio_to_irq(struct gpio_chip *chip, unsigned int pin)
@@ -431,7 +429,6 @@ static void mvebu_gpio_edge_irq_unmask(struct irq_data *d)
 	u32 mask = d->mask;
 
 	irq_gc_lock(gc);
-	mvebu_gpio_write_edge_cause(mvchip, ~mask);
 	ct->mask_cache_priv |= mask;
 	mvebu_gpio_write_edge_mask(mvchip, ct->mask_cache_priv);
 	irq_gc_unlock(gc);
@@ -776,10 +773,21 @@ static int mvebu_pwm_probe(struct platform_device *pdev,
 {
 	struct device *dev = &pdev->dev;
 	struct mvebu_pwm *mvpwm;
+	struct resource *res;
 	u32 set;
 
 	if (!of_device_is_compatible(mvchip->chip.of_node,
 				     "marvell,armada-370-gpio"))
+		return 0;
+
+	/*
+	 * There are only two sets of PWM configuration registers for
+	 * all the GPIO lines on those SoCs which this driver reserves
+	 * for the first two GPIO chips. So if the resource is missing
+	 * we can't treat it as an error.
+	 */
+	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "pwm");
+	if (!res)
 		return 0;
 
 	if (IS_ERR(mvchip->clk))
@@ -804,13 +812,7 @@ static int mvebu_pwm_probe(struct platform_device *pdev,
 	mvchip->mvpwm = mvpwm;
 	mvpwm->mvchip = mvchip;
 
-	/*
-	 * There are only two sets of PWM configuration registers for
-	 * all the GPIO lines on those SoCs which this driver reserves
-	 * for the first two GPIO chips. So if the resource is missing
-	 * we can't treat it as an error.
-	 */
-	mvpwm->membase = devm_platform_ioremap_resource_byname(pdev, "pwm");
+	mvpwm->membase = devm_ioremap_resource(dev, res);
 	if (IS_ERR(mvpwm->membase))
 		return PTR_ERR(mvpwm->membase);
 
@@ -1102,11 +1104,7 @@ static int mvebu_gpio_probe(struct platform_device *pdev)
 		soc_variant = MVEBU_GPIO_SOC_VARIANT_ORION;
 
 	/* Some gpio controllers do not provide irq support */
-	err = platform_irq_count(pdev);
-	if (err < 0)
-		return err;
-
-	have_irqs = err != 0;
+	have_irqs = of_irq_count(np) != 0;
 
 	mvchip = devm_kzalloc(&pdev->dev, sizeof(struct mvebu_gpio_chip),
 			      GFP_KERNEL);

@@ -31,6 +31,7 @@
 #include <asm/pgtable.h>
 #include <asm/processor.h>
 #include <asm/bootinfo.h>
+#include <asm/pmon.h>
 #include <asm/cacheflush.h>
 #include <asm/tlbflush.h>
 #include <asm/mipsregs.h>

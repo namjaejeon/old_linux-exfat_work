@@ -35,8 +35,7 @@
 #include <mach/cputype.h>
 #include <mach/mux.h>
 #include <mach/serial.h>
-
-#include <clocksource/timer-davinci.h>
+#include <mach/time.h>
 
 #include "asp.h"
 #include "davinci.h"
@@ -661,16 +660,10 @@ static struct davinci_id dm365_ids[] = {
 	},
 };
 
-/*
- * Bottom half of timer0 is used for clockevent, top half is used for
- * clocksource.
- */
-static const struct davinci_timer_cfg dm365_timer_cfg = {
-	.reg = DEFINE_RES_IO(DAVINCI_TIMER0_BASE, SZ_128),
-	.irq = {
-		DEFINE_RES_IRQ(DAVINCI_INTC_IRQ(IRQ_TINT0_TINT12)),
-		DEFINE_RES_IRQ(DAVINCI_INTC_IRQ(IRQ_TINT0_TINT34)),
-	},
+static struct davinci_timer_info dm365_timer_info = {
+	.timers		= davinci_timer_instance,
+	.clockevent_id	= T0_BOT,
+	.clocksource_id	= T0_TOP,
 };
 
 #define DM365_UART1_BASE	(IO_PHYS + 0x106000)
@@ -730,6 +723,7 @@ static const struct davinci_soc_info davinci_soc_info_dm365 = {
 	.pinmux_base		= DAVINCI_SYSTEM_MODULE_BASE,
 	.pinmux_pins		= dm365_pins,
 	.pinmux_pins_num	= ARRAY_SIZE(dm365_pins),
+	.timer_info		= &dm365_timer_info,
 	.emac_pdata		= &dm365_emac_pdata,
 	.sram_dma		= 0x00010000,
 	.sram_len		= SZ_32K,
@@ -777,7 +771,6 @@ void __init dm365_init_time(void)
 {
 	void __iomem *pll1, *pll2, *psc;
 	struct clk *clk;
-	int rv;
 
 	clk_register_fixed_rate(NULL, "ref_clk", NULL, 0, DM365_REF_FREQ);
 
@@ -796,8 +789,7 @@ void __init dm365_init_time(void)
 		return;
 	}
 
-	rv = davinci_timer_register(clk, &dm365_timer_cfg);
-	WARN(rv, "Unable to register the timer: %d\n", rv);
+	davinci_timer_init(clk);
 }
 
 void __init dm365_register_clocks(void)

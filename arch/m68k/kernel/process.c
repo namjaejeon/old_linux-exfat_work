@@ -30,9 +30,8 @@
 #include <linux/init_task.h>
 #include <linux/mqueue.h>
 #include <linux/rcupdate.h>
-#include <linux/syscalls.h>
-#include <linux/uaccess.h>
 
+#include <linux/uaccess.h>
 #include <asm/traps.h>
 #include <asm/machdep.h>
 #include <asm/setup.h>
@@ -108,43 +107,20 @@ void flush_thread(void)
  * on top of pt_regs, which means that sys_clone() arguments would be
  * buried.  We could, of course, copy them, but it's too costly for no
  * good reason - generic clone() would have to copy them *again* for
- * _do_fork() anyway.  So in this case it's actually better to pass pt_regs *
- * and extract arguments for _do_fork() from there.  Eventually we might
- * go for calling _do_fork() directly from the wrapper, but only after we
- * are finished with _do_fork() prototype conversion.
+ * do_fork() anyway.  So in this case it's actually better to pass pt_regs *
+ * and extract arguments for do_fork() from there.  Eventually we might
+ * go for calling do_fork() directly from the wrapper, but only after we
+ * are finished with do_fork() prototype conversion.
  */
 asmlinkage int m68k_clone(struct pt_regs *regs)
 {
 	/* regs will be equal to current_pt_regs() */
-	struct kernel_clone_args args = {
-		.flags		= regs->d1 & ~CSIGNAL,
-		.pidfd		= (int __user *)regs->d3,
-		.child_tid	= (int __user *)regs->d4,
-		.parent_tid	= (int __user *)regs->d3,
-		.exit_signal	= regs->d1 & CSIGNAL,
-		.stack		= regs->d2,
-		.tls		= regs->d5,
-	};
-
-	if (!legacy_clone_args_valid(&args))
-		return -EINVAL;
-
-	return _do_fork(&args);
+	return do_fork(regs->d1, regs->d2, 0,
+		       (int __user *)regs->d3, (int __user *)regs->d4);
 }
 
-/*
- * Because extra registers are saved on the stack after the sys_clone3()
- * arguments, this C wrapper extracts them from pt_regs * and then calls the
- * generic sys_clone3() implementation.
- */
-asmlinkage int m68k_clone3(struct pt_regs *regs)
-{
-	return sys_clone3((struct clone_args __user *)regs->d1, regs->d2);
-}
-
-int copy_thread_tls(unsigned long clone_flags, unsigned long usp,
-		    unsigned long arg, struct task_struct *p,
-		    unsigned long tls)
+int copy_thread(unsigned long clone_flags, unsigned long usp,
+		 unsigned long arg, struct task_struct *p)
 {
 	struct fork_frame {
 		struct switch_stack sw;
@@ -179,7 +155,7 @@ int copy_thread_tls(unsigned long clone_flags, unsigned long usp,
 	p->thread.usp = usp ?: rdusp();
 
 	if (clone_flags & CLONE_SETTLS)
-		task_thread_info(p)->tp_value = tls;
+		task_thread_info(p)->tp_value = frame->regs.d5;
 
 #ifdef CONFIG_FPU
 	if (!FPU_IS_EMU) {

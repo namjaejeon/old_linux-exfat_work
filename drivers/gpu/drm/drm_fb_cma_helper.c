@@ -9,7 +9,6 @@
  *  Copyright (C) 2012 Red Hat
  */
 
-#include <drm/drm_fb_cma_helper.h>
 #include <drm/drm_fourcc.h>
 #include <drm/drm_framebuffer.h>
 #include <drm/drm_gem_cma_helper.h>

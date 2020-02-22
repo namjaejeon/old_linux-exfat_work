@@ -65,7 +65,7 @@ static int pisosr_gpio_get_direction(struct gpio_chip *chip,
 				     unsigned offset)
 {
 	/* This device always input */
-	return GPIO_LINE_DIRECTION_IN;
+	return 1;
 }
 
 static int pisosr_gpio_direction_input(struct gpio_chip *chip,
@@ -96,16 +96,16 @@ static int pisosr_gpio_get_multiple(struct gpio_chip *chip,
 				    unsigned long *mask, unsigned long *bits)
 {
 	struct pisosr_gpio *gpio = gpiochip_get_data(chip);
-	unsigned long offset;
-	unsigned long gpio_mask;
-	unsigned long buffer_state;
+	unsigned int nbytes = DIV_ROUND_UP(chip->ngpio, 8);
+	unsigned int i, j;
 
 	pisosr_gpio_refresh(gpio);
 
 	bitmap_zero(bits, chip->ngpio);
-	for_each_set_clump8(offset, gpio_mask, mask, chip->ngpio) {
-		buffer_state = gpio->buffer[offset / 8] & gpio_mask;
-		bitmap_set_value8(bits, buffer_state, offset);
+	for (i = 0; i < nbytes; i++) {
+		j = i / sizeof(unsigned long);
+		bits[j] |= ((unsigned long) gpio->buffer[i])
+			   << (8 * (i % sizeof(unsigned long)));
 	}
 
 	return 0;

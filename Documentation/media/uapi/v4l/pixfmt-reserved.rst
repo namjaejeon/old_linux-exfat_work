@@ -55,7 +55,8 @@ please make a proposal on the linux-media mailing list.
 
       - ``V4L2_PIX_FMT_HM12``
       - 'HM12'
-      - YUV 4:2:0 format used by the IVTV driver.
+      - YUV 4:2:0 format used by the IVTV driver,
+	`http://www.ivtvdriver.org/ <http://www.ivtvdriver.org/>`__
 
 	The format is documented in the kernel sources in the file
 	``Documentation/media/v4l-drivers/cx2341x.rst``

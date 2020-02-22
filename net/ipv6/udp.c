@@ -690,7 +690,8 @@ static int udpv6_queue_rcv_skb(struct sock *sk, struct sk_buff *skb)
 
 	__skb_push(skb, -skb_mac_offset(skb));
 	segs = udp_rcv_segment(sk, skb, false);
-	skb_list_walk_safe(segs, skb, next) {
+	for (skb = segs; skb; skb = next) {
+		next = skb->next;
 		__skb_pull(skb, skb_transport_offset(skb));
 
 		ret = udpv6_queue_rcv_one_skb(sk, skb);

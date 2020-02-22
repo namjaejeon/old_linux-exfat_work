@@ -1466,15 +1466,16 @@ static void fadump_init_files(void)
  */
 int __init setup_fadump(void)
 {
-	if (!fw_dump.fadump_supported)
+	if (!fw_dump.fadump_enabled)
 		return 0;
 
-	fadump_init_files();
+	if (!fw_dump.fadump_supported) {
+		printk(KERN_ERR "Firmware-assisted dump is not supported on"
+			" this hardware\n");
+		return 0;
+	}
+
 	fadump_show_config();
-
-	if (!fw_dump.fadump_enabled)
-		return 1;
-
 	/*
 	 * If dump data is available then see if it is valid and prepare for
 	 * saving it to the disk.
@@ -1490,6 +1491,8 @@ int __init setup_fadump(void)
 	/* Initialize the kernel dump memory structure for FAD registration. */
 	else if (fw_dump.reserve_dump_area_size)
 		fw_dump.ops->fadump_init_mem_struct(&fw_dump);
+
+	fadump_init_files();
 
 	return 1;
 }

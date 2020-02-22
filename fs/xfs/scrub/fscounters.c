@@ -83,6 +83,9 @@ xchk_fscount_warmup(
 		error = xfs_alloc_read_agf(mp, sc->tp, agno, 0, &agf_bp);
 		if (error)
 			break;
+		error = -ENOMEM;
+		if (!agf_bp || !agi_bp)
+			break;
 
 		/*
 		 * These are supposed to be initialized by the header read
@@ -101,7 +104,7 @@ next_loop_perag:
 		pag = NULL;
 		error = 0;
 
-		if (xchk_should_terminate(sc, &error))
+		if (fatal_signal_pending(current))
 			break;
 	}
 
@@ -160,7 +163,6 @@ xchk_fscount_aggregate_agcounts(
 	uint64_t		delayed;
 	xfs_agnumber_t		agno;
 	int			tries = 8;
-	int			error = 0;
 
 retry:
 	fsc->icount = 0;
@@ -194,12 +196,9 @@ retry:
 
 		xfs_perag_put(pag);
 
-		if (xchk_should_terminate(sc, &error))
+		if (fatal_signal_pending(current))
 			break;
 	}
-
-	if (error)
-		return error;
 
 	/*
 	 * The global incore space reservation is taken from the incore

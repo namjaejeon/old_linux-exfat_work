@@ -41,6 +41,7 @@ struct cc_req_mgr_handle {
 #else
 	struct tasklet_struct comptask;
 #endif
+	bool is_runtime_suspended;
 };
 
 struct cc_bl_item {
@@ -229,7 +230,7 @@ static int cc_queues_status(struct cc_drvdata *drvdata,
 	struct device *dev = drvdata_to_dev(drvdata);
 
 	/* SW queue is checked only once as it will not
-	 * be changed during the poll because the spinlock_bh
+	 * be chaned during the poll because the spinlock_bh
 	 * is held by the thread
 	 */
 	if (((req_mgr_h->req_queue_head + 1) & (MAX_REQUEST_QUEUE_SIZE - 1)) ==
@@ -274,11 +275,12 @@ static int cc_queues_status(struct cc_drvdata *drvdata,
  * \param len The crypto sequence length
  * \param add_comp If "true": add an artificial dout DMA to mark completion
  *
+ * \return int Returns -EINPROGRESS or error code
  */
-static void cc_do_send_request(struct cc_drvdata *drvdata,
-			       struct cc_crypto_req *cc_req,
-			       struct cc_hw_desc *desc, unsigned int len,
-			       bool add_comp)
+static int cc_do_send_request(struct cc_drvdata *drvdata,
+			      struct cc_crypto_req *cc_req,
+			      struct cc_hw_desc *desc, unsigned int len,
+				bool add_comp)
 {
 	struct cc_req_mgr_handle *req_mgr_h = drvdata->request_mgr_handle;
 	unsigned int used_sw_slots;
@@ -301,8 +303,8 @@ static void cc_do_send_request(struct cc_drvdata *drvdata,
 
 	/*
 	 * We are about to push command to the HW via the command registers
-	 * that may reference host memory. We need to issue a memory barrier
-	 * to make sure there are no outstanding memory writes
+	 * that may refernece hsot memory. We need to issue a memory barrier
+	 * to make sure there are no outstnading memory writes
 	 */
 	wmb();
 
@@ -326,6 +328,9 @@ static void cc_do_send_request(struct cc_drvdata *drvdata,
 		/* Update the free slots in HW queue */
 		req_mgr_h->q_free_slots -= total_seq_len;
 	}
+
+	/* Operation still in process */
+	return -EINPROGRESS;
 }
 
 static void cc_enqueue_backlog(struct cc_drvdata *drvdata,
@@ -385,15 +390,20 @@ static void cc_proc_backlog(struct cc_drvdata *drvdata)
 			return;
 		}
 
-		cc_do_send_request(drvdata, &bli->creq, bli->desc, bli->len,
-				   false);
+		rc = cc_do_send_request(drvdata, &bli->creq, bli->desc,
+					bli->len, false);
+
 		spin_unlock(&mgr->hw_lock);
+
+		if (rc != -EINPROGRESS) {
+			cc_pm_put_suspend(dev);
+			creq->user_cb(dev, req, rc);
+		}
 
 		/* Remove ourselves from the backlog list */
 		spin_lock(&mgr->bl_lock);
 		list_del(&bli->list);
 		--mgr->bl_len;
-		kfree(bli);
 	}
 
 	spin_unlock(&mgr->bl_lock);
@@ -412,7 +422,7 @@ int cc_send_request(struct cc_drvdata *drvdata, struct cc_crypto_req *cc_req,
 
 	rc = cc_pm_get(dev);
 	if (rc) {
-		dev_err(dev, "cc_pm_get returned %x\n", rc);
+		dev_err(dev, "ssi_power_mgr_runtime_get returned %x\n", rc);
 		return rc;
 	}
 
@@ -441,10 +451,8 @@ int cc_send_request(struct cc_drvdata *drvdata, struct cc_crypto_req *cc_req,
 		return -EBUSY;
 	}
 
-	if (!rc) {
-		cc_do_send_request(drvdata, cc_req, desc, len, false);
-		rc = -EINPROGRESS;
-	}
+	if (!rc)
+		rc = cc_do_send_request(drvdata, cc_req, desc, len, false);
 
 	spin_unlock_bh(&mgr->hw_lock);
 	return rc;
@@ -464,7 +472,7 @@ int cc_send_sync_request(struct cc_drvdata *drvdata,
 
 	rc = cc_pm_get(dev);
 	if (rc) {
-		dev_err(dev, "cc_pm_get returned %x\n", rc);
+		dev_err(dev, "ssi_power_mgr_runtime_get returned %x\n", rc);
 		return rc;
 	}
 
@@ -484,8 +492,14 @@ int cc_send_sync_request(struct cc_drvdata *drvdata,
 		reinit_completion(&drvdata->hw_queue_avail);
 	}
 
-	cc_do_send_request(drvdata, cc_req, desc, len, true);
+	rc = cc_do_send_request(drvdata, cc_req, desc, len, true);
 	spin_unlock_bh(&mgr->hw_lock);
+
+	if (rc != -EINPROGRESS) {
+		cc_pm_put_suspend(dev);
+		return rc;
+	}
+
 	wait_for_completion(&cc_req->seq_compl);
 	return 0;
 }
@@ -518,8 +532,8 @@ int send_request_init(struct cc_drvdata *drvdata, struct cc_hw_desc *desc,
 
 	/*
 	 * We are about to push command to the HW via the command registers
-	 * that may reference host memory. We need to issue a memory barrier
-	 * to make sure there are no outstanding memory writes
+	 * that may refernece hsot memory. We need to issue a memory barrier
+	 * to make sure there are no outstnading memory writes
 	 */
 	wmb();
 	enqueue_seq(drvdata, desc, len);
@@ -654,7 +668,7 @@ static void comp_handler(unsigned long devarg)
 		request_mgr_handle->axi_completed += cc_axi_comp_count(drvdata);
 	}
 
-	/* after verifying that there is nothing to do,
+	/* after verifing that there is nothing to do,
 	 * unmask AXI completion interrupt
 	 */
 	cc_iowrite(drvdata, CC_REG(HOST_IMR),
@@ -663,3 +677,52 @@ static void comp_handler(unsigned long devarg)
 	cc_proc_backlog(drvdata);
 	dev_dbg(dev, "Comp. handler done.\n");
 }
+
+/*
+ * resume the queue configuration - no need to take the lock as this happens
+ * inside the spin lock protection
+ */
+#if defined(CONFIG_PM)
+int cc_resume_req_queue(struct cc_drvdata *drvdata)
+{
+	struct cc_req_mgr_handle *request_mgr_handle =
+		drvdata->request_mgr_handle;
+
+	spin_lock_bh(&request_mgr_handle->hw_lock);
+	request_mgr_handle->is_runtime_suspended = false;
+	spin_unlock_bh(&request_mgr_handle->hw_lock);
+
+	return 0;
+}
+
+/*
+ * suspend the queue configuration. Since it is used for the runtime suspend
+ * only verify that the queue can be suspended.
+ */
+int cc_suspend_req_queue(struct cc_drvdata *drvdata)
+{
+	struct cc_req_mgr_handle *request_mgr_handle =
+						drvdata->request_mgr_handle;
+
+	/* lock the send_request */
+	spin_lock_bh(&request_mgr_handle->hw_lock);
+	if (request_mgr_handle->req_queue_head !=
+	    request_mgr_handle->req_queue_tail) {
+		spin_unlock_bh(&request_mgr_handle->hw_lock);
+		return -EBUSY;
+	}
+	request_mgr_handle->is_runtime_suspended = true;
+	spin_unlock_bh(&request_mgr_handle->hw_lock);
+
+	return 0;
+}
+
+bool cc_req_queue_suspended(struct cc_drvdata *drvdata)
+{
+	struct cc_req_mgr_handle *request_mgr_handle =
+						drvdata->request_mgr_handle;
+
+	return	request_mgr_handle->is_runtime_suspended;
+}
+
+#endif

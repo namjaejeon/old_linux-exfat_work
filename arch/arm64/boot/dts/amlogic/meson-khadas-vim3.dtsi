@@ -246,10 +246,6 @@
 	linux,rc-map-name = "rc-khadas";
 };
 
-&pcie {
-	reset-gpios = <&gpio GPIOA_8 GPIO_ACTIVE_LOW>;
-};
-
 &pwm_ef {
         status = "okay";
         pinctrl-0 = <&pwm_e_pins>;
@@ -277,9 +273,6 @@
 
 	non-removable;
 	disable-wp;
-
-	/* WiFi firmware requires power to be kept while in suspend */
-	keep-power-in-suspend;
 
 	mmc-pwrseq = <&sdio_pwrseq>;
 

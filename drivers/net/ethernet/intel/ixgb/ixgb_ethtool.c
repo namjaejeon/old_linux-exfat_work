@@ -19,10 +19,10 @@ struct ixgb_stats {
 };
 
 #define IXGB_STAT(m)		IXGB_STATS, \
-				sizeof_field(struct ixgb_adapter, m), \
+				FIELD_SIZEOF(struct ixgb_adapter, m), \
 				offsetof(struct ixgb_adapter, m)
 #define IXGB_NETDEV_STAT(m)	NETDEV_STATS, \
-				sizeof_field(struct net_device, m), \
+				FIELD_SIZEOF(struct net_device, m), \
 				offsetof(struct net_device, m)
 
 static struct ixgb_stats ixgb_gstrings_stats[] = {

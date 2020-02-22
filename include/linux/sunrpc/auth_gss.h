@@ -13,6 +13,7 @@
 #ifndef _LINUX_SUNRPC_AUTH_GSS_H
 #define _LINUX_SUNRPC_AUTH_GSS_H
 
+#ifdef __KERNEL__
 #include <linux/refcount.h>
 #include <linux/sunrpc/auth.h>
 #include <linux/sunrpc/svc.h>
@@ -89,5 +90,6 @@ struct gss_cred {
 	unsigned long		gc_upcall_timestamp;
 };
 
+#endif /* __KERNEL__ */
 #endif /* _LINUX_SUNRPC_AUTH_GSS_H */
 

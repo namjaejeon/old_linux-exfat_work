@@ -714,10 +714,8 @@ s32 freq_qos_read_value(struct freq_constraints *qos,
  * @req: Constraint request to apply.
  * @action: Action to perform (add/update/remove).
  * @value: Value to assign to the QoS request.
- *
- * This is only meant to be called from inside pm_qos, not drivers.
  */
-int freq_qos_apply(struct freq_qos_request *req,
+static int freq_qos_apply(struct freq_qos_request *req,
 			  enum pm_qos_req_action action, s32 value)
 {
 	int ret;
@@ -816,8 +814,6 @@ EXPORT_SYMBOL_GPL(freq_qos_update_request);
  */
 int freq_qos_remove_request(struct freq_qos_request *req)
 {
-	int ret;
-
 	if (!req)
 		return -EINVAL;
 
@@ -825,11 +821,7 @@ int freq_qos_remove_request(struct freq_qos_request *req)
 		 "%s() called for unknown object\n", __func__))
 		return -EINVAL;
 
-	ret = freq_qos_apply(req, PM_QOS_REMOVE_REQ, PM_QOS_DEFAULT_VALUE);
-	req->qos = NULL;
-	req->type = 0;
-
-	return ret;
+	return freq_qos_apply(req, PM_QOS_REMOVE_REQ, PM_QOS_DEFAULT_VALUE);
 }
 EXPORT_SYMBOL_GPL(freq_qos_remove_request);
 

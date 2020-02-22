@@ -351,13 +351,15 @@ exists:
 static void _t4_l2e_free(struct l2t_entry *e)
 {
 	struct l2t_data *d;
+	struct sk_buff *skb;
 
 	if (atomic_read(&e->refcnt) == 0) {  /* hasn't been recycled */
 		if (e->neigh) {
 			neigh_release(e->neigh);
 			e->neigh = NULL;
 		}
-		__skb_queue_purge(&e->arpq);
+		while ((skb = __skb_dequeue(&e->arpq)) != NULL)
+			kfree_skb(skb);
 	}
 
 	d = container_of(e, struct l2t_data, l2tab[e->idx]);
@@ -368,6 +370,7 @@ static void _t4_l2e_free(struct l2t_entry *e)
 static void t4_l2e_free(struct l2t_entry *e)
 {
 	struct l2t_data *d;
+	struct sk_buff *skb;
 
 	spin_lock_bh(&e->lock);
 	if (atomic_read(&e->refcnt) == 0) {  /* hasn't been recycled */
@@ -375,7 +378,8 @@ static void t4_l2e_free(struct l2t_entry *e)
 			neigh_release(e->neigh);
 			e->neigh = NULL;
 		}
-		__skb_queue_purge(&e->arpq);
+		while ((skb = __skb_dequeue(&e->arpq)) != NULL)
+			kfree_skb(skb);
 	}
 	spin_unlock_bh(&e->lock);
 
@@ -678,7 +682,8 @@ static void *l2t_seq_start(struct seq_file *seq, loff_t *pos)
 static void *l2t_seq_next(struct seq_file *seq, void *v, loff_t *pos)
 {
 	v = l2t_get_idx(seq, *pos);
-	++(*pos);
+	if (v)
+		++*pos;
 	return v;
 }
 

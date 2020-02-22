@@ -60,10 +60,7 @@ struct cpuidle_monitor {
 	struct cpuidle_monitor* (*do_register) (void);
 	void (*unregister)(void);
 	unsigned int overflow_s;
-	struct {
-		unsigned int needs_root:1;
-		unsigned int per_cpu_schedule:1;
-	} flags;
+	int needs_root;
 };
 
 extern long long timespec_diff_us(struct timespec start, struct timespec end);

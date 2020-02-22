@@ -32,7 +32,6 @@ struct record_opts {
 	bool	      full_auxtrace;
 	bool	      auxtrace_snapshot_mode;
 	bool	      auxtrace_snapshot_on_exit;
-	bool	      auxtrace_sample_mode;
 	bool	      record_namespaces;
 	bool	      record_switch_events;
 	bool	      all_kernel;
@@ -45,7 +44,6 @@ struct record_opts {
 	bool	      strict_freq;
 	bool	      sample_id;
 	bool	      no_bpf_event;
-	bool	      kcore;
 	unsigned int  freq;
 	unsigned int  mmap_pages;
 	unsigned int  auxtrace_mmap_pages;
@@ -57,7 +55,6 @@ struct record_opts {
 	u64	      user_interval;
 	size_t	      auxtrace_snapshot_size;
 	const char    *auxtrace_snapshot_opts;
-	const char    *auxtrace_sample_opts;
 	bool	      sample_transaction;
 	unsigned      initial_delay;
 	bool	      use_clockid;

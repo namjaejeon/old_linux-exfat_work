@@ -569,6 +569,17 @@ static const struct snd_pcm_hardware snd_emu10k1_efx_playback =
 	.fifo_size =		0,
 };
 
+static int snd_emu10k1_capture_hw_params(struct snd_pcm_substream *substream,
+					 struct snd_pcm_hw_params *hw_params)
+{
+	return snd_pcm_lib_malloc_pages(substream, params_buffer_bytes(hw_params));
+}
+
+static int snd_emu10k1_capture_hw_free(struct snd_pcm_substream *substream)
+{
+	return snd_pcm_lib_free_pages(substream);
+}
+
 static int snd_emu10k1_capture_prepare(struct snd_pcm_substream *substream)
 {
 	struct snd_emu10k1 *emu = snd_pcm_substream_chip(substream);
@@ -1349,16 +1360,21 @@ static int snd_emu10k1_capture_efx_close(struct snd_pcm_substream *substream)
 static const struct snd_pcm_ops snd_emu10k1_playback_ops = {
 	.open =			snd_emu10k1_playback_open,
 	.close =		snd_emu10k1_playback_close,
+	.ioctl =		snd_pcm_lib_ioctl,
 	.hw_params =		snd_emu10k1_playback_hw_params,
 	.hw_free =		snd_emu10k1_playback_hw_free,
 	.prepare =		snd_emu10k1_playback_prepare,
 	.trigger =		snd_emu10k1_playback_trigger,
 	.pointer =		snd_emu10k1_playback_pointer,
+	.page =			snd_pcm_sgbuf_ops_page,
 };
 
 static const struct snd_pcm_ops snd_emu10k1_capture_ops = {
 	.open =			snd_emu10k1_capture_open,
 	.close =		snd_emu10k1_capture_close,
+	.ioctl =		snd_pcm_lib_ioctl,
+	.hw_params =		snd_emu10k1_capture_hw_params,
+	.hw_free =		snd_emu10k1_capture_hw_free,
 	.prepare =		snd_emu10k1_capture_prepare,
 	.trigger =		snd_emu10k1_capture_trigger,
 	.pointer =		snd_emu10k1_capture_pointer,
@@ -1368,11 +1384,13 @@ static const struct snd_pcm_ops snd_emu10k1_capture_ops = {
 static const struct snd_pcm_ops snd_emu10k1_efx_playback_ops = {
 	.open =			snd_emu10k1_efx_playback_open,
 	.close =		snd_emu10k1_efx_playback_close,
+	.ioctl =		snd_pcm_lib_ioctl,
 	.hw_params =		snd_emu10k1_playback_hw_params,
 	.hw_free =		snd_emu10k1_efx_playback_hw_free,
 	.prepare =		snd_emu10k1_efx_playback_prepare,
 	.trigger =		snd_emu10k1_efx_playback_trigger,
 	.pointer =		snd_emu10k1_efx_playback_pointer,
+	.page =			snd_pcm_sgbuf_ops_page,
 };
 
 int snd_emu10k1_pcm(struct snd_emu10k1 *emu, int device)
@@ -1394,15 +1412,15 @@ int snd_emu10k1_pcm(struct snd_emu10k1 *emu, int device)
 	strcpy(pcm->name, "ADC Capture/Standard PCM Playback");
 	emu->pcm = pcm;
 
-	/* playback substream can't use managed buffers due to alignment */
 	for (substream = pcm->streams[SNDRV_PCM_STREAM_PLAYBACK].substream; substream; substream = substream->next)
 		snd_pcm_lib_preallocate_pages(substream, SNDRV_DMA_TYPE_DEV_SG,
-					      &emu->pci->dev,
+					      snd_dma_pci_data(emu->pci),
 					      64*1024, 64*1024);
 
 	for (substream = pcm->streams[SNDRV_PCM_STREAM_CAPTURE].substream; substream; substream = substream->next)
-		snd_pcm_set_managed_buffer(substream, SNDRV_DMA_TYPE_DEV,
-					   &emu->pci->dev, 64*1024, 64*1024);
+		snd_pcm_lib_preallocate_pages(substream, SNDRV_DMA_TYPE_DEV,
+					      snd_dma_pci_data(emu->pci),
+					      64*1024, 64*1024);
 
 	return 0;
 }
@@ -1427,7 +1445,7 @@ int snd_emu10k1_pcm_multi(struct snd_emu10k1 *emu, int device)
 
 	for (substream = pcm->streams[SNDRV_PCM_STREAM_PLAYBACK].substream; substream; substream = substream->next)
 		snd_pcm_lib_preallocate_pages(substream, SNDRV_DMA_TYPE_DEV_SG,
-					      &emu->pci->dev,
+					      snd_dma_pci_data(emu->pci),
 					      64*1024, 64*1024);
 
 	return 0;
@@ -1437,6 +1455,9 @@ int snd_emu10k1_pcm_multi(struct snd_emu10k1 *emu, int device)
 static const struct snd_pcm_ops snd_emu10k1_capture_mic_ops = {
 	.open =			snd_emu10k1_capture_mic_open,
 	.close =		snd_emu10k1_capture_mic_close,
+	.ioctl =		snd_pcm_lib_ioctl,
+	.hw_params =		snd_emu10k1_capture_hw_params,
+	.hw_free =		snd_emu10k1_capture_hw_free,
 	.prepare =		snd_emu10k1_capture_prepare,
 	.trigger =		snd_emu10k1_capture_trigger,
 	.pointer =		snd_emu10k1_capture_pointer,
@@ -1458,8 +1479,9 @@ int snd_emu10k1_pcm_mic(struct snd_emu10k1 *emu, int device)
 	strcpy(pcm->name, "Mic Capture");
 	emu->pcm_mic = pcm;
 
-	snd_pcm_set_managed_buffer_all(pcm, SNDRV_DMA_TYPE_DEV, &emu->pci->dev,
-				       64*1024, 64*1024);
+	snd_pcm_lib_preallocate_pages_for_all(pcm, SNDRV_DMA_TYPE_DEV,
+					      snd_dma_pci_data(emu->pci),
+					      64*1024, 64*1024);
 
 	return 0;
 }
@@ -1530,6 +1552,9 @@ static const struct snd_kcontrol_new snd_emu10k1_pcm_efx_voices_mask = {
 static const struct snd_pcm_ops snd_emu10k1_capture_efx_ops = {
 	.open =			snd_emu10k1_capture_efx_open,
 	.close =		snd_emu10k1_capture_efx_close,
+	.ioctl =		snd_pcm_lib_ioctl,
+	.hw_params =		snd_emu10k1_capture_hw_params,
+	.hw_free =		snd_emu10k1_capture_hw_free,
 	.prepare =		snd_emu10k1_capture_prepare,
 	.trigger =		snd_emu10k1_capture_trigger,
 	.pointer =		snd_emu10k1_capture_pointer,
@@ -1610,6 +1635,12 @@ static int snd_emu10k1_fx8010_playback_transfer(struct snd_pcm_substream *substr
 						  fx8010_pb_trans_copy);
 }
 
+static int snd_emu10k1_fx8010_playback_hw_params(struct snd_pcm_substream *substream,
+						 struct snd_pcm_hw_params *hw_params)
+{
+	return snd_pcm_lib_malloc_pages(substream, params_buffer_bytes(hw_params));
+}
+
 static int snd_emu10k1_fx8010_playback_hw_free(struct snd_pcm_substream *substream)
 {
 	struct snd_emu10k1 *emu = snd_pcm_substream_chip(substream);
@@ -1618,6 +1649,7 @@ static int snd_emu10k1_fx8010_playback_hw_free(struct snd_pcm_substream *substre
 
 	for (i = 0; i < pcm->channels; i++)
 		snd_emu10k1_ptr_write(emu, TANKMEMADDRREGBASE + 0x80 + pcm->etram[i], 0, 0);
+	snd_pcm_lib_free_pages(substream);
 	return 0;
 }
 
@@ -1762,6 +1794,8 @@ static int snd_emu10k1_fx8010_playback_close(struct snd_pcm_substream *substream
 static const struct snd_pcm_ops snd_emu10k1_fx8010_playback_ops = {
 	.open =			snd_emu10k1_fx8010_playback_open,
 	.close =		snd_emu10k1_fx8010_playback_close,
+	.ioctl =		snd_pcm_lib_ioctl,
+	.hw_params =		snd_emu10k1_fx8010_playback_hw_params,
 	.hw_free =		snd_emu10k1_fx8010_playback_hw_free,
 	.prepare =		snd_emu10k1_fx8010_playback_prepare,
 	.trigger =		snd_emu10k1_fx8010_playback_trigger,
@@ -1820,8 +1854,9 @@ int snd_emu10k1_pcm_efx(struct snd_emu10k1 *emu, int device)
 	if (err < 0)
 		return err;
 
-	snd_pcm_set_managed_buffer_all(pcm, SNDRV_DMA_TYPE_DEV, &emu->pci->dev,
-				       64*1024, 64*1024);
+	snd_pcm_lib_preallocate_pages_for_all(pcm, SNDRV_DMA_TYPE_DEV,
+					      snd_dma_pci_data(emu->pci),
+					      64*1024, 64*1024);
 
 	return 0;
 }

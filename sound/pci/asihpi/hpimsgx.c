@@ -17,7 +17,7 @@ Extended Message Function With Response Caching
 #include "hpimsgx.h"
 #include "hpidebug.h"
 
-static const struct pci_device_id asihpi_pci_tbl[] = {
+static struct pci_device_id asihpi_pci_tbl[] = {
 #include "hpipcida.h"
 };
 

@@ -97,10 +97,8 @@ static void vfio_pci_nvgpu_release(struct vfio_pci_device *vdev,
 
 	/* If there were any mappings at all... */
 	if (data->mm) {
-		if (data->mem) {
-			ret = mm_iommu_put(data->mm, data->mem);
-			WARN_ON(ret);
-		}
+		ret = mm_iommu_put(data->mm, data->mem);
+		WARN_ON(ret);
 
 		mmdrop(data->mm);
 	}
@@ -161,7 +159,7 @@ static int vfio_pci_nvgpu_mmap(struct vfio_pci_device *vdev,
 	data->useraddr = vma->vm_start;
 	data->mm = current->mm;
 
-	mmgrab(data->mm);
+	atomic_inc(&data->mm->mm_count);
 	ret = (int) mm_iommu_newdev(data->mm, data->useraddr,
 			vma_pages(vma), data->gpu_hpa, &data->mem);
 

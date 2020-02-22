@@ -548,35 +548,34 @@ out_unlock:
 	return err;
 }
 
-SYSCALL_DEFINE1(sparc_adjtimex, struct __kernel_timex __user *, txc_p)
+SYSCALL_DEFINE1(sparc_adjtimex, struct timex __user *, txc_p)
 {
-	struct __kernel_timex txc;
-	struct __kernel_old_timeval *tv = (void *)&txc.time;
+	struct timex txc;		/* Local copy of parameter */
+	struct __kernel_timex *kt = (void *)&txc;
 	int ret;
 
 	/* Copy the user data space into the kernel copy
 	 * structure. But bear in mind that the structures
 	 * may change
 	 */
-	if (copy_from_user(&txc, txc_p, sizeof(txc)))
+	if (copy_from_user(&txc, txc_p, sizeof(struct timex)))
 		return -EFAULT;
 
 	/*
 	 * override for sparc64 specific timeval type: tv_usec
 	 * is 32 bit wide instead of 64-bit in __kernel_timex
 	 */
-	txc.time.tv_usec = tv->tv_usec;
-	ret = do_adjtimex(&txc);
-	tv->tv_usec = txc.time.tv_usec;
+	kt->time.tv_usec = txc.time.tv_usec;
+	ret = do_adjtimex(kt);
+	txc.time.tv_usec = kt->time.tv_usec;
 
-	return copy_to_user(txc_p, &txc, sizeof(txc)) ? -EFAULT : ret;
+	return copy_to_user(txc_p, &txc, sizeof(struct timex)) ? -EFAULT : ret;
 }
 
-SYSCALL_DEFINE2(sparc_clock_adjtime, const clockid_t, which_clock,
-		struct __kernel_timex __user *, txc_p)
+SYSCALL_DEFINE2(sparc_clock_adjtime, const clockid_t, which_clock,struct timex __user *, txc_p)
 {
-	struct __kernel_timex txc;
-	struct __kernel_old_timeval *tv = (void *)&txc.time;
+	struct timex txc;		/* Local copy of parameter */
+	struct __kernel_timex *kt = (void *)&txc;
 	int ret;
 
 	if (!IS_ENABLED(CONFIG_POSIX_TIMERS)) {
@@ -591,18 +590,18 @@ SYSCALL_DEFINE2(sparc_clock_adjtime, const clockid_t, which_clock,
 	 * structure. But bear in mind that the structures
 	 * may change
 	 */
-	if (copy_from_user(&txc, txc_p, sizeof(txc)))
+	if (copy_from_user(&txc, txc_p, sizeof(struct timex)))
 		return -EFAULT;
 
 	/*
 	 * override for sparc64 specific timeval type: tv_usec
 	 * is 32 bit wide instead of 64-bit in __kernel_timex
 	 */
-	txc.time.tv_usec = tv->tv_usec;
-	ret = do_clock_adjtime(which_clock, &txc);
-	tv->tv_usec = txc.time.tv_usec;
+	kt->time.tv_usec = txc.time.tv_usec;
+	ret = do_clock_adjtime(which_clock, kt);
+	txc.time.tv_usec = kt->time.tv_usec;
 
-	return copy_to_user(txc_p, &txc, sizeof(txc)) ? -EFAULT : ret;
+	return copy_to_user(txc_p, &txc, sizeof(struct timex)) ? -EFAULT : ret;
 }
 
 SYSCALL_DEFINE5(utrap_install, utrap_entry_t, type,

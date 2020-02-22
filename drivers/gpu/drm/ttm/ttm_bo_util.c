@@ -102,6 +102,7 @@ int ttm_mem_io_lock(struct ttm_mem_type_manager *man, bool interruptible)
 	mutex_lock(&man->io_reserve_mutex);
 	return 0;
 }
+EXPORT_SYMBOL(ttm_mem_io_lock);
 
 void ttm_mem_io_unlock(struct ttm_mem_type_manager *man)
 {
@@ -110,6 +111,7 @@ void ttm_mem_io_unlock(struct ttm_mem_type_manager *man)
 
 	mutex_unlock(&man->io_reserve_mutex);
 }
+EXPORT_SYMBOL(ttm_mem_io_unlock);
 
 static int ttm_mem_io_evict(struct ttm_mem_type_manager *man)
 {
@@ -151,6 +153,7 @@ retry:
 	}
 	return ret;
 }
+EXPORT_SYMBOL(ttm_mem_io_reserve);
 
 void ttm_mem_io_free(struct ttm_bo_device *bdev,
 		     struct ttm_mem_reg *mem)
@@ -166,6 +169,7 @@ void ttm_mem_io_free(struct ttm_bo_device *bdev,
 		bdev->driver->io_mem_free(bdev, mem);
 
 }
+EXPORT_SYMBOL(ttm_mem_io_free);
 
 int ttm_mem_io_reserve_vm(struct ttm_buffer_object *bo)
 {
@@ -218,7 +222,7 @@ static int ttm_mem_reg_ioremap(struct ttm_bo_device *bdev, struct ttm_mem_reg *m
 		if (mem->placement & TTM_PL_FLAG_WC)
 			addr = ioremap_wc(mem->bus.base + mem->bus.offset, mem->bus.size);
 		else
-			addr = ioremap(mem->bus.base + mem->bus.offset, mem->bus.size);
+			addr = ioremap_nocache(mem->bus.base + mem->bus.offset, mem->bus.size);
 		if (!addr) {
 			(void) ttm_mem_io_lock(man, false);
 			ttm_mem_io_free(bdev, mem);
@@ -499,23 +503,23 @@ static int ttm_buffer_object_transfer(struct ttm_buffer_object *bo,
 	 * TODO: Explicit member copy would probably be better here.
 	 */
 
-	atomic_inc(&ttm_bo_glob.bo_count);
+	atomic_inc(&bo->bdev->glob->bo_count);
 	INIT_LIST_HEAD(&fbo->base.ddestroy);
 	INIT_LIST_HEAD(&fbo->base.lru);
 	INIT_LIST_HEAD(&fbo->base.swap);
 	INIT_LIST_HEAD(&fbo->base.io_reserve_lru);
+	mutex_init(&fbo->base.wu_mutex);
 	fbo->base.moving = NULL;
 	drm_vma_node_reset(&fbo->base.base.vma_node);
+	atomic_set(&fbo->base.cpu_writers, 0);
 
 	kref_init(&fbo->base.list_kref);
 	kref_init(&fbo->base.kref);
 	fbo->base.destroy = &ttm_transfered_destroy;
 	fbo->base.acc_size = 0;
-	if (bo->base.resv == &bo->base._resv)
-		fbo->base.base.resv = &fbo->base.base._resv;
-
-	dma_resv_init(&fbo->base.base._resv);
-	ret = dma_resv_trylock(&fbo->base.base._resv);
+	fbo->base.base.resv = &fbo->base.base._resv;
+	dma_resv_init(fbo->base.base.resv);
+	ret = dma_resv_trylock(fbo->base.base.resv);
 	WARN_ON(!ret);
 
 	*new_obj = &fbo->base;
@@ -564,7 +568,7 @@ static int ttm_bo_ioremap(struct ttm_buffer_object *bo,
 			map->virtual = ioremap_wc(bo->mem.bus.base + bo->mem.bus.offset + offset,
 						  size);
 		else
-			map->virtual = ioremap(bo->mem.bus.base + bo->mem.bus.offset + offset,
+			map->virtual = ioremap_nocache(bo->mem.bus.base + bo->mem.bus.offset + offset,
 						       size);
 	}
 	return (!map->virtual) ? -ENOMEM : 0;
@@ -712,7 +716,7 @@ int ttm_bo_move_accel_cleanup(struct ttm_buffer_object *bo,
 		if (ret)
 			return ret;
 
-		dma_resv_add_excl_fence(&ghost_obj->base._resv, fence);
+		dma_resv_add_excl_fence(ghost_obj->base.resv, fence);
 
 		/**
 		 * If we're not moving to fixed memory, the TTM object
@@ -725,7 +729,7 @@ int ttm_bo_move_accel_cleanup(struct ttm_buffer_object *bo,
 		else
 			bo->ttm = NULL;
 
-		dma_resv_unlock(&ghost_obj->base._resv);
+		ttm_bo_unreserve(ghost_obj);
 		ttm_bo_put(ghost_obj);
 	}
 
@@ -768,7 +772,7 @@ int ttm_bo_pipeline_move(struct ttm_buffer_object *bo,
 		if (ret)
 			return ret;
 
-		dma_resv_add_excl_fence(&ghost_obj->base._resv, fence);
+		dma_resv_add_excl_fence(ghost_obj->base.resv, fence);
 
 		/**
 		 * If we're not moving to fixed memory, the TTM object
@@ -781,7 +785,7 @@ int ttm_bo_pipeline_move(struct ttm_buffer_object *bo,
 		else
 			bo->ttm = NULL;
 
-		dma_resv_unlock(&ghost_obj->base._resv);
+		ttm_bo_unreserve(ghost_obj);
 		ttm_bo_put(ghost_obj);
 
 	} else if (from->flags & TTM_MEMTYPE_FLAG_FIXED) {
@@ -837,7 +841,7 @@ int ttm_bo_pipeline_gutting(struct ttm_buffer_object *bo)
 	if (ret)
 		return ret;
 
-	ret = dma_resv_copy_fences(&ghost->base._resv, bo->base.resv);
+	ret = dma_resv_copy_fences(ghost->base.resv, bo->base.resv);
 	/* Last resort, wait for the BO to be idle when we are OOM */
 	if (ret)
 		ttm_bo_wait(bo, false, false);
@@ -846,7 +850,7 @@ int ttm_bo_pipeline_gutting(struct ttm_buffer_object *bo)
 	bo->mem.mem_type = TTM_PL_SYSTEM;
 	bo->ttm = NULL;
 
-	dma_resv_unlock(&ghost->base._resv);
+	ttm_bo_unreserve(ghost);
 	ttm_bo_put(ghost);
 
 	return 0;

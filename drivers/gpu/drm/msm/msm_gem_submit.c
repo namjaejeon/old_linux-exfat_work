@@ -54,6 +54,7 @@ static struct msm_gem_submit *submit_create(struct drm_device *dev,
 
 	INIT_LIST_HEAD(&submit->node);
 	INIT_LIST_HEAD(&submit->bo_list);
+	ww_acquire_init(&submit->ticket, &reservation_ww_class);
 
 	return submit;
 }
@@ -157,7 +158,7 @@ static void submit_unlock_unpin_bo(struct msm_gem_submit *submit,
 		msm_gem_unpin_iova(&msm_obj->base, submit->aspace);
 
 	if (submit->bos[i].flags & BO_LOCKED)
-		dma_resv_unlock(msm_obj->base.resv);
+		ww_mutex_unlock(&msm_obj->base.resv->lock);
 
 	if (backoff && !(submit->bos[i].flags & BO_VALID))
 		submit->bos[i].iova = 0;
@@ -180,8 +181,8 @@ retry:
 		contended = i;
 
 		if (!(submit->bos[i].flags & BO_LOCKED)) {
-			ret = dma_resv_lock_interruptible(msm_obj->base.resv,
-							  &submit->ticket);
+			ret = ww_mutex_lock_interruptible(&msm_obj->base.resv->lock,
+					&submit->ticket);
 			if (ret)
 				goto fail;
 			submit->bos[i].flags |= BO_LOCKED;
@@ -202,8 +203,8 @@ fail:
 	if (ret == -EDEADLK) {
 		struct msm_gem_object *msm_obj = submit->bos[contended].obj;
 		/* we lost out in a seqno race, lock and retry.. */
-		ret = dma_resv_lock_slow_interruptible(msm_obj->base.resv,
-						       &submit->ticket);
+		ret = ww_mutex_lock_slow_interruptible(&msm_obj->base.resv->lock,
+				&submit->ticket);
 		if (!ret) {
 			submit->bos[contended].flags |= BO_LOCKED;
 			slow_locked = contended;
@@ -389,6 +390,8 @@ static void submit_cleanup(struct msm_gem_submit *submit)
 		list_del_init(&msm_obj->submit_entry);
 		drm_gem_object_put(&msm_obj->base);
 	}
+
+	ww_acquire_fini(&submit->ticket);
 }
 
 int msm_ioctl_gem_submit(struct drm_device *dev, void *data,
@@ -405,7 +408,6 @@ int msm_ioctl_gem_submit(struct drm_device *dev, void *data,
 	struct msm_ringbuffer *ring;
 	int out_fence_fd = -1;
 	struct pid *pid = get_pid(task_pid(current));
-	bool has_ww_ticket = false;
 	unsigned i;
 	int ret, submitid;
 	if (!gpu)
@@ -487,9 +489,6 @@ int msm_ioctl_gem_submit(struct drm_device *dev, void *data,
 	if (ret)
 		goto out;
 
-	/* copy_*_user while holding a ww ticket upsets lockdep */
-	ww_acquire_init(&submit->ticket, &reservation_ww_class);
-	has_ww_ticket = true;
 	ret = submit_lock_objects(submit);
 	if (ret)
 		goto out;
@@ -589,8 +588,6 @@ int msm_ioctl_gem_submit(struct drm_device *dev, void *data,
 
 out:
 	submit_cleanup(submit);
-	if (has_ww_ticket)
-		ww_acquire_fini(&submit->ticket);
 	if (ret)
 		msm_gem_submit_free(submit);
 out_unlock:

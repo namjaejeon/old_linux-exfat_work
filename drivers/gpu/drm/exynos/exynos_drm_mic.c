@@ -21,7 +21,6 @@
 #include <video/of_videomode.h>
 #include <video/videomode.h>
 
-#include <drm/drm_bridge.h>
 #include <drm/drm_encoder.h>
 #include <drm/drm_print.h>
 

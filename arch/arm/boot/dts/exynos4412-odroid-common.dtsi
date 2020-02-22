@@ -267,7 +267,7 @@
 
 		intn-gpios = <&gpx3 0 GPIO_ACTIVE_HIGH>;
 		connect-gpios = <&gpx3 4 GPIO_ACTIVE_HIGH>;
-		reset-gpios = <&gpx3 5 GPIO_ACTIVE_LOW>;
+		reset-gpios = <&gpx3 5 GPIO_ACTIVE_HIGH>;
 		initial-mode = <1>;
 	};
 

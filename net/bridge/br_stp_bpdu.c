@@ -118,8 +118,6 @@ void br_send_config_bpdu(struct net_bridge_port *p, struct br_config_bpdu *bpdu)
 	br_set_ticks(buf+33, bpdu->forward_delay);
 
 	br_send_bpdu(p, buf, 35);
-
-	p->stp_xstats.tx_bpdu++;
 }
 
 /* called under bridge lock */
@@ -135,8 +133,6 @@ void br_send_tcn_bpdu(struct net_bridge_port *p)
 	buf[2] = 0;
 	buf[3] = BPDU_TYPE_TCN;
 	br_send_bpdu(p, buf, 4);
-
-	p->stp_xstats.tx_tcn++;
 }
 
 /*

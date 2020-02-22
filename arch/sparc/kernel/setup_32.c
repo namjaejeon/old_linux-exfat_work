@@ -332,6 +332,10 @@ void __init setup_arch(char **cmdline_p)
 		break;
 	}
 
+#ifdef CONFIG_DUMMY_CONSOLE
+	conswitchp = &dummy_con;
+#endif
+
 	idprom_init();
 	load_mmu();
 

@@ -220,7 +220,7 @@
 	rorq $32,			RAB2; \
 	outunpack3(mov, RIO, 2, RAB, 2);
 
-SYM_FUNC_START(__twofish_enc_blk_3way)
+ENTRY(__twofish_enc_blk_3way)
 	/* input:
 	 *	%rdi: ctx, CTX
 	 *	%rsi: dst
@@ -267,9 +267,9 @@ SYM_FUNC_START(__twofish_enc_blk_3way)
 	popq %r12;
 	popq %r13;
 	ret;
-SYM_FUNC_END(__twofish_enc_blk_3way)
+ENDPROC(__twofish_enc_blk_3way)
 
-SYM_FUNC_START(twofish_dec_blk_3way)
+ENTRY(twofish_dec_blk_3way)
 	/* input:
 	 *	%rdi: ctx, CTX
 	 *	%rsi: dst
@@ -302,4 +302,4 @@ SYM_FUNC_START(twofish_dec_blk_3way)
 	popq %r12;
 	popq %r13;
 	ret;
-SYM_FUNC_END(twofish_dec_blk_3way)
+ENDPROC(twofish_dec_blk_3way)

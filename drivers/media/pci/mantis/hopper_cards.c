@@ -60,8 +60,10 @@ static irqreturn_t hopper_irq_handler(int irq, void *dev_id)
 	struct mantis_ca *ca;
 
 	mantis = (struct mantis_pci *) dev_id;
-	if (unlikely(!mantis))
+	if (unlikely(!mantis)) {
+		dprintk(MANTIS_ERROR, 1, "Mantis == NULL");
 		return IRQ_NONE;
+	}
 	ca = mantis->mantis_ca;
 
 	stat = mmread(MANTIS_INT_STAT);

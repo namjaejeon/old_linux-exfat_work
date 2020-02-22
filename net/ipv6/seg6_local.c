@@ -23,7 +23,6 @@
 #include <net/addrconf.h>
 #include <net/ip6_route.h>
 #include <net/dst_cache.h>
-#include <net/ip_tunnels.h>
 #ifdef CONFIG_IPV6_SEG6_HMAC
 #include <net/seg6_hmac.h>
 #endif
@@ -82,11 +81,6 @@ static struct ipv6_sr_hdr *get_srh(struct sk_buff *skb)
 	if (!pskb_may_pull(skb, srhoff + len))
 		return NULL;
 
-	/* note that pskb_may_pull may change pointers in header;
-	 * for this reason it is necessary to reload them when needed.
-	 */
-	srh = (struct ipv6_sr_hdr *)(skb->data + srhoff);
-
 	if (!seg6_validate_srh(srh, len))
 		return NULL;
 
@@ -136,8 +130,7 @@ static bool decap_and_validate(struct sk_buff *skb, int proto)
 
 	skb_reset_network_header(skb);
 	skb_reset_transport_header(skb);
-	if (iptunnel_pull_offloads(skb))
-		return false;
+	skb->encapsulation = 0;
 
 	return true;
 }
@@ -151,9 +144,8 @@ static void advance_nextseg(struct ipv6_sr_hdr *srh, struct in6_addr *daddr)
 	*daddr = *addr;
 }
 
-static int
-seg6_lookup_any_nexthop(struct sk_buff *skb, struct in6_addr *nhaddr,
-			u32 tbl_id, bool local_delivery)
+int seg6_lookup_nexthop(struct sk_buff *skb, struct in6_addr *nhaddr,
+			u32 tbl_id)
 {
 	struct net *net = dev_net(skb->dev);
 	struct ipv6hdr *hdr = ipv6_hdr(skb);
@@ -161,7 +153,6 @@ seg6_lookup_any_nexthop(struct sk_buff *skb, struct in6_addr *nhaddr,
 	struct dst_entry *dst = NULL;
 	struct rt6_info *rt;
 	struct flowi6 fl6;
-	int dev_flags = 0;
 
 	fl6.flowi6_iif = skb->dev->ifindex;
 	fl6.daddr = nhaddr ? *nhaddr : hdr->daddr;
@@ -186,13 +177,7 @@ seg6_lookup_any_nexthop(struct sk_buff *skb, struct in6_addr *nhaddr,
 		dst = &rt->dst;
 	}
 
-	/* we want to discard traffic destined for local packet processing,
-	 * if @local_delivery is set to false.
-	 */
-	if (!local_delivery)
-		dev_flags |= IFF_LOOPBACK;
-
-	if (dst && (dst->dev->flags & dev_flags) && !dst->error) {
+	if (dst && dst->dev->flags & IFF_LOOPBACK && !dst->error) {
 		dst_release(dst);
 		dst = NULL;
 	}
@@ -207,12 +192,6 @@ out:
 	skb_dst_drop(skb);
 	skb_dst_set(skb, dst);
 	return dst->error;
-}
-
-int seg6_lookup_nexthop(struct sk_buff *skb,
-			struct in6_addr *nhaddr, u32 tbl_id)
-{
-	return seg6_lookup_any_nexthop(skb, nhaddr, tbl_id, false);
 }
 
 /* regular endpoint function */
@@ -357,8 +336,6 @@ static int input_action_end_dx6(struct sk_buff *skb,
 	if (!ipv6_addr_any(&slwt->nh6))
 		nhaddr = &slwt->nh6;
 
-	skb_set_transport_header(skb, sizeof(struct ipv6hdr));
-
 	seg6_lookup_nexthop(skb, nhaddr, 0);
 
 	return dst_input(skb);
@@ -388,8 +365,6 @@ static int input_action_end_dx4(struct sk_buff *skb,
 
 	skb_dst_drop(skb);
 
-	skb_set_transport_header(skb, sizeof(struct iphdr));
-
 	err = ip_route_input(skb, nhaddr, iph->saddr, 0, skb->dev);
 	if (err)
 		goto drop;
@@ -410,9 +385,7 @@ static int input_action_end_dt6(struct sk_buff *skb,
 	if (!pskb_may_pull(skb, sizeof(struct ipv6hdr)))
 		goto drop;
 
-	skb_set_transport_header(skb, sizeof(struct ipv6hdr));
-
-	seg6_lookup_any_nexthop(skb, NULL, slwt->table, true);
+	seg6_lookup_nexthop(skb, NULL, slwt->table);
 
 	return dst_input(skb);
 

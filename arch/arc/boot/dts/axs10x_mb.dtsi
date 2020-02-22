@@ -61,13 +61,12 @@
 				clock-frequency = <25000000>;
 				#clock-cells = <0>;
 			};
-		};
 
-		pguclk: pguclk@10080 {
-			compatible = "snps,axs10x-pgu-pll-clock";
-			reg = <0x10080 0x10>, <0x110 0x10>;
-			#clock-cells = <0>;
-			clocks = <&input_clk>;
+			pguclk: pguclk {
+				#clock-cells = <0>;
+				compatible = "fixed-clock";
+				clock-frequency = <74250000>;
+			};
 		};
 
 		gmac: ethernet@18000 {
@@ -78,7 +77,6 @@
 			interrupt-names = "macirq";
 			phy-mode = "rgmii";
 			snps,pbl = < 32 >;
-			snps,multicast-filter-bins = <256>;
 			clocks = <&apbclk>;
 			clock-names = "stmmaceth";
 			max-speed = <100>;

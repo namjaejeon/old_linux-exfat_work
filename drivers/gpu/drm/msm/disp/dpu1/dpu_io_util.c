@@ -93,12 +93,19 @@ int msm_dss_enable_clk(struct dss_clk *clk_arry, int num_clk, int enable)
 			DEV_DBG("%pS->%s: enable '%s'\n",
 				__builtin_return_address(0), __func__,
 				clk_arry[i].clk_name);
-			rc = clk_prepare_enable(clk_arry[i].clk);
-			if (rc)
-				DEV_ERR("%pS->%s: %s en fail. rc=%d\n",
-					__builtin_return_address(0),
-					__func__,
-					clk_arry[i].clk_name, rc);
+			if (clk_arry[i].clk) {
+				rc = clk_prepare_enable(clk_arry[i].clk);
+				if (rc)
+					DEV_ERR("%pS->%s: %s en fail. rc=%d\n",
+						__builtin_return_address(0),
+						__func__,
+						clk_arry[i].clk_name, rc);
+			} else {
+				DEV_ERR("%pS->%s: '%s' is not available\n",
+					__builtin_return_address(0), __func__,
+					clk_arry[i].clk_name);
+				rc = -EPERM;
+			}
 
 			if (rc && i) {
 				msm_dss_enable_clk(&clk_arry[i - 1],
@@ -112,7 +119,12 @@ int msm_dss_enable_clk(struct dss_clk *clk_arry, int num_clk, int enable)
 				__builtin_return_address(0), __func__,
 				clk_arry[i].clk_name);
 
-			clk_disable_unprepare(clk_arry[i].clk);
+			if (clk_arry[i].clk)
+				clk_disable_unprepare(clk_arry[i].clk);
+			else
+				DEV_ERR("%pS->%s: '%s' is not available\n",
+					__builtin_return_address(0), __func__,
+					clk_arry[i].clk_name);
 		}
 	}
 
@@ -175,7 +187,6 @@ int msm_dss_parse_clock(struct platform_device *pdev,
 			continue;
 		mp->clk_config[i].rate = rate;
 		mp->clk_config[i].type = DSS_CLK_PCLK;
-		mp->clk_config[i].max_rate = rate;
 	}
 
 	mp->num_clk = num_clk;

@@ -131,7 +131,7 @@ again:
 	case 96:
 		/* not all buffers processed */
 		qperf_inc(q, eqbs_partial);
-		DBF_DEV_EVENT(DBF_INFO, q->irq_ptr, "EQBS part:%02x",
+		DBF_DEV_EVENT(DBF_WARN, q->irq_ptr, "EQBS part:%02x",
 			tmp_count);
 		return count - tmp_count;
 	case 97:
@@ -310,19 +310,18 @@ static inline int qdio_siga_sync_q(struct qdio_q *q)
 		return qdio_siga_sync(q, q->mask, 0);
 }
 
-static int qdio_siga_output(struct qdio_q *q, unsigned int count,
-			    unsigned int *busy_bit, unsigned long aob)
+static int qdio_siga_output(struct qdio_q *q, unsigned int *busy_bit,
+	unsigned long aob)
 {
 	unsigned long schid = *((u32 *) &q->irq_ptr->schid);
 	unsigned int fc = QDIO_SIGA_WRITE;
 	u64 start_time = 0;
 	int retries = 0, cc;
+	unsigned long laob = 0;
 
-	if (queue_type(q) == QDIO_IQDIO_QFMT && !multicast_outbound(q)) {
-		if (count > 1)
-			fc = QDIO_SIGA_WRITEM;
-		else if (aob)
-			fc = QDIO_SIGA_WRITEQ;
+	if (aob) {
+		fc = QDIO_SIGA_WRITEQ;
+		laob = aob;
 	}
 
 	if (is_qebsm(q)) {
@@ -330,7 +329,7 @@ static int qdio_siga_output(struct qdio_q *q, unsigned int count,
 		fc |= QDIO_SIGA_QEBSM_FLAG;
 	}
 again:
-	cc = do_siga_output(schid, q->mask, busy_bit, fc, aob);
+	cc = do_siga_output(schid, q->mask, busy_bit, fc, laob);
 
 	/* hipersocket busy condition */
 	if (unlikely(*busy_bit)) {
@@ -424,6 +423,9 @@ static inline void account_sbals(struct qdio_q *q, unsigned int count)
 static void process_buffer_error(struct qdio_q *q, unsigned int start,
 				 int count)
 {
+	unsigned char state = (q->is_input_q) ? SLSB_P_INPUT_NOT_INIT :
+					SLSB_P_OUTPUT_NOT_INIT;
+
 	q->qdio_error = QDIO_ERROR_SLSB_STATE;
 
 	/* special handling for no target buffer empty */
@@ -431,7 +433,7 @@ static void process_buffer_error(struct qdio_q *q, unsigned int start,
 	    q->sbal[start]->element[15].sflags == 0x10) {
 		qperf_inc(q, target_full);
 		DBF_DEV_EVENT(DBF_INFO, q->irq_ptr, "OUTFULL FTC:%02x", start);
-		return;
+		goto set;
 	}
 
 	DBF_ERROR("%4x BUF ERROR", SCH_NO(q));
@@ -440,6 +442,13 @@ static void process_buffer_error(struct qdio_q *q, unsigned int start,
 	DBF_ERROR("F14:%2x F15:%2x",
 		  q->sbal[start]->element[14].sflags,
 		  q->sbal[start]->element[15].sflags);
+
+set:
+	/*
+	 * Interrupts may be avoided as long as the error is present
+	 * so change the buffer state immediately to avoid starvation.
+	 */
+	set_buf_states(q, start, state, count);
 }
 
 static inline void inbound_primed(struct qdio_q *q, unsigned int start,
@@ -521,11 +530,6 @@ static int get_inbound_buffer_frontier(struct qdio_q *q, unsigned int start)
 		return count;
 	case SLSB_P_INPUT_ERROR:
 		process_buffer_error(q, start, count);
-		/*
-		 * Interrupts may be avoided as long as the error is present
-		 * so change the buffer state immediately to avoid starvation.
-		 */
-		set_buf_states(q, start, SLSB_P_INPUT_NOT_INIT, count);
 		if (atomic_sub_return(count, &q->nr_buf_used) == 0)
 			qperf_inc(q, inbound_queue_full);
 		if (q->irq_ptr->perf_stat_enabled)
@@ -777,8 +781,7 @@ static inline int qdio_outbound_q_moved(struct qdio_q *q, unsigned int start)
 	return count;
 }
 
-static int qdio_kick_outbound_q(struct qdio_q *q, unsigned int count,
-				unsigned long aob)
+static int qdio_kick_outbound_q(struct qdio_q *q, unsigned long aob)
 {
 	int retries = 0, cc;
 	unsigned int busy_bit;
@@ -790,7 +793,7 @@ static int qdio_kick_outbound_q(struct qdio_q *q, unsigned int count,
 retry:
 	qperf_inc(q, siga_write);
 
-	cc = qdio_siga_output(q, count, &busy_bit, aob);
+	cc = qdio_siga_output(q, &busy_bit, aob);
 	switch (cc) {
 	case 0:
 		break;
@@ -960,7 +963,7 @@ static void qdio_int_handler_pci(struct qdio_irq *irq_ptr)
 			/* skip if polling is enabled or already in work */
 			if (test_and_set_bit(QDIO_QUEUE_IRQS_DISABLED,
 				     &q->u.in.queue_irq_state)) {
-				QDIO_PERF_STAT_INC(irq_ptr, int_discarded);
+				qperf_inc(q, int_discarded);
 				continue;
 			}
 			q->u.in.queue_start_poll(q->irq_ptr->cdev, q->nr,
@@ -1159,7 +1162,7 @@ int qdio_shutdown(struct ccw_device *cdev, int how)
 	 */
 	qdio_set_state(irq_ptr, QDIO_IRQ_STATE_STOPPED);
 
-	tiqdio_remove_device(irq_ptr);
+	tiqdio_remove_input_queues(irq_ptr);
 	qdio_shutdown_queues(cdev);
 	qdio_shutdown_debug_entries(irq_ptr);
 
@@ -1281,7 +1284,6 @@ int qdio_allocate(struct qdio_initialize *init_data)
 			     init_data->no_output_qs))
 		goto out_rel;
 
-	INIT_LIST_HEAD(&irq_ptr->entry);
 	init_data->cdev->private->qdio_data = irq_ptr;
 	qdio_set_state(irq_ptr, QDIO_IRQ_STATE_INACTIVE);
 	return 0;
@@ -1426,7 +1428,7 @@ int qdio_activate(struct ccw_device *cdev)
 	}
 
 	if (is_thinint_irq(irq_ptr))
-		tiqdio_add_device(irq_ptr);
+		tiqdio_add_input_queues(irq_ptr);
 
 	/* wait for subchannel to become active */
 	msleep(5);
@@ -1524,7 +1526,7 @@ set:
  * @count: how many buffers are filled
  */
 static int handle_outbound(struct qdio_q *q, unsigned int callflags,
-			   unsigned int bufnr, unsigned int count)
+			   int bufnr, int count)
 {
 	const unsigned int scan_threshold = q->irq_ptr->scan_threshold;
 	unsigned char state = 0;
@@ -1547,10 +1549,13 @@ static int handle_outbound(struct qdio_q *q, unsigned int callflags,
 	if (queue_type(q) == QDIO_IQDIO_QFMT) {
 		unsigned long phys_aob = 0;
 
-		if (q->u.out.use_cq && count == 1)
+		/* One SIGA-W per buffer required for unicast HSI */
+		WARN_ON_ONCE(count > 1 && !multicast_outbound(q));
+
+		if (q->u.out.use_cq)
 			phys_aob = qdio_aob_for_buffer(&q->u.out, bufnr);
 
-		rc = qdio_kick_outbound_q(q, count, phys_aob);
+		rc = qdio_kick_outbound_q(q, phys_aob);
 	} else if (need_siga_sync(q)) {
 		rc = qdio_siga_sync_q(q);
 	} else if (count < QDIO_MAX_BUFFERS_PER_Q &&
@@ -1559,7 +1564,7 @@ static int handle_outbound(struct qdio_q *q, unsigned int callflags,
 		/* The previous buffer is not processed yet, tack on. */
 		qperf_inc(q, fast_requeue);
 	} else {
-		rc = qdio_kick_outbound_q(q, count, 0);
+		rc = qdio_kick_outbound_q(q, 0);
 	}
 
 	/* Let drivers implement their own completion scanning: */

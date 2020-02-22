@@ -267,6 +267,7 @@ static int mvebu_devbus_probe(struct platform_device *pdev)
 	struct devbus_read_params r;
 	struct devbus_write_params w;
 	struct devbus *devbus;
+	struct resource *res;
 	struct clk *clk;
 	unsigned long rate;
 	int err;
@@ -276,7 +277,8 @@ static int mvebu_devbus_probe(struct platform_device *pdev)
 		return -ENOMEM;
 
 	devbus->dev = dev;
-	devbus->base = devm_platform_ioremap_resource(pdev, 0);
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	devbus->base = devm_ioremap_resource(&pdev->dev, res);
 	if (IS_ERR(devbus->base))
 		return PTR_ERR(devbus->base);
 

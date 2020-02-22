@@ -537,7 +537,6 @@ flush_count_cache:
 	/* Save LR into r9 */
 	mflr	r9
 
-	// Flush the link stack
 	.rept 64
 	bl	.+4
 	.endr
@@ -547,11 +546,6 @@ flush_count_cache:
 	.balign 32
 	/* Restore LR */
 1:	mtlr	r9
-
-	// If we're just flushing the link stack, return here
-3:	nop
-	patch_site 3b patch__flush_link_stack_return
-
 	li	r9,0x7fff
 	mtctr	r9
 
@@ -597,7 +591,8 @@ _GLOBAL(_switch)
 	std	r0,16(r1)
 	stdu	r1,-SWITCH_FRAME_SIZE(r1)
 	/* r3-r13 are caller saved -- Cort */
-	SAVE_NVGPRS(r1)
+	SAVE_8GPRS(14, r1)
+	SAVE_10GPRS(22, r1)
 	std	r0,_NIP(r1)	/* Return to switch caller */
 	mfcr	r23
 	std	r23,_CCR(r1)
@@ -721,7 +716,8 @@ END_FTR_SECTION_IFCLR(CPU_FTR_ARCH_207S)
 	mtcrf	0xFF,r6
 
 	/* r3-r13 are destroyed -- Cort */
-	REST_NVGPRS(r1)
+	REST_8GPRS(14, r1)
+	REST_10GPRS(22, r1)
 
 	/* convert old thread to its task_struct for return value */
 	addi	r3,r3,-THREAD
@@ -844,7 +840,7 @@ resume_kernel:
 	bne-	0b
 1:
 
-#ifdef CONFIG_PREEMPTION
+#ifdef CONFIG_PREEMPT
 	/* Check if we need to preempt */
 	andi.	r0,r4,_TIF_NEED_RESCHED
 	beq+	restore
@@ -875,7 +871,7 @@ resume_kernel:
 	li	r10,MSR_RI
 	mtmsrd	r10,1		  /* Update machine state */
 #endif /* CONFIG_PPC_BOOK3E */
-#endif /* CONFIG_PREEMPTION */
+#endif /* CONFIG_PREEMPT */
 
 	.globl	fast_exc_return_irq
 fast_exc_return_irq:
@@ -1153,7 +1149,8 @@ _GLOBAL(enter_rtas)
    	 */
 	SAVE_GPR(2, r1)			/* Save the TOC */
 	SAVE_GPR(13, r1)		/* Save paca */
-	SAVE_NVGPRS(r1)			/* Save the non-volatiles */
+	SAVE_8GPRS(14, r1)		/* Save the non-volatiles */
+	SAVE_10GPRS(22, r1)		/* ditto */
 
 	mfcr	r4
 	std	r4,_CCR(r1)
@@ -1260,7 +1257,8 @@ rtas_restore_regs:
 	/* relocation is on at this point */
 	REST_GPR(2, r1)			/* Restore the TOC */
 	REST_GPR(13, r1)		/* Restore paca */
-	REST_NVGPRS(r1)			/* Restore the non-volatiles */
+	REST_8GPRS(14, r1)		/* Restore the non-volatiles */
+	REST_10GPRS(22, r1)		/* ditto */
 
 	GET_PACA(r13)
 
@@ -1294,7 +1292,8 @@ _GLOBAL(enter_prom)
    	 */
 	SAVE_GPR(2, r1)
 	SAVE_GPR(13, r1)
-	SAVE_NVGPRS(r1)
+	SAVE_8GPRS(14, r1)
+	SAVE_10GPRS(22, r1)
 	mfcr	r10
 	mfmsr	r11
 	std	r10,_CCR(r1)
@@ -1338,7 +1337,8 @@ _GLOBAL(enter_prom)
 	/* Restore other registers */
 	REST_GPR(2, r1)
 	REST_GPR(13, r1)
-	REST_NVGPRS(r1)
+	REST_8GPRS(14, r1)
+	REST_10GPRS(22, r1)
 	ld	r4,_CCR(r1)
 	mtcr	r4
 

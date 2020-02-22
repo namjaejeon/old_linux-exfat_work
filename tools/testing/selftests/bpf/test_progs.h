@@ -35,25 +35,12 @@ typedef __u16 __sum16;
 
 #include "test_iptunnel_common.h"
 #include "bpf_util.h"
-#include <bpf/bpf_endian.h>
+#include "bpf_endian.h"
 #include "trace_helpers.h"
 #include "flow_dissector_load.h"
 
-enum verbosity {
-	VERBOSE_NONE,
-	VERBOSE_NORMAL,
-	VERBOSE_VERY,
-	VERBOSE_SUPER,
-};
-
-struct str_set {
-	const char **strs;
-	int cnt;
-};
-
 struct test_selector {
-	struct str_set whitelist;
-	struct str_set blacklist;
+	const char *name;
 	bool *num_set;
 	int num_set_len;
 };
@@ -62,7 +49,8 @@ struct test_env {
 	struct test_selector test_selector;
 	struct test_selector subtest_selector;
 	bool verifier_stats;
-	enum verbosity verbosity;
+	bool verbose;
+	bool very_verbose;
 
 	bool jit_enabled;
 
@@ -106,7 +94,6 @@ extern struct ipv6_packet pkt_v6;
 
 #define _CHECK(condition, tag, duration, format...) ({			\
 	int __ret = !!(condition);					\
-	int __save_errno = errno;					\
 	if (__ret) {							\
 		test__fail();						\
 		printf("%s:FAIL:%s ", __func__, tag);			\
@@ -115,18 +102,15 @@ extern struct ipv6_packet pkt_v6;
 		printf("%s:PASS:%s %d nsec\n",				\
 		       __func__, tag, duration);			\
 	}								\
-	errno = __save_errno;						\
 	__ret;								\
 })
 
 #define CHECK_FAIL(condition) ({					\
 	int __ret = !!(condition);					\
-	int __save_errno = errno;					\
 	if (__ret) {							\
 		test__fail();						\
 		printf("%s:FAIL:%d\n", __func__, __LINE__);		\
 	}								\
-	errno = __save_errno;						\
 	__ret;								\
 })
 

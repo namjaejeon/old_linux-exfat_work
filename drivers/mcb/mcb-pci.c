@@ -131,4 +131,3 @@ module_pci_driver(mcb_pci_driver);
 MODULE_AUTHOR("Johannes Thumshirn <johannes.thumshirn@men.de>");
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("MCB over PCI support");
-MODULE_IMPORT_NS(MCB);

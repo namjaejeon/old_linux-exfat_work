@@ -13,6 +13,7 @@
 #include <linux/errno.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
+#include <linux/gpio.h>
 #include <linux/input.h>
 #include <linux/delay.h>
 #include <linux/interrupt.h>

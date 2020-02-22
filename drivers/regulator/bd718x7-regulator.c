@@ -318,7 +318,6 @@ struct reg_init {
 };
 struct bd718xx_regulator_data {
 	struct regulator_desc desc;
-	const struct rohm_dvs_config dvs;
 	const struct reg_init init;
 	const struct reg_init *additional_inits;
 	int additional_init_amnt;
@@ -350,15 +349,133 @@ static const struct reg_init bd71837_ldo6_inits[] = {
 	},
 };
 
-static int buck_set_hw_dvs_levels(struct device_node *np,
+#define NUM_DVS_BUCKS 4
+
+struct of_dvs_setting {
+	const char *prop;
+	unsigned int reg;
+};
+
+static int set_dvs_levels(const struct of_dvs_setting *dvs,
+			  struct device_node *np,
+			  const struct regulator_desc *desc,
+			  struct regmap *regmap)
+{
+	int ret, i;
+	unsigned int uv;
+
+	ret = of_property_read_u32(np, dvs->prop, &uv);
+	if (ret) {
+		if (ret != -EINVAL)
+			return ret;
+		return 0;
+	}
+
+	for (i = 0; i < desc->n_voltages; i++) {
+		ret = regulator_desc_list_voltage_linear_range(desc, i);
+		if (ret < 0)
+			continue;
+		if (ret == uv) {
+			i <<= ffs(desc->vsel_mask) - 1;
+			ret = regmap_update_bits(regmap, dvs->reg,
+						 DVS_BUCK_RUN_MASK, i);
+			break;
+		}
+	}
+	return ret;
+}
+
+static int buck4_set_hw_dvs_levels(struct device_node *np,
 			    const struct regulator_desc *desc,
 			    struct regulator_config *cfg)
 {
-	struct bd718xx_regulator_data *data;
+	int ret, i;
+	const struct of_dvs_setting dvs[] = {
+		{
+			.prop = "rohm,dvs-run-voltage",
+			.reg = BD71837_REG_BUCK4_VOLT_RUN,
+		},
+	};
 
-	data = container_of(desc, struct bd718xx_regulator_data, desc);
+	for (i = 0; i < ARRAY_SIZE(dvs); i++) {
+		ret = set_dvs_levels(&dvs[i], np, desc, cfg->regmap);
+		if (ret)
+			break;
+	}
+	return ret;
+}
+static int buck3_set_hw_dvs_levels(struct device_node *np,
+			    const struct regulator_desc *desc,
+			    struct regulator_config *cfg)
+{
+	int ret, i;
+	const struct of_dvs_setting dvs[] = {
+		{
+			.prop = "rohm,dvs-run-voltage",
+			.reg = BD71837_REG_BUCK3_VOLT_RUN,
+		},
+	};
 
-	return rohm_regulator_set_dvs_levels(&data->dvs, np, desc, cfg->regmap);
+	for (i = 0; i < ARRAY_SIZE(dvs); i++) {
+		ret = set_dvs_levels(&dvs[i], np, desc, cfg->regmap);
+		if (ret)
+			break;
+	}
+	return ret;
+}
+
+static int buck2_set_hw_dvs_levels(struct device_node *np,
+			    const struct regulator_desc *desc,
+			    struct regulator_config *cfg)
+{
+	int ret, i;
+	const struct of_dvs_setting dvs[] = {
+		{
+			.prop = "rohm,dvs-run-voltage",
+			.reg = BD718XX_REG_BUCK2_VOLT_RUN,
+		},
+		{
+			.prop = "rohm,dvs-idle-voltage",
+			.reg = BD718XX_REG_BUCK2_VOLT_IDLE,
+		},
+	};
+
+
+
+	for (i = 0; i < ARRAY_SIZE(dvs); i++) {
+		ret = set_dvs_levels(&dvs[i], np, desc, cfg->regmap);
+		if (ret)
+			break;
+	}
+	return ret;
+}
+
+static int buck1_set_hw_dvs_levels(struct device_node *np,
+			    const struct regulator_desc *desc,
+			    struct regulator_config *cfg)
+{
+	int ret, i;
+	const struct of_dvs_setting dvs[] = {
+		{
+			.prop = "rohm,dvs-run-voltage",
+			.reg = BD718XX_REG_BUCK1_VOLT_RUN,
+		},
+		{
+			.prop = "rohm,dvs-idle-voltage",
+			.reg = BD718XX_REG_BUCK1_VOLT_IDLE,
+		},
+		{
+			.prop = "rohm,dvs-suspend-voltage",
+			.reg = BD718XX_REG_BUCK1_VOLT_SUSP,
+		},
+	};
+
+	for (i = 0; i < ARRAY_SIZE(dvs); i++) {
+		ret = set_dvs_levels(&dvs[i], np, desc, cfg->regmap);
+		if (ret)
+			break;
+	}
+	return ret;
 }
 
 static const struct bd718xx_regulator_data bd71847_regulators[] = {
@@ -379,17 +496,7 @@ static const struct bd718xx_regulator_data bd71847_regulators[] = {
 			.enable_reg = BD718XX_REG_BUCK1_CTRL,
 			.enable_mask = BD718XX_BUCK_EN,
 			.owner = THIS_MODULE,
-			.of_parse_cb = buck_set_hw_dvs_levels,
-		},
-		.dvs = {
-			.level_map = ROHM_DVS_LEVEL_RUN | ROHM_DVS_LEVEL_IDLE |
-				     ROHM_DVS_LEVEL_SUSPEND,
-			.run_reg = BD718XX_REG_BUCK1_VOLT_RUN,
-			.run_mask = DVS_BUCK_RUN_MASK,
-			.idle_reg = BD718XX_REG_BUCK1_VOLT_IDLE,
-			.idle_mask = DVS_BUCK_RUN_MASK,
-			.suspend_reg = BD718XX_REG_BUCK1_VOLT_SUSP,
-			.suspend_mask = DVS_BUCK_RUN_MASK,
+			.of_parse_cb = buck1_set_hw_dvs_levels,
 		},
 		.init = {
 			.reg = BD718XX_REG_BUCK1_CTRL,
@@ -413,14 +520,7 @@ static const struct bd718xx_regulator_data bd71847_regulators[] = {
 			.enable_reg = BD718XX_REG_BUCK2_CTRL,
 			.enable_mask = BD718XX_BUCK_EN,
 			.owner = THIS_MODULE,
-			.of_parse_cb = buck_set_hw_dvs_levels,
-		},
-		.dvs = {
-			.level_map = ROHM_DVS_LEVEL_RUN | ROHM_DVS_LEVEL_IDLE,
-			.run_reg = BD718XX_REG_BUCK2_VOLT_RUN,
-			.run_mask = DVS_BUCK_RUN_MASK,
-			.idle_reg = BD718XX_REG_BUCK2_VOLT_IDLE,
-			.idle_mask = DVS_BUCK_RUN_MASK,
+			.of_parse_cb = buck2_set_hw_dvs_levels,
 		},
 		.init = {
 			.reg = BD718XX_REG_BUCK2_CTRL,
@@ -692,17 +792,7 @@ static const struct bd718xx_regulator_data bd71837_regulators[] = {
 			.enable_reg = BD718XX_REG_BUCK1_CTRL,
 			.enable_mask = BD718XX_BUCK_EN,
 			.owner = THIS_MODULE,
-			.of_parse_cb = buck_set_hw_dvs_levels,
-		},
-		.dvs = {
-			.level_map = ROHM_DVS_LEVEL_RUN | ROHM_DVS_LEVEL_IDLE |
-				     ROHM_DVS_LEVEL_SUSPEND,
-			.run_reg = BD718XX_REG_BUCK1_VOLT_RUN,
-			.run_mask = DVS_BUCK_RUN_MASK,
-			.idle_reg = BD718XX_REG_BUCK1_VOLT_IDLE,
-			.idle_mask = DVS_BUCK_RUN_MASK,
-			.suspend_reg = BD718XX_REG_BUCK1_VOLT_SUSP,
-			.suspend_mask = DVS_BUCK_RUN_MASK,
+			.of_parse_cb = buck1_set_hw_dvs_levels,
 		},
 		.init = {
 			.reg = BD718XX_REG_BUCK1_CTRL,
@@ -726,14 +816,7 @@ static const struct bd718xx_regulator_data bd71837_regulators[] = {
 			.enable_reg = BD718XX_REG_BUCK2_CTRL,
 			.enable_mask = BD718XX_BUCK_EN,
 			.owner = THIS_MODULE,
-			.of_parse_cb = buck_set_hw_dvs_levels,
-		},
-		.dvs = {
-			.level_map = ROHM_DVS_LEVEL_RUN | ROHM_DVS_LEVEL_IDLE,
-			.run_reg = BD718XX_REG_BUCK2_VOLT_RUN,
-			.run_mask = DVS_BUCK_RUN_MASK,
-			.idle_reg = BD718XX_REG_BUCK2_VOLT_IDLE,
-			.idle_mask = DVS_BUCK_RUN_MASK,
+			.of_parse_cb = buck2_set_hw_dvs_levels,
 		},
 		.init = {
 			.reg = BD718XX_REG_BUCK2_CTRL,
@@ -757,12 +840,7 @@ static const struct bd718xx_regulator_data bd71837_regulators[] = {
 			.enable_reg = BD71837_REG_BUCK3_CTRL,
 			.enable_mask = BD718XX_BUCK_EN,
 			.owner = THIS_MODULE,
-			.of_parse_cb = buck_set_hw_dvs_levels,
-		},
-		.dvs = {
-			.level_map = ROHM_DVS_LEVEL_RUN,
-			.run_reg = BD71837_REG_BUCK3_VOLT_RUN,
-			.run_mask = DVS_BUCK_RUN_MASK,
+			.of_parse_cb = buck3_set_hw_dvs_levels,
 		},
 		.init = {
 			.reg = BD71837_REG_BUCK3_CTRL,
@@ -786,12 +864,7 @@ static const struct bd718xx_regulator_data bd71837_regulators[] = {
 			.enable_reg = BD71837_REG_BUCK4_CTRL,
 			.enable_mask = BD718XX_BUCK_EN,
 			.owner = THIS_MODULE,
-			.of_parse_cb = buck_set_hw_dvs_levels,
-		},
-		.dvs = {
-			.level_map = ROHM_DVS_LEVEL_RUN,
-			.run_reg = BD71837_REG_BUCK4_VOLT_RUN,
-			.run_mask = DVS_BUCK_RUN_MASK,
+			.of_parse_cb = buck4_set_hw_dvs_levels,
 		},
 		.init = {
 			.reg = BD71837_REG_BUCK4_CTRL,
@@ -1069,15 +1142,28 @@ static const struct bd718xx_regulator_data bd71837_regulators[] = {
 	},
 };
 
+struct bd718xx_pmic_inits {
+	const struct bd718xx_regulator_data *r_datas;
+	unsigned int r_amount;
+};
+
 static int bd718xx_probe(struct platform_device *pdev)
 {
 	struct bd718xx *mfd;
 	struct regulator_config config = { 0 };
+	struct bd718xx_pmic_inits pmic_regulators[ROHM_CHIP_TYPE_AMOUNT] = {
+		[ROHM_CHIP_TYPE_BD71837] = {
+			.r_datas = bd71837_regulators,
+			.r_amount = ARRAY_SIZE(bd71837_regulators),
+		},
+		[ROHM_CHIP_TYPE_BD71847] = {
+			.r_datas = bd71847_regulators,
+			.r_amount = ARRAY_SIZE(bd71847_regulators),
+		},
+	};
+
 	int i, j, err;
 	bool use_snvs;
-	const struct bd718xx_regulator_data *reg_data;
-	unsigned int num_reg_data;
-	enum rohm_chip_type chip = platform_get_device_id(pdev)->driver_data;
 
 	mfd = dev_get_drvdata(pdev->dev.parent);
 	if (!mfd) {
@@ -1086,16 +1172,8 @@ static int bd718xx_probe(struct platform_device *pdev)
 		goto err;
 	}
 
-	switch (chip) {
-	case ROHM_CHIP_TYPE_BD71837:
-		reg_data = bd71837_regulators;
-		num_reg_data = ARRAY_SIZE(bd71837_regulators);
-		break;
-	case ROHM_CHIP_TYPE_BD71847:
-		reg_data = bd71847_regulators;
-		num_reg_data = ARRAY_SIZE(bd71847_regulators);
-		break;
-	default:
+	if (mfd->chip.chip_type >= ROHM_CHIP_TYPE_AMOUNT ||
+	    !pmic_regulators[mfd->chip.chip_type].r_datas) {
 		dev_err(&pdev->dev, "Unsupported chip type\n");
 		err = -EINVAL;
 		goto err;
@@ -1137,13 +1215,13 @@ static int bd718xx_probe(struct platform_device *pdev)
 		}
 	}
 
-	for (i = 0; i < num_reg_data; i++) {
+	for (i = 0; i < pmic_regulators[mfd->chip.chip_type].r_amount; i++) {
 
 		const struct regulator_desc *desc;
 		struct regulator_dev *rdev;
 		const struct bd718xx_regulator_data *r;
 
-		r = &reg_data[i];
+		r = &pmic_regulators[mfd->chip.chip_type].r_datas[i];
 		desc = &r->desc;
 
 		config.dev = pdev->dev.parent;
@@ -1203,19 +1281,11 @@ err:
 	return err;
 }
 
-static const struct platform_device_id bd718x7_pmic_id[] = {
-	{ "bd71837-pmic", ROHM_CHIP_TYPE_BD71837 },
-	{ "bd71847-pmic", ROHM_CHIP_TYPE_BD71847 },
-	{ },
-};
-MODULE_DEVICE_TABLE(platform, bd718x7_pmic_id);
-
 static struct platform_driver bd718xx_regulator = {
 	.driver = {
 		.name = "bd718xx-pmic",
 	},
 	.probe = bd718xx_probe,
-	.id_table = bd718x7_pmic_id,
 };
 
 module_platform_driver(bd718xx_regulator);
@@ -1223,4 +1293,3 @@ module_platform_driver(bd718xx_regulator);
 MODULE_AUTHOR("Matti Vaittinen <matti.vaittinen@fi.rohmeurope.com>");
 MODULE_DESCRIPTION("BD71837/BD71847 voltage regulator driver");
 MODULE_LICENSE("GPL");
-MODULE_ALIAS("platform:bd718xx-pmic");

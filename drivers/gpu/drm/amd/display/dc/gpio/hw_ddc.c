@@ -48,18 +48,18 @@
 
 struct gpio;
 
-static void dal_hw_ddc_destruct(
+static void destruct(
 	struct hw_ddc *pin)
 {
 	dal_hw_gpio_destruct(&pin->base);
 }
 
-static void dal_hw_ddc_destroy(
+static void destroy(
 	struct hw_gpio_pin **ptr)
 {
 	struct hw_ddc *pin = HW_DDC_FROM_BASE(*ptr);
 
-	dal_hw_ddc_destruct(pin);
+	destruct(pin);
 
 	kfree(pin);
 
@@ -150,6 +150,7 @@ static enum gpio_result set_config(
 					AUX_PAD1_MODE, 0);
 		}
 
+#if defined(CONFIG_DRM_AMD_DC_DCN2_0)
 		if (ddc->regs->dc_gpio_aux_ctrl_5 != 0) {
 				REG_UPDATE(dc_gpio_aux_ctrl_5, DDC_PAD_I2CMODE, 1);
 		}
@@ -157,6 +158,7 @@ static enum gpio_result set_config(
 		if (ddc->regs->phy_aux_cntl != 0) {
 				REG_UPDATE(phy_aux_cntl, AUX_PAD_RXSEL, 1);
 		}
+#endif
 		return GPIO_RESULT_OK;
 	case GPIO_DDC_CONFIG_TYPE_MODE_AUX:
 		/* set the AUX pad mode */
@@ -164,10 +166,12 @@ static enum gpio_result set_config(
 			REG_SET(gpio.MASK_reg, regval,
 					AUX_PAD1_MODE, 1);
 		}
+#if defined(CONFIG_DRM_AMD_DC_DCN2_0)
 		if (ddc->regs->dc_gpio_aux_ctrl_5 != 0) {
 			REG_UPDATE(dc_gpio_aux_ctrl_5,
 					DDC_PAD_I2CMODE, 0);
 		}
+#endif
 
 		return GPIO_RESULT_OK;
 	case GPIO_DDC_CONFIG_TYPE_POLL_FOR_CONNECT:
@@ -207,7 +211,7 @@ static enum gpio_result set_config(
 }
 
 static const struct hw_gpio_pin_funcs funcs = {
-	.destroy = dal_hw_ddc_destroy,
+	.destroy = destroy,
 	.open = dal_hw_gpio_open,
 	.get_value = dal_hw_gpio_get_value,
 	.set_value = dal_hw_gpio_set_value,
@@ -216,7 +220,7 @@ static const struct hw_gpio_pin_funcs funcs = {
 	.close = dal_hw_gpio_close,
 };
 
-static void dal_hw_ddc_construct(
+static void construct(
 	struct hw_ddc *ddc,
 	enum gpio_id id,
 	uint32_t en,
@@ -243,7 +247,7 @@ void dal_hw_ddc_init(
 		return;
 	}
 
-	dal_hw_ddc_construct(*hw_ddc, id, en, ctx);
+	construct(*hw_ddc, id, en, ctx);
 }
 
 struct hw_gpio_pin *dal_hw_ddc_get_pin(struct gpio *gpio)

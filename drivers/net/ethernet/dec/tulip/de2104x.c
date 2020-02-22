@@ -417,10 +417,7 @@ static void de_rx (struct de_private *de)
 		if (status & DescOwn)
 			break;
 
-		/* the length is actually a 15 bit value here according
-		 * to Table 4-1 in the DE2104x spec so mask is 0x7fff
-		 */
-		len = ((status >> 16) & 0x7fff) - 4;
+		len = ((status >> 16) & 0x7ff) - 4;
 		mapping = de->rx_skb[rx_tail].mapping;
 
 		if (unlikely(drop)) {
@@ -1439,7 +1436,7 @@ static int de_close (struct net_device *dev)
 	return 0;
 }
 
-static void de_tx_timeout (struct net_device *dev, unsigned int txqueue)
+static void de_tx_timeout (struct net_device *dev)
 {
 	struct de_private *de = netdev_priv(dev);
 	const int irq = de->pdev->irq;
@@ -2042,7 +2039,7 @@ static int de_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
 	}
 
 	/* remap CSR registers */
-	regs = ioremap(pciaddr, DE_REGS_SIZE);
+	regs = ioremap_nocache(pciaddr, DE_REGS_SIZE);
 	if (!regs) {
 		rc = -EIO;
 		pr_err("Cannot map PCI MMIO (%llx@%lx) on pci dev %s\n",

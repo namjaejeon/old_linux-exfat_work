@@ -35,8 +35,6 @@
 #ifndef _GVT_EXECLIST_H_
 #define _GVT_EXECLIST_H_
 
-#include <linux/types.h>
-
 struct execlist_ctx_descriptor_format {
 	union {
 		u32 ldw;

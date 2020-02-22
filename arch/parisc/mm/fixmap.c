@@ -14,13 +14,11 @@ void notrace set_fixmap(enum fixed_addresses idx, phys_addr_t phys)
 {
 	unsigned long vaddr = __fix_to_virt(idx);
 	pgd_t *pgd = pgd_offset_k(vaddr);
-	p4d_t *p4d = p4d_offset(pgd, vaddr);
-	pud_t *pud = pud_offset(p4d, vaddr);
-	pmd_t *pmd = pmd_offset(pud, vaddr);
+	pmd_t *pmd = pmd_offset(pgd, vaddr);
 	pte_t *pte;
 
 	if (pmd_none(*pmd))
-		pmd = pmd_alloc(NULL, pud, vaddr);
+		pmd = pmd_alloc(NULL, pgd, vaddr);
 
 	pte = pte_offset_kernel(pmd, vaddr);
 	if (pte_none(*pte))
@@ -34,9 +32,7 @@ void notrace clear_fixmap(enum fixed_addresses idx)
 {
 	unsigned long vaddr = __fix_to_virt(idx);
 	pgd_t *pgd = pgd_offset_k(vaddr);
-	p4d_t *p4d = p4d_offset(pgd, vaddr);
-	pud_t *pud = pud_offset(p4d, vaddr);
-	pmd_t *pmd = pmd_offset(pud, vaddr);
+	pmd_t *pmd = pmd_offset(pgd, vaddr);
 	pte_t *pte = pte_offset_kernel(pmd, vaddr);
 
 	if (WARN_ON(pte_none(*pte)))

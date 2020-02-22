@@ -300,14 +300,13 @@ static const struct drm_display_mode default_mode = {
 		.flags = 0,
 };
 
-static int jdi_panel_get_modes(struct drm_panel *panel,
-			       struct drm_connector *connector)
+static int jdi_panel_get_modes(struct drm_panel *panel)
 {
 	struct drm_display_mode *mode;
 	struct jdi_panel *jdi = to_jdi_panel(panel);
 	struct device *dev = &jdi->dsi->dev;
 
-	mode = drm_mode_duplicate(connector->dev, &default_mode);
+	mode = drm_mode_duplicate(panel->drm, &default_mode);
 	if (!mode) {
 		dev_err(dev, "failed to add mode %ux%ux@%u\n",
 			default_mode.hdisplay, default_mode.vdisplay,
@@ -317,10 +316,10 @@ static int jdi_panel_get_modes(struct drm_panel *panel,
 
 	drm_mode_set_name(mode);
 
-	drm_mode_probed_add(connector, mode);
+	drm_mode_probed_add(panel->connector, mode);
 
-	connector->display_info.width_mm = 95;
-	connector->display_info.height_mm = 151;
+	panel->connector->display_info.width_mm = 95;
+	panel->connector->display_info.height_mm = 151;
 
 	return 1;
 }
@@ -438,8 +437,9 @@ static int jdi_panel_add(struct jdi_panel *jdi)
 		return ret;
 	}
 
-	drm_panel_init(&jdi->base, &jdi->dsi->dev, &jdi_panel_funcs,
-		       DRM_MODE_CONNECTOR_DSI);
+	drm_panel_init(&jdi->base);
+	jdi->base.funcs = &jdi_panel_funcs;
+	jdi->base.dev = &jdi->dsi->dev;
 
 	ret = drm_panel_add(&jdi->base);
 

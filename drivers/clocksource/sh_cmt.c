@@ -25,10 +25,6 @@
 #include <linux/slab.h>
 #include <linux/spinlock.h>
 
-#ifdef CONFIG_SUPERH
-#include <asm/platform_early.h>
-#endif
-
 struct sh_cmt_device;
 
 /*
@@ -905,7 +901,7 @@ static int sh_cmt_map_memory(struct sh_cmt_device *cmt)
 		return -ENXIO;
 	}
 
-	cmt->mapbase = ioremap(mem->start, resource_size(mem));
+	cmt->mapbase = ioremap_nocache(mem->start, resource_size(mem));
 	if (cmt->mapbase == NULL) {
 		dev_err(&cmt->pdev->dev, "failed to remap I/O memory\n");
 		return -ENXIO;
@@ -1056,7 +1052,7 @@ static int sh_cmt_probe(struct platform_device *pdev)
 	struct sh_cmt_device *cmt = platform_get_drvdata(pdev);
 	int ret;
 
-	if (!is_sh_early_platform_device(pdev)) {
+	if (!is_early_platform_device(pdev)) {
 		pm_runtime_set_active(&pdev->dev);
 		pm_runtime_enable(&pdev->dev);
 	}
@@ -1076,7 +1072,7 @@ static int sh_cmt_probe(struct platform_device *pdev)
 		pm_runtime_idle(&pdev->dev);
 		return ret;
 	}
-	if (is_sh_early_platform_device(pdev))
+	if (is_early_platform_device(pdev))
 		return 0;
 
  out:
@@ -1113,10 +1109,7 @@ static void __exit sh_cmt_exit(void)
 	platform_driver_unregister(&sh_cmt_device_driver);
 }
 
-#ifdef CONFIG_SUPERH
-sh_early_platform_init("earlytimer", &sh_cmt_device_driver);
-#endif
-
+early_platform_init("earlytimer", &sh_cmt_device_driver);
 subsys_initcall(sh_cmt_init);
 module_exit(sh_cmt_exit);
 

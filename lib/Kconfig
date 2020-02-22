@@ -278,13 +278,6 @@ config ZLIB_DEFLATE
 	tristate
 	select BITREVERSE
 
-config ZLIB_DFLTCC
-	def_bool y
-	depends on S390
-	prompt "Enable s390x DEFLATE CONVERSION CALL support for kernel zlib"
-	help
-	 Enable s390x hardware support for zlib in the kernel.
-
 config LZO_COMPRESS
 	tristate
 
@@ -454,6 +447,7 @@ config ASSOCIATIVE_ARRAY
 config HAS_IOMEM
 	bool
 	depends on !NO_IOMEM
+	select GENERIC_IO
 	default y
 
 config HAS_IOPORT_MAP
@@ -573,16 +567,13 @@ config DIMLIB
 config LIBFDT
 	bool
 
-config LIBXBC
-	bool
-
 config OID_REGISTRY
 	tristate
 	help
 	  Enable fast lookup object identifier registry.
 
 config UCS2_STRING
-	tristate
+        tristate
 
 #
 # generic vdso
@@ -613,9 +604,6 @@ config ARCH_NO_SG_CHAIN
 	def_bool n
 
 config ARCH_HAS_PMEM_API
-	bool
-
-config MEMREGION
 	bool
 
 # use memcpy to implement user copies for nommu architectures
@@ -649,9 +637,6 @@ config STRING_SELFTEST
 	tristate "Test string functions"
 
 endmenu
-
-config GENERIC_IOREMAP
-	bool
 
 config GENERIC_LIB_ASHLDI3
 	bool

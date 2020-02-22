@@ -9,7 +9,6 @@
  */
 
 #include <linux/async.h>
-#include <linux/device/bus.h>
 #include <linux/device.h>
 #include <linux/module.h>
 #include <linux/errno.h>

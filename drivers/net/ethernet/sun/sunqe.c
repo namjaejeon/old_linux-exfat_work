@@ -544,7 +544,7 @@ static void qe_tx_reclaim(struct sunqe *qep)
 	qep->tx_old = elem;
 }
 
-static void qe_tx_timeout(struct net_device *dev, unsigned int txqueue)
+static void qe_tx_timeout(struct net_device *dev)
 {
 	struct sunqe *qep = netdev_priv(dev);
 	int tx_full;

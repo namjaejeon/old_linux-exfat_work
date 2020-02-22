@@ -776,7 +776,7 @@ static void emac_reset_work(struct work_struct *work)
 	mutex_unlock(&dev->link_lock);
 }
 
-static void emac_tx_timeout(struct net_device *ndev, unsigned int txqueue)
+static void emac_tx_timeout(struct net_device *ndev)
 {
 	struct emac_instance *dev = netdev_priv(ndev);
 
@@ -2849,7 +2849,6 @@ static int emac_init_config(struct emac_instance *dev)
 {
 	struct device_node *np = dev->ofdev->dev.of_node;
 	const void *p;
-	int err;
 
 	/* Read config from device-tree */
 	if (emac_read_uint_prop(np, "mal-device", &dev->mal_ph, 1))
@@ -2898,8 +2897,8 @@ static int emac_init_config(struct emac_instance *dev)
 		dev->mal_burst_size = 256;
 
 	/* PHY mode needs some decoding */
-	err = of_get_phy_mode(np, &dev->phy_mode);
-	if (err)
+	dev->phy_mode = of_get_phy_mode(np);
+	if (dev->phy_mode < 0)
 		dev->phy_mode = PHY_INTERFACE_MODE_NA;
 
 	/* Check EMAC version */

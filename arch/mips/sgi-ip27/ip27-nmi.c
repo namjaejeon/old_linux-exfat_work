@@ -9,7 +9,7 @@
 #include <asm/sn/addrs.h>
 #include <asm/sn/nmi.h>
 #include <asm/sn/arch.h>
-#include <asm/sn/agent.h>
+#include <asm/sn/sn0/hub.h>
 
 #if 0
 #define NODE_NUM_CPUS(n)	CNODE_NUM_CPUS(n)
@@ -17,8 +17,7 @@
 #define NODE_NUM_CPUS(n)	CPUS_PER_NODE
 #endif
 
-#define SEND_NMI(_nasid, _slice)	\
-	REMOTE_HUB_S((_nasid),  (PI_NMI_A + ((_slice) * PI_NMI_OFFSET)), 1)
+#define CNODEID_NONE (cnodeid_t)-1
 
 typedef unsigned long machreg_t;
 
@@ -153,10 +152,16 @@ void nmi_dump_hub_irq(nasid_t nasid, int slice)
  * Copy the cpu registers which have been saved in the IP27prom format
  * into the eframe format for the node under consideration.
  */
-void nmi_node_eframe_save(nasid_t nasid)
+void nmi_node_eframe_save(cnodeid_t  cnode)
 {
+	nasid_t nasid;
 	int slice;
 
+	/* Make sure that we have a valid node */
+	if (cnode == CNODEID_NONE)
+		return;
+
+	nasid = COMPACT_TO_NASID_NODEID(cnode);
 	if (nasid == INVALID_NASID)
 		return;
 
@@ -173,10 +178,10 @@ void nmi_node_eframe_save(nasid_t nasid)
 void
 nmi_eframes_save(void)
 {
-	nasid_t nasid;
+	cnodeid_t	cnode;
 
-	for_each_online_node(nasid)
-		nmi_node_eframe_save(nasid);
+	for_each_online_node(cnode)
+		nmi_node_eframe_save(cnode);
 }
 
 void

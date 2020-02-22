@@ -20,6 +20,4 @@ obj-$(CONFIG_NET_DSA_VITESSE_VSC73XX_SPI) += vitesse-vsc73xx-spi.o
 obj-y				+= b53/
 obj-y				+= microchip/
 obj-y				+= mv88e6xxx/
-obj-y				+= ocelot/
-obj-y				+= qca/
 obj-y				+= sja1105/

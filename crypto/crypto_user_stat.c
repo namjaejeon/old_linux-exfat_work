@@ -213,6 +213,10 @@ static int crypto_reportstat_one(struct crypto_alg *alg,
 		if (crypto_report_cipher(skb, alg))
 			goto nla_put_failure;
 		break;
+	case CRYPTO_ALG_TYPE_BLKCIPHER:
+		if (crypto_report_cipher(skb, alg))
+			goto nla_put_failure;
+		break;
 	case CRYPTO_ALG_TYPE_CIPHER:
 		if (crypto_report_cipher(skb, alg))
 			goto nla_put_failure;
@@ -324,10 +328,8 @@ int crypto_reportstat(struct sk_buff *in_skb, struct nlmsghdr *in_nlh,
 drop_alg:
 	crypto_mod_put(alg);
 
-	if (err) {
-		kfree_skb(skb);
+	if (err)
 		return err;
-	}
 
 	return nlmsg_unicast(net->crypto_nlsk, skb, NETLINK_CB(in_skb).portid);
 }

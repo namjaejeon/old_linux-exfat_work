@@ -43,7 +43,7 @@
  * they VM-Fail, whereas a successful VM-Enter + VM-Exit will jump
  * to vmx_vmexit.
  */
-SYM_FUNC_START(vmx_vmenter)
+ENTRY(vmx_vmenter)
 	/* EFLAGS.ZF is set if VMCS.LAUNCHED == 0 */
 	je 2f
 
@@ -65,7 +65,7 @@ SYM_FUNC_START(vmx_vmenter)
 	_ASM_EXTABLE(1b, 5b)
 	_ASM_EXTABLE(2b, 5b)
 
-SYM_FUNC_END(vmx_vmenter)
+ENDPROC(vmx_vmenter)
 
 /**
  * vmx_vmexit - Handle a VMX VM-Exit
@@ -77,7 +77,7 @@ SYM_FUNC_END(vmx_vmenter)
  * here after hardware loads the host's state, i.e. this is the destination
  * referred to by VMCS.HOST_RIP.
  */
-SYM_FUNC_START(vmx_vmexit)
+ENTRY(vmx_vmexit)
 #ifdef CONFIG_RETPOLINE
 	ALTERNATIVE "jmp .Lvmexit_skip_rsb", "", X86_FEATURE_RETPOLINE
 	/* Preserve guest's RAX, it's used to stuff the RSB. */
@@ -90,7 +90,7 @@ SYM_FUNC_START(vmx_vmexit)
 .Lvmexit_skip_rsb:
 #endif
 	ret
-SYM_FUNC_END(vmx_vmexit)
+ENDPROC(vmx_vmexit)
 
 /**
  * __vmx_vcpu_run - Run a vCPU via a transition to VMX guest mode
@@ -101,7 +101,7 @@ SYM_FUNC_END(vmx_vmexit)
  * Returns:
  *	0 on VM-Exit, 1 on VM-Fail
  */
-SYM_FUNC_START(__vmx_vcpu_run)
+ENTRY(__vmx_vcpu_run)
 	push %_ASM_BP
 	mov  %_ASM_SP, %_ASM_BP
 #ifdef CONFIG_X86_64
@@ -233,4 +233,4 @@ SYM_FUNC_START(__vmx_vcpu_run)
 	/* VM-Fail.  Out-of-line to avoid a taken Jcc after VM-Exit. */
 2:	mov $1, %eax
 	jmp 1b
-SYM_FUNC_END(__vmx_vcpu_run)
+ENDPROC(__vmx_vcpu_run)

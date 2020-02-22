@@ -213,13 +213,12 @@ u32 __pci_msix_desc_mask_irq(struct msi_desc *desc, u32 flag)
 
 	if (pci_msi_ignore_mask)
 		return 0;
-
 	desc_addr = pci_msix_desc_addr(desc);
 	if (!desc_addr)
 		return 0;
 
 	mask_bits &= ~PCI_MSIX_ENTRY_CTRL_MASKBIT;
-	if (flag & PCI_MSIX_ENTRY_CTRL_MASKBIT)
+	if (flag)
 		mask_bits |= PCI_MSIX_ENTRY_CTRL_MASKBIT;
 
 	writel(mask_bits, desc_addr + PCI_MSIX_ENTRY_VECTOR_CTRL);
@@ -688,7 +687,7 @@ static void __iomem *msix_map_region(struct pci_dev *dev, unsigned nr_entries)
 	table_offset &= PCI_MSIX_TABLE_OFFSET;
 	phys_addr = pci_resource_start(dev, bir) + table_offset;
 
-	return ioremap(phys_addr, nr_entries * PCI_MSIX_ENTRY_SIZE);
+	return ioremap_nocache(phys_addr, nr_entries * PCI_MSIX_ENTRY_SIZE);
 }
 
 static int msix_setup_entries(struct pci_dev *dev, void __iomem *base,
@@ -862,7 +861,7 @@ static int pci_msi_supported(struct pci_dev *dev, int nvec)
 	if (!pci_msi_enable)
 		return 0;
 
-	if (!dev || dev->no_msi)
+	if (!dev || dev->no_msi || dev->current_state != PCI_D0)
 		return 0;
 
 	/*
@@ -973,7 +972,7 @@ static int __pci_enable_msix(struct pci_dev *dev, struct msix_entry *entries,
 	int nr_entries;
 	int i, j;
 
-	if (!pci_msi_supported(dev, nvec) || dev->current_state != PCI_D0)
+	if (!pci_msi_supported(dev, nvec))
 		return -EINVAL;
 
 	nr_entries = pci_msix_vec_count(dev);
@@ -1059,7 +1058,7 @@ static int __pci_enable_msi_range(struct pci_dev *dev, int minvec, int maxvec,
 	int nvec;
 	int rc;
 
-	if (!pci_msi_supported(dev, minvec) || dev->current_state != PCI_D0)
+	if (!pci_msi_supported(dev, minvec))
 		return -EINVAL;
 
 	/* Check whether driver already requested MSI-X IRQs */
@@ -1315,6 +1314,22 @@ const struct cpumask *pci_irq_get_affinity(struct pci_dev *dev, int nr)
 	}
 }
 EXPORT_SYMBOL(pci_irq_get_affinity);
+
+/**
+ * pci_irq_get_node - return the NUMA node of a particular MSI vector
+ * @pdev:	PCI device to operate on
+ * @vec:	device-relative interrupt vector index (0-based).
+ */
+int pci_irq_get_node(struct pci_dev *pdev, int vec)
+{
+	const struct cpumask *mask;
+
+	mask = pci_irq_get_affinity(pdev, vec);
+	if (mask)
+		return local_memory_node(cpu_to_node(cpumask_first(mask)));
+	return dev_to_node(&pdev->dev);
+}
+EXPORT_SYMBOL(pci_irq_get_node);
 
 struct pci_dev *msi_desc_to_pci_dev(struct msi_desc *desc)
 {

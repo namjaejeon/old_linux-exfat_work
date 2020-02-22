@@ -4,7 +4,7 @@
  *
  * Module interface and handling of zfcp data structures.
  *
- * Copyright IBM Corp. 2002, 2018
+ * Copyright IBM Corp. 2002, 2017
  */
 
 /*
@@ -25,7 +25,6 @@
  *            Martin Petermann
  *            Sven Schuetz
  *            Steffen Maier
- *	      Benjamin Block
  */
 
 #define KMSG_COMPONENT "zfcp"
@@ -37,7 +36,6 @@
 #include "zfcp_ext.h"
 #include "zfcp_fc.h"
 #include "zfcp_reqlist.h"
-#include "zfcp_diag.h"
 
 #define ZFCP_BUS_ID_SIZE	20
 
@@ -358,9 +356,6 @@ struct zfcp_adapter *zfcp_adapter_enqueue(struct ccw_device *ccw_device)
 
 	adapter->erp_action.adapter = adapter;
 
-	if (zfcp_diag_adapter_setup(adapter))
-		goto failed;
-
 	if (zfcp_qdio_setup(adapter))
 		goto failed;
 
@@ -407,9 +402,6 @@ struct zfcp_adapter *zfcp_adapter_enqueue(struct ccw_device *ccw_device)
 			       &zfcp_sysfs_adapter_attrs))
 		goto failed;
 
-	if (zfcp_diag_sysfs_setup(adapter))
-		goto failed;
-
 	/* report size limit per scatter-gather segment */
 	adapter->ccw_device->dev.dma_parms = &adapter->dma_parms;
 
@@ -434,7 +426,6 @@ void zfcp_adapter_unregister(struct zfcp_adapter *adapter)
 
 	zfcp_fc_wka_ports_force_offline(adapter->gs);
 	zfcp_scsi_adapter_unregister(adapter);
-	zfcp_diag_sysfs_destroy(adapter);
 	sysfs_remove_group(&cdev->dev.kobj, &zfcp_sysfs_adapter_attrs);
 
 	zfcp_erp_thread_kill(adapter);
@@ -458,7 +449,6 @@ void zfcp_adapter_release(struct kref *ref)
 	dev_set_drvdata(&adapter->ccw_device->dev, NULL);
 	zfcp_fc_gs_destroy(adapter);
 	zfcp_free_low_mem_buffers(adapter);
-	zfcp_diag_adapter_free(adapter);
 	kfree(adapter->req_list);
 	kfree(adapter->fc_stats);
 	kfree(adapter->stats_reset_data);

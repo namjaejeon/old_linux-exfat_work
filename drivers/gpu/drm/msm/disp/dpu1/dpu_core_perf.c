@@ -32,7 +32,18 @@ enum dpu_perf_mode {
 static struct dpu_kms *_dpu_crtc_get_kms(struct drm_crtc *crtc)
 {
 	struct msm_drm_private *priv;
+
+	if (!crtc->dev || !crtc->dev->dev_private) {
+		DPU_ERROR("invalid device\n");
+		return NULL;
+	}
+
 	priv = crtc->dev->dev_private;
+	if (!priv || !priv->kms) {
+		DPU_ERROR("invalid kms\n");
+		return NULL;
+	}
+
 	return to_dpu_kms(priv->kms);
 }
 
@@ -105,7 +116,7 @@ int dpu_core_perf_crtc_check(struct drm_crtc *crtc,
 	}
 
 	kms = _dpu_crtc_get_kms(crtc);
-	if (!kms->catalog) {
+	if (!kms || !kms->catalog) {
 		DPU_ERROR("invalid parameters\n");
 		return 0;
 	}
@@ -204,6 +215,7 @@ static int _dpu_core_perf_crtc_update_bus(struct dpu_kms *kms,
 void dpu_core_perf_crtc_release_bw(struct drm_crtc *crtc)
 {
 	struct dpu_crtc *dpu_crtc;
+	struct dpu_crtc_state *dpu_cstate;
 	struct dpu_kms *kms;
 
 	if (!crtc) {
@@ -212,12 +224,13 @@ void dpu_core_perf_crtc_release_bw(struct drm_crtc *crtc)
 	}
 
 	kms = _dpu_crtc_get_kms(crtc);
-	if (!kms->catalog) {
+	if (!kms || !kms->catalog) {
 		DPU_ERROR("invalid kms\n");
 		return;
 	}
 
 	dpu_crtc = to_dpu_crtc(crtc);
+	dpu_cstate = to_dpu_crtc_state(crtc->state);
 
 	if (atomic_dec_return(&kms->bandwidth_ref) > 0)
 		return;
@@ -274,6 +287,7 @@ int dpu_core_perf_crtc_update(struct drm_crtc *crtc,
 	u64 clk_rate = 0;
 	struct dpu_crtc *dpu_crtc;
 	struct dpu_crtc_state *dpu_cstate;
+	struct msm_drm_private *priv;
 	struct dpu_kms *kms;
 	int ret;
 
@@ -283,10 +297,11 @@ int dpu_core_perf_crtc_update(struct drm_crtc *crtc,
 	}
 
 	kms = _dpu_crtc_get_kms(crtc);
-	if (!kms->catalog) {
+	if (!kms || !kms->catalog) {
 		DPU_ERROR("invalid kms\n");
 		return -EINVAL;
 	}
+	priv = kms->dev->dev_private;
 
 	dpu_crtc = to_dpu_crtc(crtc);
 	dpu_cstate = to_dpu_crtc_state(crtc->state);

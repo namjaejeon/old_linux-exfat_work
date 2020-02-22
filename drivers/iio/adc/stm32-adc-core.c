@@ -38,12 +38,12 @@
 #define HAS_ANASWVDD		BIT(1)
 
 /**
- * struct stm32_adc_common_regs - stm32 common registers
+ * stm32_adc_common_regs - stm32 common registers, compatible dependent data
  * @csr:	common status register offset
  * @ccr:	common control register offset
- * @eoc1_msk:	adc1 end of conversion flag in @csr
- * @eoc2_msk:	adc2 end of conversion flag in @csr
- * @eoc3_msk:	adc3 end of conversion flag in @csr
+ * @eoc1:	adc1 end of conversion flag in @csr
+ * @eoc2:	adc2 end of conversion flag in @csr
+ * @eoc3:	adc3 end of conversion flag in @csr
  * @ier:	interrupt enable register offset for each adc
  * @eocie_msk:	end of conversion interrupt enable mask in @ier
  */
@@ -60,7 +60,7 @@ struct stm32_adc_common_regs {
 struct stm32_adc_priv;
 
 /**
- * struct stm32_adc_priv_cfg - stm32 core compatible configuration data
+ * stm32_adc_priv_cfg - stm32 core compatible configuration data
  * @regs:	common registers for all instances
  * @clk_sel:	clock selection routine
  * @max_clk_rate_hz: maximum analog clock rate (Hz, from datasheet)
@@ -79,7 +79,6 @@ struct stm32_adc_priv_cfg {
  * @domain:		irq domain reference
  * @aclk:		clock reference for the analog circuitry
  * @bclk:		bus clock common for all ADCs, depends on part used
- * @max_clk_rate:	desired maximum clock rate
  * @booster:		booster supply reference
  * @vdd:		vdd supply reference
  * @vdda:		vdda analog supply reference
@@ -96,7 +95,6 @@ struct stm32_adc_priv {
 	struct irq_domain		*domain;
 	struct clk			*aclk;
 	struct clk			*bclk;
-	u32				max_clk_rate;
 	struct regulator		*booster;
 	struct regulator		*vdd;
 	struct regulator		*vdda;
@@ -119,7 +117,6 @@ static int stm32f4_pclk_div[] = {2, 4, 6, 8};
 
 /**
  * stm32f4_adc_clk_sel() - Select stm32f4 ADC common clock prescaler
- * @pdev: platform device
  * @priv: stm32 ADC core private data
  * Select clock prescaler used for analog conversions, before using ADC.
  */
@@ -143,7 +140,7 @@ static int stm32f4_adc_clk_sel(struct platform_device *pdev,
 	}
 
 	for (i = 0; i < ARRAY_SIZE(stm32f4_pclk_div); i++) {
-		if ((rate / stm32f4_pclk_div[i]) <= priv->max_clk_rate)
+		if ((rate / stm32f4_pclk_div[i]) <= priv->cfg->max_clk_rate_hz)
 			break;
 	}
 	if (i >= ARRAY_SIZE(stm32f4_pclk_div)) {
@@ -232,7 +229,7 @@ static int stm32h7_adc_clk_sel(struct platform_device *pdev,
 			if (ckmode)
 				continue;
 
-			if ((rate / div) <= priv->max_clk_rate)
+			if ((rate / div) <= priv->cfg->max_clk_rate_hz)
 				goto out;
 		}
 	}
@@ -252,7 +249,7 @@ static int stm32h7_adc_clk_sel(struct platform_device *pdev,
 		if (!ckmode)
 			continue;
 
-		if ((rate / div) <= priv->max_clk_rate)
+		if ((rate / div) <= priv->cfg->max_clk_rate_hz)
 			goto out;
 	}
 
@@ -280,21 +277,21 @@ out:
 static const struct stm32_adc_common_regs stm32f4_adc_common_regs = {
 	.csr = STM32F4_ADC_CSR,
 	.ccr = STM32F4_ADC_CCR,
-	.eoc1_msk = STM32F4_EOC1 | STM32F4_OVR1,
-	.eoc2_msk = STM32F4_EOC2 | STM32F4_OVR2,
-	.eoc3_msk = STM32F4_EOC3 | STM32F4_OVR3,
+	.eoc1_msk = STM32F4_EOC1,
+	.eoc2_msk = STM32F4_EOC2,
+	.eoc3_msk = STM32F4_EOC3,
 	.ier = STM32F4_ADC_CR1,
-	.eocie_msk = STM32F4_EOCIE | STM32F4_OVRIE,
+	.eocie_msk = STM32F4_EOCIE,
 };
 
 /* STM32H7 common registers definitions */
 static const struct stm32_adc_common_regs stm32h7_adc_common_regs = {
 	.csr = STM32H7_ADC_CSR,
 	.ccr = STM32H7_ADC_CCR,
-	.eoc1_msk = STM32H7_EOC_MST | STM32H7_OVR_MST,
-	.eoc2_msk = STM32H7_EOC_SLV | STM32H7_OVR_SLV,
+	.eoc1_msk = STM32H7_EOC_MST,
+	.eoc2_msk = STM32H7_EOC_SLV,
 	.ier = STM32H7_ADC_IER,
-	.eocie_msk = STM32H7_EOCIE | STM32H7_OVRIE,
+	.eocie_msk = STM32H7_EOCIE,
 };
 
 static const unsigned int stm32_adc_offset[STM32_ADC_MAX_ADCS] = {
@@ -657,7 +654,6 @@ static int stm32_adc_probe(struct platform_device *pdev)
 	struct device *dev = &pdev->dev;
 	struct device_node *np = pdev->dev.of_node;
 	struct resource *res;
-	u32 max_rate;
 	int ret;
 
 	if (!pdev->dev.of_node)
@@ -688,8 +684,7 @@ static int stm32_adc_probe(struct platform_device *pdev)
 	priv->vref = devm_regulator_get(&pdev->dev, "vref");
 	if (IS_ERR(priv->vref)) {
 		ret = PTR_ERR(priv->vref);
-		if (ret != -EPROBE_DEFER)
-			dev_err(&pdev->dev, "vref get failed, %d\n", ret);
+		dev_err(&pdev->dev, "vref get failed, %d\n", ret);
 		return ret;
 	}
 
@@ -697,8 +692,7 @@ static int stm32_adc_probe(struct platform_device *pdev)
 	if (IS_ERR(priv->aclk)) {
 		ret = PTR_ERR(priv->aclk);
 		if (ret != -ENOENT) {
-			if (ret != -EPROBE_DEFER)
-				dev_err(&pdev->dev, "Can't get 'adc' clock\n");
+			dev_err(&pdev->dev, "Can't get 'adc' clock\n");
 			return ret;
 		}
 		priv->aclk = NULL;
@@ -708,8 +702,7 @@ static int stm32_adc_probe(struct platform_device *pdev)
 	if (IS_ERR(priv->bclk)) {
 		ret = PTR_ERR(priv->bclk);
 		if (ret != -ENOENT) {
-			if (ret != -EPROBE_DEFER)
-				dev_err(&pdev->dev, "Can't get 'bus' clock\n");
+			dev_err(&pdev->dev, "Can't get 'bus' clock\n");
 			return ret;
 		}
 		priv->bclk = NULL;
@@ -736,13 +729,6 @@ static int stm32_adc_probe(struct platform_device *pdev)
 	}
 	priv->common.vref_mv = ret / 1000;
 	dev_dbg(&pdev->dev, "vref+=%dmV\n", priv->common.vref_mv);
-
-	ret = of_property_read_u32(pdev->dev.of_node, "st,max-clk-rate-hz",
-				   &max_rate);
-	if (!ret)
-		priv->max_clk_rate = min(max_rate, priv->cfg->max_clk_rate_hz);
-	else
-		priv->max_clk_rate = priv->cfg->max_clk_rate_hz;
 
 	ret = priv->cfg->clk_sel(pdev, priv);
 	if (ret < 0)

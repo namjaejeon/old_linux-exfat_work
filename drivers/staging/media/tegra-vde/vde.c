@@ -1150,7 +1150,8 @@ static int tegra_vde_remove(struct platform_device *pdev)
 	return 0;
 }
 
-static __maybe_unused int tegra_vde_pm_suspend(struct device *dev)
+#ifdef CONFIG_PM_SLEEP
+static int tegra_vde_pm_suspend(struct device *dev)
 {
 	struct tegra_vde *vde = dev_get_drvdata(dev);
 	int err;
@@ -1164,7 +1165,7 @@ static __maybe_unused int tegra_vde_pm_suspend(struct device *dev)
 	return 0;
 }
 
-static __maybe_unused int tegra_vde_pm_resume(struct device *dev)
+static int tegra_vde_pm_resume(struct device *dev)
 {
 	struct tegra_vde *vde = dev_get_drvdata(dev);
 	int err;
@@ -1177,6 +1178,7 @@ static __maybe_unused int tegra_vde_pm_resume(struct device *dev)
 
 	return 0;
 }
+#endif
 
 static const struct dev_pm_ops tegra_vde_pm_ops = {
 	SET_RUNTIME_PM_OPS(tegra_vde_runtime_suspend,

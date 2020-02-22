@@ -52,16 +52,12 @@ static bool map_pte(struct page_vma_mapped_walk *pvmw)
 	return true;
 }
 
-static inline bool pfn_is_match(struct page *page, unsigned long pfn)
+static inline bool pfn_in_hpage(struct page *hpage, unsigned long pfn)
 {
-	unsigned long page_pfn = page_to_pfn(page);
-
-	/* normal page and hugetlbfs page */
-	if (!PageTransCompound(page) || PageHuge(page))
-		return page_pfn == pfn;
+	unsigned long hpage_pfn = page_to_pfn(hpage);
 
 	/* THP can be referenced by any subpage */
-	return pfn >= page_pfn && pfn - page_pfn < hpage_nr_pages(page);
+	return pfn >= hpage_pfn && pfn - hpage_pfn < hpage_nr_pages(hpage);
 }
 
 /**
@@ -112,7 +108,7 @@ static bool check_pte(struct page_vma_mapped_walk *pvmw)
 		pfn = pte_pfn(*pvmw->pte);
 	}
 
-	return pfn_is_match(pvmw->page, pfn);
+	return pfn_in_hpage(pvmw->page, pfn);
 }
 
 /**

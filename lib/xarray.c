@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0+
 /*
  * XArray implementation
- * Copyright (c) 2017-2018 Microsoft Corporation
- * Copyright (c) 2018-2020 Oracle
+ * Copyright (c) 2017 Microsoft Corporation
  * Author: Matthew Wilcox <willy@infradead.org>
  */
 
@@ -968,7 +967,6 @@ void xas_pause(struct xa_state *xas)
 	if (xas_invalid(xas))
 		return;
 
-	xas->xa_node = XAS_RESTART;
 	if (node) {
 		unsigned int offset = xas->xa_offset;
 		while (++offset < XA_CHUNK_SIZE) {
@@ -976,11 +974,10 @@ void xas_pause(struct xa_state *xas)
 				break;
 		}
 		xas->xa_index += (offset - xas->xa_offset) << node->shift;
-		if (xas->xa_index == 0)
-			xas->xa_node = XAS_BOUNDS;
 	} else {
 		xas->xa_index++;
 	}
+	xas->xa_node = XAS_RESTART;
 }
 EXPORT_SYMBOL_GPL(xas_pause);
 
@@ -997,8 +994,6 @@ void *__xas_prev(struct xa_state *xas)
 
 	if (!xas_frozen(xas->xa_node))
 		xas->xa_index--;
-	if (!xas->xa_node)
-		return set_bounds(xas);
 	if (xas_not_node(xas->xa_node))
 		return xas_load(xas);
 
@@ -1036,8 +1031,6 @@ void *__xas_next(struct xa_state *xas)
 
 	if (!xas_frozen(xas->xa_node))
 		xas->xa_index++;
-	if (!xas->xa_node)
-		return set_bounds(xas);
 	if (xas_not_node(xas->xa_node))
 		return xas_load(xas);
 
@@ -1082,15 +1075,13 @@ void *xas_find(struct xa_state *xas, unsigned long max)
 {
 	void *entry;
 
-	if (xas_error(xas) || xas->xa_node == XAS_BOUNDS)
+	if (xas_error(xas))
 		return NULL;
-	if (xas->xa_index > max)
-		return set_bounds(xas);
 
 	if (!xas->xa_node) {
 		xas->xa_index = 1;
 		return set_bounds(xas);
-	} else if (xas->xa_node == XAS_RESTART) {
+	} else if (xas_top(xas->xa_node)) {
 		entry = xas_load(xas);
 		if (entry || xas_not_node(xas->xa_node))
 			return entry;
@@ -1155,8 +1146,6 @@ void *xas_find_marked(struct xa_state *xas, unsigned long max, xa_mark_t mark)
 
 	if (xas_error(xas))
 		return NULL;
-	if (xas->xa_index > max)
-		goto max;
 
 	if (!xas->xa_node) {
 		xas->xa_index = 1;
@@ -1831,17 +1820,6 @@ void *xa_find(struct xarray *xa, unsigned long *indexp,
 }
 EXPORT_SYMBOL(xa_find);
 
-static bool xas_sibling(struct xa_state *xas)
-{
-	struct xa_node *node = xas->xa_node;
-	unsigned long mask;
-
-	if (!node)
-		return false;
-	mask = (XA_CHUNK_SIZE << node->shift) - 1;
-	return (xas->xa_index & mask) > (xas->xa_offset << node->shift);
-}
-
 /**
  * xa_find_after() - Search the XArray for a present entry.
  * @xa: XArray.
@@ -1865,20 +1843,21 @@ void *xa_find_after(struct xarray *xa, unsigned long *indexp,
 	XA_STATE(xas, xa, *indexp + 1);
 	void *entry;
 
-	if (xas.xa_index == 0)
-		return NULL;
-
 	rcu_read_lock();
 	for (;;) {
 		if ((__force unsigned int)filter < XA_MAX_MARKS)
 			entry = xas_find_marked(&xas, max, filter);
 		else
 			entry = xas_find(&xas, max);
-
-		if (xas_invalid(&xas))
+		if (xas.xa_node == XAS_BOUNDS)
 			break;
-		if (xas_sibling(&xas))
-			continue;
+		if (xas.xa_shift) {
+			if (xas.xa_index & ((1UL << xas.xa_shift) - 1))
+				continue;
+		} else {
+			if (xas.xa_offset < (xas.xa_index & XA_CHUNK_MASK))
+				continue;
+		}
 		if (!xas_retry(&xas, entry))
 			break;
 	}

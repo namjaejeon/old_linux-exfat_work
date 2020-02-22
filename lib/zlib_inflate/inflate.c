@@ -15,16 +15,6 @@
 #include "inffast.h"
 #include "infutil.h"
 
-/* architecture-specific bits */
-#ifdef CONFIG_ZLIB_DFLTCC
-#  include "../zlib_dfltcc/dfltcc.h"
-#else
-#define INFLATE_RESET_HOOK(strm) do {} while (0)
-#define INFLATE_TYPEDO_HOOK(strm, flush) do {} while (0)
-#define INFLATE_NEED_UPDATEWINDOW(strm) 1
-#define INFLATE_NEED_CHECKSUM(strm) 1
-#endif
-
 int zlib_inflate_workspacesize(void)
 {
     return sizeof(struct inflate_workspace);
@@ -52,7 +42,6 @@ int zlib_inflateReset(z_streamp strm)
     state->write = 0;
     state->whave = 0;
 
-    INFLATE_RESET_HOOK(strm);
     return Z_OK;
 }
 
@@ -77,15 +66,7 @@ int zlib_inflateInit2(z_streamp strm, int windowBits)
         return Z_STREAM_ERROR;
     }
     state->wbits = (unsigned)windowBits;
-#ifdef CONFIG_ZLIB_DFLTCC
-    /*
-     * DFLTCC requires the window to be page aligned.
-     * Thus, we overallocate and take the aligned portion of the buffer.
-     */
-    state->window = PTR_ALIGN(&WS(strm)->working_window[0], PAGE_SIZE);
-#else
     state->window = &WS(strm)->working_window[0];
-#endif
 
     return zlib_inflateReset(strm);
 }
@@ -245,6 +226,11 @@ static int zlib_inflateSyncPacket(z_streamp strm)
         hold >>= bits & 7; \
         bits -= bits & 7; \
     } while (0)
+
+/* Reverse the bytes in a 32-bit value */
+#define REVERSE(q) \
+    ((((q) >> 24) & 0xff) + (((q) >> 8) & 0xff00) + \
+     (((q) & 0xff00) << 8) + (((q) & 0xff) << 24))
 
 /*
    inflate() uses a state machine to process as much input data and generate as
@@ -409,7 +395,6 @@ int zlib_inflate(z_streamp strm, int flush)
             if (flush == Z_BLOCK) goto inf_leave;
 	    /* fall through */
         case TYPEDO:
-            INFLATE_TYPEDO_HOOK(strm, flush);
             if (state->last) {
                 BYTEBITS();
                 state->mode = CHECK;
@@ -707,7 +692,7 @@ int zlib_inflate(z_streamp strm, int flush)
                 out -= left;
                 strm->total_out += out;
                 state->total += out;
-                if (INFLATE_NEED_CHECKSUM(strm) && out)
+                if (out)
                     strm->adler = state->check =
                         UPDATE(state->check, put - out, out);
                 out = left;
@@ -741,8 +726,7 @@ int zlib_inflate(z_streamp strm, int flush)
      */
   inf_leave:
     RESTORE();
-    if (INFLATE_NEED_UPDATEWINDOW(strm) &&
-            (state->wsize || (state->mode < CHECK && out != strm->avail_out)))
+    if (state->wsize || (state->mode < CHECK && out != strm->avail_out))
         zlib_updatewindow(strm, out);
 
     in -= strm->avail_in;
@@ -750,7 +734,7 @@ int zlib_inflate(z_streamp strm, int flush)
     strm->total_in += in;
     strm->total_out += out;
     state->total += out;
-    if (INFLATE_NEED_CHECKSUM(strm) && state->wrap && out)
+    if (state->wrap && out)
         strm->adler = state->check =
             UPDATE(state->check, strm->next_out - out, out);
 

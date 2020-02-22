@@ -35,4 +35,4 @@ $(obj)/utf8data.h: $(src)/utf8data.h_shipped FORCE
 endif
 
 targets += utf8data.h
-hostprogs += mkutf8data
+hostprogs-y += mkutf8data

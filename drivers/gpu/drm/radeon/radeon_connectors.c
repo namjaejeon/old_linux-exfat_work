@@ -249,10 +249,11 @@ radeon_connector_update_scratch_regs(struct drm_connector *connector, enum drm_c
 	struct drm_encoder *encoder;
 	const struct drm_connector_helper_funcs *connector_funcs = connector->helper_private;
 	bool connected;
+	int i;
 
 	best_encoder = connector_funcs->best_encoder(connector);
 
-	drm_connector_for_each_possible_encoder(connector, encoder) {
+	drm_connector_for_each_possible_encoder(connector, encoder, i) {
 		if ((encoder == best_encoder) && (status == connector_status_connected))
 			connected = true;
 		else
@@ -268,8 +269,9 @@ radeon_connector_update_scratch_regs(struct drm_connector *connector, enum drm_c
 static struct drm_encoder *radeon_find_encoder(struct drm_connector *connector, int encoder_type)
 {
 	struct drm_encoder *encoder;
+	int i;
 
-	drm_connector_for_each_possible_encoder(connector, encoder) {
+	drm_connector_for_each_possible_encoder(connector, encoder, i) {
 		if (encoder->encoder_type == encoder_type)
 			return encoder;
 	}
@@ -378,9 +380,10 @@ static int radeon_ddc_get_modes(struct drm_connector *connector)
 static struct drm_encoder *radeon_best_single_encoder(struct drm_connector *connector)
 {
 	struct drm_encoder *encoder;
+	int i;
 
 	/* pick the first one */
-	drm_connector_for_each_possible_encoder(connector, encoder)
+	drm_connector_for_each_possible_encoder(connector, encoder, i)
 		return encoder;
 
 	return NULL;
@@ -425,13 +428,14 @@ radeon_connector_analog_encoder_conflict_solve(struct drm_connector *connector,
 
 	list_for_each_entry(conflict, &dev->mode_config.connector_list, head) {
 		struct drm_encoder *enc;
+		int i;
 
 		if (conflict == connector)
 			continue;
 
 		radeon_conflict = to_radeon_connector(conflict);
 
-		drm_connector_for_each_possible_encoder(conflict, enc) {
+		drm_connector_for_each_possible_encoder(conflict, enc, i) {
 			/* if the IDs match */
 			if (enc == encoder) {
 				if (conflict->status != connector_status_connected)
@@ -440,7 +444,7 @@ radeon_connector_analog_encoder_conflict_solve(struct drm_connector *connector,
 				if (radeon_conflict->use_digital)
 					continue;
 
-				if (priority) {
+				if (priority == true) {
 					DRM_DEBUG_KMS("1: conflicting encoders switching off %s\n",
 						      conflict->name);
 					DRM_DEBUG_KMS("in favor of %s\n",
@@ -700,9 +704,9 @@ static int radeon_connector_set_property(struct drm_connector *connector, struct
 			else
 				ret = radeon_legacy_get_tmds_info_from_combios(radeon_encoder, tmds);
 		}
-		if (val == 1 || !ret)
+		if (val == 1 || ret == false) {
 			radeon_legacy_get_tmds_info_from_table(radeon_encoder, tmds);
-
+		}
 		radeon_property_change_mode(&radeon_encoder->base);
 	}
 
@@ -1359,7 +1363,9 @@ radeon_dvi_detect(struct drm_connector *connector, bool force)
 
 	/* find analog encoder */
 	if (radeon_connector->dac_load_detect) {
-		drm_connector_for_each_possible_encoder(connector, encoder) {
+		int i;
+
+		drm_connector_for_each_possible_encoder(connector, encoder, i) {
 			if (encoder->encoder_type != DRM_MODE_ENCODER_DAC &&
 			    encoder->encoder_type != DRM_MODE_ENCODER_TVDAC)
 				continue;
@@ -1437,8 +1443,9 @@ static struct drm_encoder *radeon_dvi_encoder(struct drm_connector *connector)
 {
 	struct radeon_connector *radeon_connector = to_radeon_connector(connector);
 	struct drm_encoder *encoder;
+	int i;
 
-	drm_connector_for_each_possible_encoder(connector, encoder) {
+	drm_connector_for_each_possible_encoder(connector, encoder, i) {
 		if (radeon_connector->use_digital == true) {
 			if (encoder->encoder_type == DRM_MODE_ENCODER_TMDS)
 				return encoder;
@@ -1453,7 +1460,7 @@ static struct drm_encoder *radeon_dvi_encoder(struct drm_connector *connector)
 
 	/* then check use digitial */
 	/* pick the first one */
-	drm_connector_for_each_possible_encoder(connector, encoder)
+	drm_connector_for_each_possible_encoder(connector, encoder, i)
 		return encoder;
 
 	return NULL;
@@ -1596,8 +1603,9 @@ u16 radeon_connector_encoder_get_dp_bridge_encoder_id(struct drm_connector *conn
 {
 	struct drm_encoder *encoder;
 	struct radeon_encoder *radeon_encoder;
+	int i;
 
-	drm_connector_for_each_possible_encoder(connector, encoder) {
+	drm_connector_for_each_possible_encoder(connector, encoder, i) {
 		radeon_encoder = to_radeon_encoder(encoder);
 
 		switch (radeon_encoder->encoder_id) {
@@ -1616,9 +1624,10 @@ static bool radeon_connector_encoder_is_hbr2(struct drm_connector *connector)
 {
 	struct drm_encoder *encoder;
 	struct radeon_encoder *radeon_encoder;
+	int i;
 	bool found = false;
 
-	drm_connector_for_each_possible_encoder(connector, encoder) {
+	drm_connector_for_each_possible_encoder(connector, encoder, i) {
 		radeon_encoder = to_radeon_encoder(encoder);
 		if (radeon_encoder->caps & ATOM_ENCODER_CAP_RECORD_HBR2)
 			found = true;
@@ -1861,7 +1870,6 @@ radeon_add_atom_connector(struct drm_device *dev,
 	struct radeon_connector_atom_dig *radeon_dig_connector;
 	struct drm_encoder *encoder;
 	struct radeon_encoder *radeon_encoder;
-	struct i2c_adapter *ddc = NULL;
 	uint32_t subpixel_order = SubPixelNone;
 	bool shared_ddc = false;
 	bool is_dp_bridge = false;
@@ -1939,21 +1947,17 @@ radeon_add_atom_connector(struct drm_device *dev,
 		radeon_connector->con_priv = radeon_dig_connector;
 		if (i2c_bus->valid) {
 			radeon_connector->ddc_bus = radeon_i2c_lookup(rdev, i2c_bus);
-			if (radeon_connector->ddc_bus) {
+			if (radeon_connector->ddc_bus)
 				has_aux = true;
-				ddc = &radeon_connector->ddc_bus->adapter;
-			} else {
+			else
 				DRM_ERROR("DP: Failed to assign ddc bus! Check dmesg for i2c errors.\n");
-			}
 		}
 		switch (connector_type) {
 		case DRM_MODE_CONNECTOR_VGA:
 		case DRM_MODE_CONNECTOR_DVIA:
 		default:
-			drm_connector_init_with_ddc(dev, &radeon_connector->base,
-						    &radeon_dp_connector_funcs,
-						    connector_type,
-						    ddc);
+			drm_connector_init(dev, &radeon_connector->base,
+					   &radeon_dp_connector_funcs, connector_type);
 			drm_connector_helper_add(&radeon_connector->base,
 						 &radeon_dp_connector_helper_funcs);
 			connector->interlace_allowed = true;
@@ -1975,10 +1979,8 @@ radeon_add_atom_connector(struct drm_device *dev,
 		case DRM_MODE_CONNECTOR_HDMIA:
 		case DRM_MODE_CONNECTOR_HDMIB:
 		case DRM_MODE_CONNECTOR_DisplayPort:
-			drm_connector_init_with_ddc(dev, &radeon_connector->base,
-						    &radeon_dp_connector_funcs,
-						    connector_type,
-						    ddc);
+			drm_connector_init(dev, &radeon_connector->base,
+					   &radeon_dp_connector_funcs, connector_type);
 			drm_connector_helper_add(&radeon_connector->base,
 						 &radeon_dp_connector_helper_funcs);
 			drm_object_attach_property(&radeon_connector->base.base,
@@ -2025,10 +2027,8 @@ radeon_add_atom_connector(struct drm_device *dev,
 			break;
 		case DRM_MODE_CONNECTOR_LVDS:
 		case DRM_MODE_CONNECTOR_eDP:
-			drm_connector_init_with_ddc(dev, &radeon_connector->base,
-						    &radeon_lvds_bridge_connector_funcs,
-						    connector_type,
-						    ddc);
+			drm_connector_init(dev, &radeon_connector->base,
+					   &radeon_lvds_bridge_connector_funcs, connector_type);
 			drm_connector_helper_add(&radeon_connector->base,
 						 &radeon_dp_connector_helper_funcs);
 			drm_object_attach_property(&radeon_connector->base.base,
@@ -2042,18 +2042,13 @@ radeon_add_atom_connector(struct drm_device *dev,
 	} else {
 		switch (connector_type) {
 		case DRM_MODE_CONNECTOR_VGA:
+			drm_connector_init(dev, &radeon_connector->base, &radeon_vga_connector_funcs, connector_type);
+			drm_connector_helper_add(&radeon_connector->base, &radeon_vga_connector_helper_funcs);
 			if (i2c_bus->valid) {
 				radeon_connector->ddc_bus = radeon_i2c_lookup(rdev, i2c_bus);
 				if (!radeon_connector->ddc_bus)
 					DRM_ERROR("VGA: Failed to assign ddc bus! Check dmesg for i2c errors.\n");
-				else
-					ddc = &radeon_connector->ddc_bus->adapter;
 			}
-			drm_connector_init_with_ddc(dev, &radeon_connector->base,
-						    &radeon_vga_connector_funcs,
-						    connector_type,
-						    ddc);
-			drm_connector_helper_add(&radeon_connector->base, &radeon_vga_connector_helper_funcs);
 			radeon_connector->dac_load_detect = true;
 			drm_object_attach_property(&radeon_connector->base.base,
 						      rdev->mode_info.load_detect_property,
@@ -2072,18 +2067,13 @@ radeon_add_atom_connector(struct drm_device *dev,
 			connector->doublescan_allowed = true;
 			break;
 		case DRM_MODE_CONNECTOR_DVIA:
+			drm_connector_init(dev, &radeon_connector->base, &radeon_vga_connector_funcs, connector_type);
+			drm_connector_helper_add(&radeon_connector->base, &radeon_vga_connector_helper_funcs);
 			if (i2c_bus->valid) {
 				radeon_connector->ddc_bus = radeon_i2c_lookup(rdev, i2c_bus);
 				if (!radeon_connector->ddc_bus)
 					DRM_ERROR("DVIA: Failed to assign ddc bus! Check dmesg for i2c errors.\n");
-				else
-					ddc = &radeon_connector->ddc_bus->adapter;
 			}
-			drm_connector_init_with_ddc(dev, &radeon_connector->base,
-						    &radeon_vga_connector_funcs,
-						    connector_type,
-						    ddc);
-			drm_connector_helper_add(&radeon_connector->base, &radeon_vga_connector_helper_funcs);
 			radeon_connector->dac_load_detect = true;
 			drm_object_attach_property(&radeon_connector->base.base,
 						      rdev->mode_info.load_detect_property,
@@ -2108,18 +2098,13 @@ radeon_add_atom_connector(struct drm_device *dev,
 				goto failed;
 			radeon_dig_connector->igp_lane_info = igp_lane_info;
 			radeon_connector->con_priv = radeon_dig_connector;
+			drm_connector_init(dev, &radeon_connector->base, &radeon_dvi_connector_funcs, connector_type);
+			drm_connector_helper_add(&radeon_connector->base, &radeon_dvi_connector_helper_funcs);
 			if (i2c_bus->valid) {
 				radeon_connector->ddc_bus = radeon_i2c_lookup(rdev, i2c_bus);
 				if (!radeon_connector->ddc_bus)
 					DRM_ERROR("DVI: Failed to assign ddc bus! Check dmesg for i2c errors.\n");
-				else
-					ddc = &radeon_connector->ddc_bus->adapter;
 			}
-			drm_connector_init_with_ddc(dev, &radeon_connector->base,
-						    &radeon_dvi_connector_funcs,
-						    connector_type,
-						    ddc);
-			drm_connector_helper_add(&radeon_connector->base, &radeon_dvi_connector_helper_funcs);
 			subpixel_order = SubPixelHorizontalRGB;
 			drm_object_attach_property(&radeon_connector->base.base,
 						      rdev->mode_info.coherent_mode_property,
@@ -2170,18 +2155,13 @@ radeon_add_atom_connector(struct drm_device *dev,
 				goto failed;
 			radeon_dig_connector->igp_lane_info = igp_lane_info;
 			radeon_connector->con_priv = radeon_dig_connector;
+			drm_connector_init(dev, &radeon_connector->base, &radeon_dvi_connector_funcs, connector_type);
+			drm_connector_helper_add(&radeon_connector->base, &radeon_dvi_connector_helper_funcs);
 			if (i2c_bus->valid) {
 				radeon_connector->ddc_bus = radeon_i2c_lookup(rdev, i2c_bus);
 				if (!radeon_connector->ddc_bus)
 					DRM_ERROR("HDMI: Failed to assign ddc bus! Check dmesg for i2c errors.\n");
-				else
-					ddc = &radeon_connector->ddc_bus->adapter;
 			}
-			drm_connector_init_with_ddc(dev, &radeon_connector->base,
-						    &radeon_dvi_connector_funcs,
-						    connector_type,
-						    ddc);
-			drm_connector_helper_add(&radeon_connector->base, &radeon_dvi_connector_helper_funcs);
 			drm_object_attach_property(&radeon_connector->base.base,
 						      rdev->mode_info.coherent_mode_property,
 						      1);
@@ -2225,20 +2205,15 @@ radeon_add_atom_connector(struct drm_device *dev,
 				goto failed;
 			radeon_dig_connector->igp_lane_info = igp_lane_info;
 			radeon_connector->con_priv = radeon_dig_connector;
+			drm_connector_init(dev, &radeon_connector->base, &radeon_dp_connector_funcs, connector_type);
+			drm_connector_helper_add(&radeon_connector->base, &radeon_dp_connector_helper_funcs);
 			if (i2c_bus->valid) {
 				radeon_connector->ddc_bus = radeon_i2c_lookup(rdev, i2c_bus);
-				if (radeon_connector->ddc_bus) {
+				if (radeon_connector->ddc_bus)
 					has_aux = true;
-					ddc = &radeon_connector->ddc_bus->adapter;
-				} else {
+				else
 					DRM_ERROR("DP: Failed to assign ddc bus! Check dmesg for i2c errors.\n");
-				}
 			}
-			drm_connector_init_with_ddc(dev, &radeon_connector->base,
-						    &radeon_dp_connector_funcs,
-						    connector_type,
-						    ddc);
-			drm_connector_helper_add(&radeon_connector->base, &radeon_dp_connector_helper_funcs);
 			subpixel_order = SubPixelHorizontalRGB;
 			drm_object_attach_property(&radeon_connector->base.base,
 						      rdev->mode_info.coherent_mode_property,
@@ -2280,20 +2255,15 @@ radeon_add_atom_connector(struct drm_device *dev,
 				goto failed;
 			radeon_dig_connector->igp_lane_info = igp_lane_info;
 			radeon_connector->con_priv = radeon_dig_connector;
+			drm_connector_init(dev, &radeon_connector->base, &radeon_edp_connector_funcs, connector_type);
+			drm_connector_helper_add(&radeon_connector->base, &radeon_dp_connector_helper_funcs);
 			if (i2c_bus->valid) {
 				radeon_connector->ddc_bus = radeon_i2c_lookup(rdev, i2c_bus);
-				if (radeon_connector->ddc_bus) {
+				if (radeon_connector->ddc_bus)
 					has_aux = true;
-					ddc = &radeon_connector->ddc_bus->adapter;
-				} else {
+				else
 					DRM_ERROR("DP: Failed to assign ddc bus! Check dmesg for i2c errors.\n");
-				}
 			}
-			drm_connector_init_with_ddc(dev, &radeon_connector->base,
-						    &radeon_edp_connector_funcs,
-						    connector_type,
-						    ddc);
-			drm_connector_helper_add(&radeon_connector->base, &radeon_dp_connector_helper_funcs);
 			drm_object_attach_property(&radeon_connector->base.base,
 						      dev->mode_config.scaling_mode_property,
 						      DRM_MODE_SCALE_FULLSCREEN);
@@ -2304,10 +2274,7 @@ radeon_add_atom_connector(struct drm_device *dev,
 		case DRM_MODE_CONNECTOR_SVIDEO:
 		case DRM_MODE_CONNECTOR_Composite:
 		case DRM_MODE_CONNECTOR_9PinDIN:
-			drm_connector_init_with_ddc(dev, &radeon_connector->base,
-						    &radeon_tv_connector_funcs,
-						    connector_type,
-						    ddc);
+			drm_connector_init(dev, &radeon_connector->base, &radeon_tv_connector_funcs, connector_type);
 			drm_connector_helper_add(&radeon_connector->base, &radeon_tv_connector_helper_funcs);
 			radeon_connector->dac_load_detect = true;
 			drm_object_attach_property(&radeon_connector->base.base,
@@ -2327,18 +2294,13 @@ radeon_add_atom_connector(struct drm_device *dev,
 				goto failed;
 			radeon_dig_connector->igp_lane_info = igp_lane_info;
 			radeon_connector->con_priv = radeon_dig_connector;
+			drm_connector_init(dev, &radeon_connector->base, &radeon_lvds_connector_funcs, connector_type);
+			drm_connector_helper_add(&radeon_connector->base, &radeon_lvds_connector_helper_funcs);
 			if (i2c_bus->valid) {
 				radeon_connector->ddc_bus = radeon_i2c_lookup(rdev, i2c_bus);
 				if (!radeon_connector->ddc_bus)
 					DRM_ERROR("LVDS: Failed to assign ddc bus! Check dmesg for i2c errors.\n");
-				else
-					ddc = &radeon_connector->ddc_bus->adapter;
 			}
-			drm_connector_init_with_ddc(dev, &radeon_connector->base,
-						    &radeon_lvds_connector_funcs,
-						    connector_type,
-						    ddc);
-			drm_connector_helper_add(&radeon_connector->base, &radeon_lvds_connector_helper_funcs);
 			drm_object_attach_property(&radeon_connector->base.base,
 						      dev->mode_config.scaling_mode_property,
 						      DRM_MODE_SCALE_FULLSCREEN);
@@ -2382,7 +2344,6 @@ radeon_add_legacy_connector(struct drm_device *dev,
 	struct radeon_device *rdev = dev->dev_private;
 	struct drm_connector *connector;
 	struct radeon_connector *radeon_connector;
-	struct i2c_adapter *ddc = NULL;
 	uint32_t subpixel_order = SubPixelNone;
 
 	if (connector_type == DRM_MODE_CONNECTOR_Unknown)
@@ -2417,18 +2378,13 @@ radeon_add_legacy_connector(struct drm_device *dev,
 
 	switch (connector_type) {
 	case DRM_MODE_CONNECTOR_VGA:
+		drm_connector_init(dev, &radeon_connector->base, &radeon_vga_connector_funcs, connector_type);
+		drm_connector_helper_add(&radeon_connector->base, &radeon_vga_connector_helper_funcs);
 		if (i2c_bus->valid) {
 			radeon_connector->ddc_bus = radeon_i2c_lookup(rdev, i2c_bus);
 			if (!radeon_connector->ddc_bus)
 				DRM_ERROR("VGA: Failed to assign ddc bus! Check dmesg for i2c errors.\n");
-			else
-				ddc = &radeon_connector->ddc_bus->adapter;
 		}
-		drm_connector_init_with_ddc(dev, &radeon_connector->base,
-					    &radeon_vga_connector_funcs,
-					    connector_type,
-					    ddc);
-		drm_connector_helper_add(&radeon_connector->base, &radeon_vga_connector_helper_funcs);
 		radeon_connector->dac_load_detect = true;
 		drm_object_attach_property(&radeon_connector->base.base,
 					      rdev->mode_info.load_detect_property,
@@ -2439,18 +2395,13 @@ radeon_add_legacy_connector(struct drm_device *dev,
 		connector->doublescan_allowed = true;
 		break;
 	case DRM_MODE_CONNECTOR_DVIA:
+		drm_connector_init(dev, &radeon_connector->base, &radeon_vga_connector_funcs, connector_type);
+		drm_connector_helper_add(&radeon_connector->base, &radeon_vga_connector_helper_funcs);
 		if (i2c_bus->valid) {
 			radeon_connector->ddc_bus = radeon_i2c_lookup(rdev, i2c_bus);
 			if (!radeon_connector->ddc_bus)
 				DRM_ERROR("DVIA: Failed to assign ddc bus! Check dmesg for i2c errors.\n");
-			else
-				ddc = &radeon_connector->ddc_bus->adapter;
 		}
-		drm_connector_init_with_ddc(dev, &radeon_connector->base,
-					    &radeon_vga_connector_funcs,
-					    connector_type,
-					    ddc);
-		drm_connector_helper_add(&radeon_connector->base, &radeon_vga_connector_helper_funcs);
 		radeon_connector->dac_load_detect = true;
 		drm_object_attach_property(&radeon_connector->base.base,
 					      rdev->mode_info.load_detect_property,
@@ -2462,18 +2413,13 @@ radeon_add_legacy_connector(struct drm_device *dev,
 		break;
 	case DRM_MODE_CONNECTOR_DVII:
 	case DRM_MODE_CONNECTOR_DVID:
+		drm_connector_init(dev, &radeon_connector->base, &radeon_dvi_connector_funcs, connector_type);
+		drm_connector_helper_add(&radeon_connector->base, &radeon_dvi_connector_helper_funcs);
 		if (i2c_bus->valid) {
 			radeon_connector->ddc_bus = radeon_i2c_lookup(rdev, i2c_bus);
 			if (!radeon_connector->ddc_bus)
 				DRM_ERROR("DVI: Failed to assign ddc bus! Check dmesg for i2c errors.\n");
-			else
-				ddc = &radeon_connector->ddc_bus->adapter;
 		}
-		drm_connector_init_with_ddc(dev, &radeon_connector->base,
-					    &radeon_dvi_connector_funcs,
-					    connector_type,
-					    ddc);
-		drm_connector_helper_add(&radeon_connector->base, &radeon_dvi_connector_helper_funcs);
 		if (connector_type == DRM_MODE_CONNECTOR_DVII) {
 			radeon_connector->dac_load_detect = true;
 			drm_object_attach_property(&radeon_connector->base.base,
@@ -2490,10 +2436,7 @@ radeon_add_legacy_connector(struct drm_device *dev,
 	case DRM_MODE_CONNECTOR_SVIDEO:
 	case DRM_MODE_CONNECTOR_Composite:
 	case DRM_MODE_CONNECTOR_9PinDIN:
-		drm_connector_init_with_ddc(dev, &radeon_connector->base,
-					    &radeon_tv_connector_funcs,
-					    connector_type,
-					    ddc);
+		drm_connector_init(dev, &radeon_connector->base, &radeon_tv_connector_funcs, connector_type);
 		drm_connector_helper_add(&radeon_connector->base, &radeon_tv_connector_helper_funcs);
 		radeon_connector->dac_load_detect = true;
 		/* RS400,RC410,RS480 chipset seems to report a lot
@@ -2515,18 +2458,13 @@ radeon_add_legacy_connector(struct drm_device *dev,
 		connector->doublescan_allowed = false;
 		break;
 	case DRM_MODE_CONNECTOR_LVDS:
+		drm_connector_init(dev, &radeon_connector->base, &radeon_lvds_connector_funcs, connector_type);
+		drm_connector_helper_add(&radeon_connector->base, &radeon_lvds_connector_helper_funcs);
 		if (i2c_bus->valid) {
 			radeon_connector->ddc_bus = radeon_i2c_lookup(rdev, i2c_bus);
 			if (!radeon_connector->ddc_bus)
 				DRM_ERROR("LVDS: Failed to assign ddc bus! Check dmesg for i2c errors.\n");
-			else
-				ddc = &radeon_connector->ddc_bus->adapter;
 		}
-		drm_connector_init_with_ddc(dev, &radeon_connector->base,
-					    &radeon_lvds_connector_funcs,
-					    connector_type,
-					    ddc);
-		drm_connector_helper_add(&radeon_connector->base, &radeon_lvds_connector_helper_funcs);
 		drm_object_attach_property(&radeon_connector->base.base,
 					      dev->mode_config.scaling_mode_property,
 					      DRM_MODE_SCALE_FULLSCREEN);

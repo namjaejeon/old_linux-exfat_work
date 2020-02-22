@@ -8,7 +8,6 @@
 struct device;
 struct typec_mux;
 struct typec_switch;
-struct typec_altmode;
 struct fwnode_handle;
 
 typedef int (*typec_switch_set_fn_t)(struct typec_switch *sw,
@@ -30,14 +29,7 @@ void typec_switch_unregister(struct typec_switch *sw);
 void typec_switch_set_drvdata(struct typec_switch *sw, void *data);
 void *typec_switch_get_drvdata(struct typec_switch *sw);
 
-struct typec_mux_state {
-	struct typec_altmode *alt;
-	unsigned long mode;
-	void *data;
-};
-
-typedef int (*typec_mux_set_fn_t)(struct typec_mux *mux,
-				  struct typec_mux_state *state);
+typedef int (*typec_mux_set_fn_t)(struct typec_mux *mux, int state);
 
 struct typec_mux_desc {
 	struct fwnode_handle *fwnode;

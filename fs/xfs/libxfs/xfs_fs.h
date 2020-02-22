@@ -324,7 +324,7 @@ typedef struct xfs_growfs_rt {
  * Structures returned from ioctl XFS_IOC_FSBULKSTAT & XFS_IOC_FSBULKSTAT_SINGLE
  */
 typedef struct xfs_bstime {
-	__kernel_long_t tv_sec;		/* seconds		*/
+	time_t		tv_sec;		/* seconds		*/
 	__s32		tv_nsec;	/* and nanoseconds	*/
 } xfs_bstime_t;
 
@@ -416,7 +416,7 @@ struct xfs_bulkstat {
 
 /*
  * Project quota id helpers (previously projid was 16bit only
- * and using two 16bit values to hold new 32bit projid was chosen
+ * and using two 16bit values to hold new 32bit projid was choosen
  * to retain compatibility with "old" filesystems).
  */
 static inline uint32_t

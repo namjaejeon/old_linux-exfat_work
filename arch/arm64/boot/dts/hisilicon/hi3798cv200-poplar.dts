@@ -170,7 +170,6 @@
 };
 
 &ir {
-	linux,rc-map-name = "rc-hisi-poplar";
 	status = "okay";
 };
 

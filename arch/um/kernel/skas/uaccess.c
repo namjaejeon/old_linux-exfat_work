@@ -17,7 +17,6 @@
 pte_t *virt_to_pte(struct mm_struct *mm, unsigned long addr)
 {
 	pgd_t *pgd;
-	p4d_t *p4d;
 	pud_t *pud;
 	pmd_t *pmd;
 
@@ -28,11 +27,7 @@ pte_t *virt_to_pte(struct mm_struct *mm, unsigned long addr)
 	if (!pgd_present(*pgd))
 		return NULL;
 
-	p4d = p4d_offset(pgd, addr);
-	if (!p4d_present(*p4d))
-		return NULL;
-
-	pud = pud_offset(p4d, addr);
+	pud = pud_offset(pgd, addr);
 	if (!pud_present(*pud))
 		return NULL;
 

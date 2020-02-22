@@ -201,12 +201,12 @@ iomap_dio_bio_actor(struct inode *inode, loff_t pos, loff_t length,
 	unsigned int blkbits = blksize_bits(bdev_logical_block_size(iomap->bdev));
 	unsigned int fs_block_size = i_blocksize(inode), pad;
 	unsigned int align = iov_iter_alignment(dio->submit.iter);
+	struct iov_iter iter;
 	struct bio *bio;
 	bool need_zeroout = false;
 	bool use_fua = false;
 	int nr_pages, ret = 0;
 	size_t copied = 0;
-	size_t orig_count;
 
 	if ((pos | length | align) & ((1 << blkbits) - 1))
 		return -EINVAL;
@@ -236,18 +236,15 @@ iomap_dio_bio_actor(struct inode *inode, loff_t pos, loff_t length,
 	}
 
 	/*
-	 * Save the original count and trim the iter to just the extent we
-	 * are operating on right now.  The iter will be re-expanded once
-	 * we are done.
+	 * Operate on a partial iter trimmed to the extent we were called for.
+	 * We'll update the iter in the dio once we're done with this extent.
 	 */
-	orig_count = iov_iter_count(dio->submit.iter);
-	iov_iter_truncate(dio->submit.iter, length);
+	iter = *dio->submit.iter;
+	iov_iter_truncate(&iter, length);
 
-	nr_pages = iov_iter_npages(dio->submit.iter, BIO_MAX_PAGES);
-	if (nr_pages <= 0) {
-		ret = nr_pages;
-		goto out;
-	}
+	nr_pages = iov_iter_npages(&iter, BIO_MAX_PAGES);
+	if (nr_pages <= 0)
+		return nr_pages;
 
 	if (need_zeroout) {
 		/* zero out from the start of the block to the write offset */
@@ -260,8 +257,7 @@ iomap_dio_bio_actor(struct inode *inode, loff_t pos, loff_t length,
 		size_t n;
 		if (dio->error) {
 			iov_iter_revert(dio->submit.iter, copied);
-			copied = ret = 0;
-			goto out;
+			return 0;
 		}
 
 		bio = bio_alloc(GFP_KERNEL, nr_pages);
@@ -272,7 +268,7 @@ iomap_dio_bio_actor(struct inode *inode, loff_t pos, loff_t length,
 		bio->bi_private = dio;
 		bio->bi_end_io = iomap_dio_bio_end_io;
 
-		ret = bio_iov_iter_get_pages(bio, dio->submit.iter);
+		ret = bio_iov_iter_get_pages(bio, &iter);
 		if (unlikely(ret)) {
 			/*
 			 * We have to stop part way through an IO. We must fall
@@ -298,11 +294,13 @@ iomap_dio_bio_actor(struct inode *inode, loff_t pos, loff_t length,
 				bio_set_pages_dirty(bio);
 		}
 
+		iov_iter_advance(dio->submit.iter, n);
+
 		dio->size += n;
 		pos += n;
 		copied += n;
 
-		nr_pages = iov_iter_npages(dio->submit.iter, BIO_MAX_PAGES);
+		nr_pages = iov_iter_npages(&iter, BIO_MAX_PAGES);
 		iomap_dio_submit_bio(dio, iomap, bio);
 	} while (nr_pages);
 
@@ -320,12 +318,7 @@ zero_tail:
 		if (pad)
 			iomap_dio_zero(dio, iomap, pos, fs_block_size - pad);
 	}
-out:
-	/* Undo iter limitation to current extent */
-	iov_iter_reexpand(dio->submit.iter, orig_count - copied);
-	if (copied)
-		return copied;
-	return ret;
+	return copied ? copied : ret;
 }
 
 static loff_t
@@ -365,7 +358,7 @@ iomap_dio_inline_actor(struct inode *inode, loff_t pos, loff_t length,
 
 static loff_t
 iomap_dio_actor(struct inode *inode, loff_t pos, loff_t length,
-		void *data, struct iomap *iomap, struct iomap *srcmap)
+		void *data, struct iomap *iomap)
 {
 	struct iomap_dio *dio = data;
 
@@ -399,15 +392,15 @@ iomap_dio_actor(struct inode *inode, loff_t pos, loff_t length,
  */
 ssize_t
 iomap_dio_rw(struct kiocb *iocb, struct iov_iter *iter,
-		const struct iomap_ops *ops, const struct iomap_dio_ops *dops,
-		bool wait_for_completion)
+		const struct iomap_ops *ops, const struct iomap_dio_ops *dops)
 {
 	struct address_space *mapping = iocb->ki_filp->f_mapping;
 	struct inode *inode = file_inode(iocb->ki_filp);
 	size_t count = iov_iter_count(iter);
-	loff_t pos = iocb->ki_pos;
+	loff_t pos = iocb->ki_pos, start = pos;
 	loff_t end = iocb->ki_pos + count - 1, ret = 0;
 	unsigned int flags = IOMAP_DIRECT;
+	bool wait_for_completion = is_sync_kiocb(iocb);
 	struct blk_plug plug;
 	struct iomap_dio *dio;
 
@@ -415,9 +408,6 @@ iomap_dio_rw(struct kiocb *iocb, struct iov_iter *iter,
 
 	if (!count)
 		return 0;
-
-	if (WARN_ON(is_sync_kiocb(iocb) && !wait_for_completion))
-		return -EIO;
 
 	dio = kmalloc(sizeof(*dio), GFP_KERNEL);
 	if (!dio)
@@ -440,7 +430,7 @@ iomap_dio_rw(struct kiocb *iocb, struct iov_iter *iter,
 		if (pos >= dio->i_size)
 			goto out_free_dio;
 
-		if (iter_is_iovec(iter))
+		if (iter_is_iovec(iter) && iov_iter_rw(iter) == READ)
 			dio->flags |= IOMAP_DIO_DIRTY;
 	} else {
 		flags |= IOMAP_WRITE;
@@ -461,14 +451,14 @@ iomap_dio_rw(struct kiocb *iocb, struct iov_iter *iter,
 	}
 
 	if (iocb->ki_flags & IOCB_NOWAIT) {
-		if (filemap_range_has_page(mapping, pos, end)) {
+		if (filemap_range_has_page(mapping, start, end)) {
 			ret = -EAGAIN;
 			goto out_free_dio;
 		}
 		flags |= IOMAP_NOWAIT;
 	}
 
-	ret = filemap_write_and_wait_range(mapping, pos, end);
+	ret = filemap_write_and_wait_range(mapping, start, end);
 	if (ret)
 		goto out_free_dio;
 
@@ -479,7 +469,7 @@ iomap_dio_rw(struct kiocb *iocb, struct iov_iter *iter,
 	 * pretty crazy thing to do, so we don't support it 100%.
 	 */
 	ret = invalidate_inode_pages2_range(mapping,
-			pos >> PAGE_SHIFT, end >> PAGE_SHIFT);
+			start >> PAGE_SHIFT, end >> PAGE_SHIFT);
 	if (ret)
 		dio_warn_stale_pagecache(iocb->ki_filp);
 	ret = 0;
@@ -507,15 +497,8 @@ iomap_dio_rw(struct kiocb *iocb, struct iov_iter *iter,
 		}
 		pos += ret;
 
-		if (iov_iter_rw(iter) == READ && pos >= dio->i_size) {
-			/*
-			 * We only report that we've read data up to i_size.
-			 * Revert iter to a state corresponding to that as
-			 * some callers (such as splice code) rely on it.
-			 */
-			iov_iter_revert(iter, pos - dio->i_size);
+		if (iov_iter_rw(iter) == READ && pos >= dio->i_size)
 			break;
-		}
 	} while ((count = iov_iter_count(iter)) > 0);
 	blk_finish_plug(&plug);
 

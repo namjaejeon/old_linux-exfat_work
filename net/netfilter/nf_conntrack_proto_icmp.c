@@ -235,7 +235,11 @@ int nf_conntrack_icmpv4_error(struct nf_conn *tmpl,
 	}
 
 	/* Need to track icmp error message? */
-	if (!icmp_is_err(icmph->type))
+	if (icmph->type != ICMP_DEST_UNREACH &&
+	    icmph->type != ICMP_SOURCE_QUENCH &&
+	    icmph->type != ICMP_TIME_EXCEEDED &&
+	    icmph->type != ICMP_PARAMETERPROB &&
+	    icmph->type != ICMP_REDIRECT)
 		return NF_ACCEPT;
 
 	memset(&outer_daddr, 0, sizeof(outer_daddr));

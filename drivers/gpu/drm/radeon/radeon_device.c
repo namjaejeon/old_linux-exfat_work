@@ -28,7 +28,6 @@
 
 #include <linux/console.h>
 #include <linux/efi.h>
-#include <linux/pci.h>
 #include <linux/pm_runtime.h>
 #include <linux/slab.h>
 #include <linux/vga_switcheroo.h>
@@ -39,6 +38,7 @@
 #include <drm/drm_debugfs.h>
 #include <drm/drm_device.h>
 #include <drm/drm_file.h>
+#include <drm/drm_pci.h>
 #include <drm/drm_probe_helper.h>
 #include <drm/radeon_drm.h>
 

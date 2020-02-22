@@ -1612,7 +1612,8 @@ qla82xx_get_bootld_offset(struct qla_hw_data *ha)
 	return (u8 *)&ha->hablob->fw->data[offset];
 }
 
-static u32 qla82xx_get_fw_size(struct qla_hw_data *ha)
+static __le32
+qla82xx_get_fw_size(struct qla_hw_data *ha)
 {
 	struct qla82xx_uri_data_desc *uri_desc = NULL;
 
@@ -1623,7 +1624,7 @@ static u32 qla82xx_get_fw_size(struct qla_hw_data *ha)
 			return cpu_to_le32(uri_desc->size);
 	}
 
-	return get_unaligned_le32(&ha->hablob->fw->data[FW_SIZE_OFFSET]);
+	return cpu_to_le32(*(u32 *)&ha->hablob->fw->data[FW_SIZE_OFFSET]);
 }
 
 static u8 *
@@ -1815,7 +1816,7 @@ qla82xx_fw_load_from_blob(struct qla_hw_data *ha)
 	}
 
 	flashaddr = FLASH_ADDR_START;
-	size = qla82xx_get_fw_size(ha) / 8;
+	size = (__force u32)qla82xx_get_fw_size(ha) / 8;
 	ptr64 = (u64 *)qla82xx_get_fw_offs(ha);
 
 	for (i = 0; i < size; i++) {
@@ -1882,7 +1883,7 @@ qla82xx_set_product_offset(struct qla_hw_data *ha)
 static int
 qla82xx_validate_firmware_blob(scsi_qla_host_t *vha, uint8_t fw_type)
 {
-	uint32_t val;
+	__le32 val;
 	uint32_t min_size;
 	struct qla_hw_data *ha = vha->hw;
 	const struct firmware *fw = ha->hablob->fw;
@@ -1895,8 +1896,8 @@ qla82xx_validate_firmware_blob(scsi_qla_host_t *vha, uint8_t fw_type)
 
 		min_size = QLA82XX_URI_FW_MIN_SIZE;
 	} else {
-		val = get_unaligned_le32(&fw->data[QLA82XX_FW_MAGIC_OFFSET]);
-		if (val != QLA82XX_BDINFO_MAGIC)
+		val = cpu_to_le32(*(u32 *)&fw->data[QLA82XX_FW_MAGIC_OFFSET]);
+		if ((__force u32)val != QLA82XX_BDINFO_MAGIC)
 			return -EINVAL;
 
 		min_size = QLA82XX_FW_MIN_SIZE;
@@ -3029,7 +3030,7 @@ qla8xxx_dev_failed_handler(scsi_qla_host_t *vha)
 	/* Set DEV_FAILED flag to disable timer */
 	vha->device_flags |= DFLG_DEV_FAILED;
 	qla2x00_abort_all_cmds(vha, DID_NO_CONNECT << 16);
-	qla2x00_mark_all_devices_lost(vha);
+	qla2x00_mark_all_devices_lost(vha, 0);
 	vha->flags.online = 0;
 	vha->flags.init_done = 0;
 }

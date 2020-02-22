@@ -11,7 +11,6 @@
 
 #include <drm/drm_atomic.h>
 #include <drm/drm_atomic_helper.h>
-#include <drm/drm_bridge.h>
 #include <drm/drm_drv.h>
 #include <drm/drm_fb_helper.h>
 #include <drm/drm_file.h>
@@ -217,8 +216,8 @@ static int omap_display_id(struct omap_dss_device *output)
 	} else if (output->bridge) {
 		struct drm_bridge *bridge = output->bridge;
 
-		while (drm_bridge_get_next_bridge(bridge))
-			bridge = drm_bridge_get_next_bridge(bridge);
+		while (bridge->next)
+			bridge = bridge->next;
 
 		node = bridge->of_node;
 	} else if (output->panel) {

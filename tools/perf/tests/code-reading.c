@@ -10,7 +10,6 @@
 #include <sys/param.h>
 #include <perf/cpumap.h>
 #include <perf/evlist.h>
-#include <perf/mmap.h>
 
 #include "debug.h"
 #include "dso.h"
@@ -276,7 +275,7 @@ static int read_object_code(u64 addr, size_t len, u8 cpumode,
 		len = al.map->end - addr;
 
 	/* Read the object code using perf */
-	ret_len = dso__data_read_offset(al.map->dso, thread->maps->machine,
+	ret_len = dso__data_read_offset(al.map->dso, thread->mg->machine,
 					al.addr, buf1, len);
 	if (ret_len != len) {
 		pr_debug("dso__data_read_offset failed\n");
@@ -426,16 +425,16 @@ static int process_events(struct machine *machine, struct evlist *evlist,
 
 	for (i = 0; i < evlist->core.nr_mmaps; i++) {
 		md = &evlist->mmap[i];
-		if (perf_mmap__read_init(&md->core) < 0)
+		if (perf_mmap__read_init(md) < 0)
 			continue;
 
-		while ((event = perf_mmap__read_event(&md->core)) != NULL) {
+		while ((event = perf_mmap__read_event(md)) != NULL) {
 			ret = process_event(machine, evlist, event, state);
-			perf_mmap__consume(&md->core);
+			perf_mmap__consume(md);
 			if (ret < 0)
 				return ret;
 		}
-		perf_mmap__read_done(&md->core);
+		perf_mmap__read_done(md);
 	}
 	return 0;
 }

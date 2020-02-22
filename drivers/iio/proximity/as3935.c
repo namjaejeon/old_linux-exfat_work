@@ -14,6 +14,7 @@
 #include <linux/mutex.h>
 #include <linux/err.h>
 #include <linux/irq.h>
+#include <linux/gpio.h>
 #include <linux/spi/spi.h>
 #include <linux/iio/iio.h>
 #include <linux/iio/sysfs.h>
@@ -21,6 +22,8 @@
 #include <linux/iio/trigger_consumer.h>
 #include <linux/iio/buffer.h>
 #include <linux/iio/triggered_buffer.h>
+#include <linux/of_gpio.h>
+
 
 #define AS3935_AFE_GAIN		0x00
 #define AS3935_AFE_MASK		0x3F

@@ -43,6 +43,7 @@ static const struct sdhci_ops sdhci_pltfm_ops = {
 static int sdhci_probe(struct platform_device *pdev)
 {
 	struct sdhci_host *host;
+	struct resource *iomem;
 	struct spear_sdhci *sdhci;
 	struct device *dev;
 	int ret;
@@ -55,7 +56,8 @@ static int sdhci_probe(struct platform_device *pdev)
 		goto err;
 	}
 
-	host->ioaddr = devm_platform_ioremap_resource(pdev, 0);
+	iomem = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	host->ioaddr = devm_ioremap_resource(&pdev->dev, iomem);
 	if (IS_ERR(host->ioaddr)) {
 		ret = PTR_ERR(host->ioaddr);
 		dev_dbg(&pdev->dev, "unable to map iomem: %d\n", ret);
@@ -96,7 +98,7 @@ static int sdhci_probe(struct platform_device *pdev)
 	 * It is optional to use GPIOs for sdhci card detection. If we
 	 * find a descriptor using slot GPIO, we use it.
 	 */
-	ret = mmc_gpiod_request_cd(host->mmc, "cd", 0, false, 0);
+	ret = mmc_gpiod_request_cd(host->mmc, "cd", 0, false, 0, NULL);
 	if (ret == -EPROBE_DEFER)
 		goto disable_clk;
 

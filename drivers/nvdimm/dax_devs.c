@@ -23,6 +23,17 @@ static void nd_dax_release(struct device *dev)
 	kfree(nd_dax);
 }
 
+static struct device_type nd_dax_device_type = {
+	.name = "nd_dax",
+	.release = nd_dax_release,
+};
+
+bool is_nd_dax(struct device *dev)
+{
+	return dev ? dev->type == &nd_dax_device_type : false;
+}
+EXPORT_SYMBOL(is_nd_dax);
+
 struct nd_dax *to_nd_dax(struct device *dev)
 {
 	struct nd_dax *nd_dax = container_of(dev, struct nd_dax, nd_pfn.dev);
@@ -32,17 +43,12 @@ struct nd_dax *to_nd_dax(struct device *dev)
 }
 EXPORT_SYMBOL(to_nd_dax);
 
-static const struct device_type nd_dax_device_type = {
-	.name = "nd_dax",
-	.release = nd_dax_release,
-	.groups = nd_pfn_attribute_groups,
+static const struct attribute_group *nd_dax_attribute_groups[] = {
+	&nd_pfn_attribute_group,
+	&nd_device_attribute_group,
+	&nd_numa_attribute_group,
+	NULL,
 };
-
-bool is_nd_dax(struct device *dev)
-{
-	return dev ? dev->type == &nd_dax_device_type : false;
-}
-EXPORT_SYMBOL(is_nd_dax);
 
 static struct nd_dax *nd_dax_alloc(struct nd_region *nd_region)
 {
@@ -63,6 +69,7 @@ static struct nd_dax *nd_dax_alloc(struct nd_region *nd_region)
 
 	dev = &nd_pfn->dev;
 	dev_set_name(dev, "dax%d.%d", nd_region->id, nd_pfn->id);
+	dev->groups = nd_dax_attribute_groups;
 	dev->type = &nd_dax_device_type;
 	dev->parent = &nd_region->dev;
 

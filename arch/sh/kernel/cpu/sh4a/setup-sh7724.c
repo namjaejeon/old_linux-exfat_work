@@ -24,7 +24,6 @@
 #include <asm/suspend.h>
 #include <asm/clock.h>
 #include <asm/mmzone.h>
-#include <asm/platform_early.h>
 
 #include <cpu/dma-register.h>
 #include <cpu/sh7724.h>
@@ -831,7 +830,7 @@ static struct platform_device *sh7724_early_devices[] __initdata = {
 
 void __init plat_early_device_setup(void)
 {
-	sh_early_platform_add_devices(sh7724_early_devices,
+	early_platform_add_devices(sh7724_early_devices,
 				   ARRAY_SIZE(sh7724_early_devices));
 }
 

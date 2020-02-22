@@ -8,13 +8,13 @@
  * This code has been taken from kexec-tools.
  */
 
-#include <linux/linkage.h>
-
 	.text
 	.balign 16
 	.code64
+	.globl entry64, entry64_regs
 
-SYM_CODE_START(entry64)
+
+entry64:
 	/* Setup a gdt that should be preserved */
 	lgdt gdt(%rip)
 
@@ -54,11 +54,10 @@ new_cs_exit:
 
 	/* Jump to the new code... */
 	jmpq	*rip(%rip)
-SYM_CODE_END(entry64)
 
 	.section ".rodata"
 	.balign 4
-SYM_DATA_START(entry64_regs)
+entry64_regs:
 rax:	.quad 0x0
 rcx:	.quad 0x0
 rdx:	.quad 0x0
@@ -76,14 +75,13 @@ r13:	.quad 0x0
 r14:	.quad 0x0
 r15:	.quad 0x0
 rip:	.quad 0x0
-SYM_DATA_END(entry64_regs)
+	.size entry64_regs, . - entry64_regs
 
 	/* GDT */
 	.section ".rodata"
 	.balign 16
-SYM_DATA_START_LOCAL(gdt)
-	/*
-	 * 0x00 unusable segment
+gdt:
+	/* 0x00 unusable segment
 	 * 0x08 unused
 	 * so use them as gdt ptr
 	 */
@@ -96,8 +94,6 @@ SYM_DATA_START_LOCAL(gdt)
 
 	/* 0x18 4GB flat data segment */
 	.word 0xFFFF, 0x0000, 0x9200, 0x00CF
-SYM_DATA_END_LABEL(gdt, SYM_L_LOCAL, gdt_end)
-
-SYM_DATA_START_LOCAL(stack)
-	.quad   0, 0
-SYM_DATA_END_LABEL(stack, SYM_L_LOCAL, stack_init)
+gdt_end:
+stack:	.quad   0, 0
+stack_init:

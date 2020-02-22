@@ -3,7 +3,6 @@
 #define __NVKM_DEVICE_PRIV_H__
 #include <core/device.h>
 
-#include <subdev/acr.h>
 #include <subdev/bar.h>
 #include <subdev/bios.h>
 #include <subdev/bus.h>
@@ -28,6 +27,7 @@
 #include <subdev/timer.h>
 #include <subdev/top.h>
 #include <subdev/volt.h>
+#include <subdev/secboot.h>
 
 #include <engine/bsp.h>
 #include <engine/ce.h>

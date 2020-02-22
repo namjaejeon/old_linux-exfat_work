@@ -200,7 +200,7 @@ static void phy_mdm6600_status(struct work_struct *work)
 	struct phy_mdm6600 *ddata;
 	struct device *dev;
 	DECLARE_BITMAP(values, PHY_MDM6600_NR_STATUS_LINES);
-	int error;
+	int error, i, val = 0;
 
 	ddata = container_of(work, struct phy_mdm6600, status_work.work);
 	dev = ddata->dev;
@@ -212,11 +212,16 @@ static void phy_mdm6600_status(struct work_struct *work)
 	if (error)
 		return;
 
-	ddata->status = values[0] & ((1 << PHY_MDM6600_NR_STATUS_LINES) - 1);
+	for (i = 0; i < PHY_MDM6600_NR_STATUS_LINES; i++) {
+		val |= test_bit(i, values) << i;
+		dev_dbg(ddata->dev, "XXX %s: i: %i values[i]: %i val: %i\n",
+			__func__, i, test_bit(i, values), val);
+	}
+	ddata->status = values[0];
 
 	dev_info(dev, "modem status: %i %s\n",
 		 ddata->status,
-		 phy_mdm6600_status_name[ddata->status]);
+		 phy_mdm6600_status_name[ddata->status & 7]);
 	complete(&ddata->ack);
 }
 

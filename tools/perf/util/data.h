@@ -9,11 +9,6 @@ enum perf_data_mode {
 	PERF_DATA_MODE_READ,
 };
 
-enum perf_dir_version {
-	PERF_DIR_SINGLE_FILE	= 0,
-	PERF_DIR_VERSION	= 1,
-};
-
 struct perf_data_file {
 	char		*path;
 	int		 fd;
@@ -55,11 +50,6 @@ static inline bool perf_data__is_dir(struct perf_data *data)
 	return data->is_dir;
 }
 
-static inline bool perf_data__is_single_file(struct perf_data *data)
-{
-	return data->dir.version == PERF_DIR_SINGLE_FILE;
-}
-
 static inline int perf_data__fd(struct perf_data *data)
 {
 	return data->file.fd;
@@ -87,6 +77,4 @@ int perf_data__open_dir(struct perf_data *data);
 void perf_data__close_dir(struct perf_data *data);
 int perf_data__update_dir(struct perf_data *data);
 unsigned long perf_data__size(struct perf_data *data);
-int perf_data__make_kcore_dir(struct perf_data *data, char *buf, size_t buf_sz);
-char *perf_data__kallsyms_name(struct perf_data *data);
 #endif /* __PERF_DATA_H */

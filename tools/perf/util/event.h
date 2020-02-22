@@ -114,11 +114,6 @@ enum {
 
 #define MAX_INSN 16
 
-struct aux_sample {
-	u64 size;
-	void *data;
-};
-
 struct perf_sample {
 	u64 ip;
 	u32 pid, tid;
@@ -147,7 +142,6 @@ struct perf_sample {
 	struct regs_dump  intr_regs;
 	struct stack_dump user_stack;
 	struct sample_read read;
-	struct aux_sample aux_sample;
 };
 
 #define PERF_MEM_DATA_SRC_NONE \

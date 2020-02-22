@@ -17,7 +17,6 @@ struct pmu_event {
 	const char *metric_expr;
 	const char *metric_name;
 	const char *metric_group;
-	const char *deprecated;
 };
 
 /*

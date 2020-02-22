@@ -23,7 +23,7 @@
 #include <asm/clock.h>
 #include <asm/idle.h>
 
-#include <asm/mach-loongson2ef/loongson.h>
+#include <asm/mach-loongson64/loongson.h>
 
 static uint nowait;
 
@@ -144,11 +144,9 @@ static void loongson2_cpu_wait(void)
 	u32 cpu_freq;
 
 	spin_lock_irqsave(&loongson2_wait_lock, flags);
-	cpu_freq = readl(LOONGSON_CHIPCFG);
-	/* Put CPU into wait mode */
-	writel(readl(LOONGSON_CHIPCFG) & ~0x7, LOONGSON_CHIPCFG);
-	/* Restore CPU state */
-	writel(cpu_freq, LOONGSON_CHIPCFG);
+	cpu_freq = LOONGSON_CHIPCFG(0);
+	LOONGSON_CHIPCFG(0) &= ~0x7;	/* Put CPU into wait mode */
+	LOONGSON_CHIPCFG(0) = cpu_freq;	/* Restore CPU state */
 	spin_unlock_irqrestore(&loongson2_wait_lock, flags);
 	local_irq_enable();
 }

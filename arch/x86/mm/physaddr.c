@@ -5,7 +5,6 @@
 #include <linux/mm.h>
 
 #include <asm/page.h>
-#include <linux/vmalloc.h>
 
 #include "physaddr.h"
 

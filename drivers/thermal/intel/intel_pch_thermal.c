@@ -13,7 +13,6 @@
 #include <linux/pci.h>
 #include <linux/acpi.h>
 #include <linux/thermal.h>
-#include <linux/units.h>
 #include <linux/pm.h>
 
 /* Intel PCH thermal Device IDs */
@@ -24,7 +23,6 @@
 #define PCH_THERMAL_DID_SKL_H	0xA131 /* Skylake PCH 100 series */
 #define PCH_THERMAL_DID_CNL	0x9Df9 /* CNL PCH */
 #define PCH_THERMAL_DID_CNL_H	0xA379 /* CNL-H PCH */
-#define PCH_THERMAL_DID_CML_H	0X06F9 /* CML-H PCH */
 
 /* Wildcat Point-LP  PCH Thermal registers */
 #define WPT_TEMP	0x0000	/* Temperature */
@@ -94,7 +92,7 @@ static void pch_wpt_add_acpi_psv_trip(struct pch_thermal_device *ptd,
 		if (ACPI_SUCCESS(status)) {
 			unsigned long trip_temp;
 
-			trip_temp = deci_kelvin_to_millicelsius(r);
+			trip_temp = DECI_KELVIN_TO_MILLICELSIUS(r);
 			if (trip_temp) {
 				ptd->psv_temp = trip_temp;
 				ptd->psv_trip_id = *nr_trips;
@@ -274,7 +272,6 @@ enum board_ids {
 	board_wpt,
 	board_skl,
 	board_cnl,
-	board_cml,
 };
 
 static const struct board_info {
@@ -297,10 +294,6 @@ static const struct board_info {
 		.name = "pch_cannonlake",
 		.ops = &pch_dev_ops_wpt,
 	},
-	[board_cml] = {
-		.name = "pch_cometlake",
-		.ops = &pch_dev_ops_wpt,
-	}
 };
 
 static int intel_pch_thermal_probe(struct pci_dev *pdev,
@@ -372,7 +365,7 @@ static void intel_pch_thermal_remove(struct pci_dev *pdev)
 	thermal_zone_device_unregister(ptd->tzd);
 	iounmap(ptd->hw_base);
 	pci_set_drvdata(pdev, NULL);
-	pci_release_regions(pdev);
+	pci_release_region(pdev, 0);
 	pci_disable_device(pdev);
 }
 
@@ -405,8 +398,6 @@ static const struct pci_device_id intel_pch_thermal_id[] = {
 		.driver_data = board_cnl, },
 	{ PCI_DEVICE(PCI_VENDOR_ID_INTEL, PCH_THERMAL_DID_CNL_H),
 		.driver_data = board_cnl, },
-	{ PCI_DEVICE(PCI_VENDOR_ID_INTEL, PCH_THERMAL_DID_CML_H),
-		.driver_data = board_cml, },
 	{ 0, },
 };
 MODULE_DEVICE_TABLE(pci, intel_pch_thermal_id);

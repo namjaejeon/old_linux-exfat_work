@@ -710,6 +710,7 @@ static enum usb_charger_type mxs_phy_charger_detect(struct usb_phy *phy)
 
 static int mxs_phy_probe(struct platform_device *pdev)
 {
+	struct resource *res;
 	void __iomem *base;
 	struct clk *clk;
 	struct mxs_phy *mxs_phy;
@@ -722,7 +723,8 @@ static int mxs_phy_probe(struct platform_device *pdev)
 	if (!of_id)
 		return -ENODEV;
 
-	base = devm_platform_ioremap_resource(pdev, 0);
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	base = devm_ioremap_resource(&pdev->dev, res);
 	if (IS_ERR(base))
 		return PTR_ERR(base);
 

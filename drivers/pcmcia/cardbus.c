@@ -22,9 +22,7 @@
 #include <linux/pci.h>
 
 #include <pcmcia/ss.h>
-#include <pcmcia/cistpl.h>
 
-#include "cs_internal.h"
 
 static void cardbus_config_irq_and_cls(struct pci_bus *bus, int irq)
 {

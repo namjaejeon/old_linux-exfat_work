@@ -2337,7 +2337,7 @@ jme_change_mtu(struct net_device *netdev, int new_mtu)
 }
 
 static void
-jme_tx_timeout(struct net_device *netdev, unsigned int txqueue)
+jme_tx_timeout(struct net_device *netdev)
 {
 	struct jme_adapter *jme = netdev_priv(netdev);
 

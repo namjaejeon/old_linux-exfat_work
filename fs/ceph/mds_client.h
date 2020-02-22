@@ -17,30 +17,21 @@
 #include <linux/ceph/auth.h>
 
 /* The first 8 bits are reserved for old ceph releases */
-enum ceph_feature_type {
-	CEPHFS_FEATURE_MIMIC = 8,
-	CEPHFS_FEATURE_REPLY_ENCODING,
-	CEPHFS_FEATURE_RECLAIM_CLIENT,
-	CEPHFS_FEATURE_LAZY_CAP_WANTED,
-	CEPHFS_FEATURE_MULTI_RECONNECT,
+#define CEPHFS_FEATURE_MIMIC		8
+#define CEPHFS_FEATURE_REPLY_ENCODING	9
+#define CEPHFS_FEATURE_RECLAIM_CLIENT	10
+#define CEPHFS_FEATURE_LAZY_CAP_WANTED	11
+#define CEPHFS_FEATURE_MULTI_RECONNECT  12
 
-	CEPHFS_FEATURE_MAX = CEPHFS_FEATURE_MULTI_RECONNECT,
-};
-
-/*
- * This will always have the highest feature bit value
- * as the last element of the array.
- */
-#define CEPHFS_FEATURES_CLIENT_SUPPORTED {	\
+#define CEPHFS_FEATURES_CLIENT_SUPPORTED { 	\
 	0, 1, 2, 3, 4, 5, 6, 7,			\
 	CEPHFS_FEATURE_MIMIC,			\
 	CEPHFS_FEATURE_REPLY_ENCODING,		\
 	CEPHFS_FEATURE_LAZY_CAP_WANTED,		\
 	CEPHFS_FEATURE_MULTI_RECONNECT,		\
-						\
-	CEPHFS_FEATURE_MAX,			\
 }
 #define CEPHFS_FEATURES_CLIENT_REQUIRED {}
+
 
 /*
  * Some lock dependencies:
@@ -160,8 +151,7 @@ enum {
 	CEPH_MDS_SESSION_RESTARTING = 5,
 	CEPH_MDS_SESSION_RECONNECTING = 6,
 	CEPH_MDS_SESSION_CLOSING = 7,
-	CEPH_MDS_SESSION_CLOSED = 8,
-	CEPH_MDS_SESSION_REJECTED = 9,
+	CEPH_MDS_SESSION_REJECTED = 8,
 };
 
 struct ceph_mds_session {
@@ -184,7 +174,6 @@ struct ceph_mds_session {
 
 	/* protected by s_cap_lock */
 	spinlock_t        s_cap_lock;
-	refcount_t        s_ref;
 	struct list_head  s_caps;     /* all caps issued by this session */
 	struct ceph_cap  *s_cap_iterator;
 	int               s_nr_caps;
@@ -199,6 +188,7 @@ struct ceph_mds_session {
 	unsigned long     s_renew_requested; /* last time we sent a renew req */
 	u64               s_renew_seq;
 
+	refcount_t        s_ref;
 	struct list_head  s_waiting;  /* waiting requests */
 	struct list_head  s_unsafe;   /* unsafe requests */
 };
@@ -234,7 +224,6 @@ struct ceph_mds_request {
 	struct rb_node r_node;
 	struct ceph_mds_client *r_mdsc;
 
-	struct kref       r_kref;
 	int r_op;                    /* mds op code */
 
 	/* operation on what? */
@@ -305,6 +294,7 @@ struct ceph_mds_request {
 	int               r_resend_mds; /* mds to resend to next, if any*/
 	u32               r_sent_on_mseq; /* cap mseq request was sent at*/
 
+	struct kref       r_kref;
 	struct list_head  r_wait;
 	struct completion r_completion;
 	struct completion r_safe_completion;
@@ -348,14 +338,6 @@ struct ceph_quotarealm_inode {
 	unsigned long timeout; /* last time a lookup failed for this inode */
 	struct mutex mutex;
 	struct inode *inode;
-};
-
-struct cap_wait {
-	struct list_head	list;
-	unsigned long		ino;
-	pid_t			tgid;
-	int			need;
-	int			want;
 };
 
 /*
@@ -434,7 +416,6 @@ struct ceph_mds_client {
 	spinlock_t	caps_list_lock;
 	struct		list_head caps_list; /* unused (reserved or
 						unreserved) */
-	struct		list_head cap_wait_list;
 	int		caps_total_count;    /* total caps allocated */
 	int		caps_use_count;      /* in use */
 	int		caps_use_max;	     /* max used caps */
@@ -461,10 +442,15 @@ extern const char *ceph_mds_op_name(int op);
 extern struct ceph_mds_session *
 __ceph_lookup_mds_session(struct ceph_mds_client *, int mds);
 
+static inline struct ceph_mds_session *
+ceph_get_mds_session(struct ceph_mds_session *s)
+{
+	refcount_inc(&s->s_ref);
+	return s;
+}
+
 extern const char *ceph_session_state_name(int s);
 
-extern struct ceph_mds_session *
-ceph_get_mds_session(struct ceph_mds_session *s);
 extern void ceph_put_mds_session(struct ceph_mds_session *s);
 
 extern int ceph_send_msg_mds(struct ceph_mds_client *mdsc,

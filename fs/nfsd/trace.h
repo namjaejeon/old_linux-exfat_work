@@ -166,12 +166,6 @@ DEFINE_STATEID_EVENT(layout_recall_done);
 DEFINE_STATEID_EVENT(layout_recall_fail);
 DEFINE_STATEID_EVENT(layout_recall_release);
 
-TRACE_DEFINE_ENUM(NFSD_FILE_HASHED);
-TRACE_DEFINE_ENUM(NFSD_FILE_PENDING);
-TRACE_DEFINE_ENUM(NFSD_FILE_BREAK_READ);
-TRACE_DEFINE_ENUM(NFSD_FILE_BREAK_WRITE);
-TRACE_DEFINE_ENUM(NFSD_FILE_REFERENCED);
-
 #define show_nf_flags(val)						\
 	__print_flags(val, "|",						\
 		{ 1 << NFSD_FILE_HASHED,	"HASHED" },		\
@@ -201,7 +195,7 @@ DECLARE_EVENT_CLASS(nfsd_file_class,
 	TP_fast_assign(
 		__entry->nf_hashval = nf->nf_hashval;
 		__entry->nf_inode = nf->nf_inode;
-		__entry->nf_ref = refcount_read(&nf->nf_ref);
+		__entry->nf_ref = atomic_read(&nf->nf_ref);
 		__entry->nf_flags = nf->nf_flags;
 		__entry->nf_may = nf->nf_may;
 		__entry->nf_file = nf->nf_file;
@@ -234,7 +228,7 @@ TRACE_EVENT(nfsd_file_acquire,
 	TP_ARGS(rqstp, hash, inode, may_flags, nf, status),
 
 	TP_STRUCT__entry(
-		__field(u32, xid)
+		__field(__be32, xid)
 		__field(unsigned int, hash)
 		__field(void *, inode)
 		__field(unsigned int, may_flags)
@@ -242,27 +236,27 @@ TRACE_EVENT(nfsd_file_acquire,
 		__field(unsigned long, nf_flags)
 		__field(unsigned char, nf_may)
 		__field(struct file *, nf_file)
-		__field(u32, status)
+		__field(__be32, status)
 	),
 
 	TP_fast_assign(
-		__entry->xid = be32_to_cpu(rqstp->rq_xid);
+		__entry->xid = rqstp->rq_xid;
 		__entry->hash = hash;
 		__entry->inode = inode;
 		__entry->may_flags = may_flags;
-		__entry->nf_ref = nf ? refcount_read(&nf->nf_ref) : 0;
+		__entry->nf_ref = nf ? atomic_read(&nf->nf_ref) : 0;
 		__entry->nf_flags = nf ? nf->nf_flags : 0;
 		__entry->nf_may = nf ? nf->nf_may : 0;
 		__entry->nf_file = nf ? nf->nf_file : NULL;
-		__entry->status = be32_to_cpu(status);
+		__entry->status = status;
 	),
 
 	TP_printk("xid=0x%x hash=0x%x inode=0x%p may_flags=%s ref=%d nf_flags=%s nf_may=%s nf_file=0x%p status=%u",
-			__entry->xid, __entry->hash, __entry->inode,
+			be32_to_cpu(__entry->xid), __entry->hash, __entry->inode,
 			show_nf_may(__entry->may_flags), __entry->nf_ref,
 			show_nf_flags(__entry->nf_flags),
 			show_nf_may(__entry->nf_may), __entry->nf_file,
-			__entry->status)
+			be32_to_cpu(__entry->status))
 );
 
 DECLARE_EVENT_CLASS(nfsd_file_search_class,

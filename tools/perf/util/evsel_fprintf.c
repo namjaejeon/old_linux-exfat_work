@@ -125,18 +125,13 @@ int sample__fprintf_callchain(struct perf_sample *sample, int left_alignment,
 		callchain_cursor_commit(cursor);
 
 		while (1) {
-			struct symbol *sym;
-			struct map *map;
 			u64 addr = 0;
 
 			node = callchain_cursor_current(cursor);
 			if (!node)
 				break;
 
-			sym = node->ms.sym;
-			map = node->ms.map;
-
-			if (sym && sym->ignore && print_skip_ignored)
+			if (node->sym && node->sym->ignore && print_skip_ignored)
 				goto next;
 
 			printed += fprintf(fp, "%-*.*s", left_alignment, left_alignment, " ");
@@ -147,42 +142,42 @@ int sample__fprintf_callchain(struct perf_sample *sample, int left_alignment,
 			if (print_ip)
 				printed += fprintf(fp, "%c%16" PRIx64, s, node->ip);
 
-			if (map)
-				addr = map->map_ip(map, node->ip);
+			if (node->map)
+				addr = node->map->map_ip(node->map, node->ip);
 
 			if (print_sym) {
 				printed += fprintf(fp, " ");
 				node_al.addr = addr;
-				node_al.map  = map;
+				node_al.map  = node->map;
 
 				if (print_symoffset) {
-					printed += __symbol__fprintf_symname_offs(sym, &node_al,
+					printed += __symbol__fprintf_symname_offs(node->sym, &node_al,
 										  print_unknown_as_addr,
 										  true, fp);
 				} else {
-					printed += __symbol__fprintf_symname(sym, &node_al,
+					printed += __symbol__fprintf_symname(node->sym, &node_al,
 									     print_unknown_as_addr, fp);
 				}
 			}
 
-			if (print_dso && (!sym || !sym->inlined)) {
+			if (print_dso && (!node->sym || !node->sym->inlined)) {
 				printed += fprintf(fp, " (");
-				printed += map__fprintf_dsoname(map, fp);
+				printed += map__fprintf_dsoname(node->map, fp);
 				printed += fprintf(fp, ")");
 			}
 
 			if (print_srcline)
-				printed += map__fprintf_srcline(map, addr, "\n  ", fp);
+				printed += map__fprintf_srcline(node->map, addr, "\n  ", fp);
 
-			if (sym && sym->inlined)
+			if (node->sym && node->sym->inlined)
 				printed += fprintf(fp, " (inlined)");
 
 			if (!print_oneline)
 				printed += fprintf(fp, "\n");
 
 			/* Add srccode here too? */
-			if (bt_stop_list && sym &&
-			    strlist__has_entry(bt_stop_list, sym->name)) {
+			if (bt_stop_list && node->sym &&
+			    strlist__has_entry(bt_stop_list, node->sym->name)) {
 				break;
 			}
 

@@ -1514,28 +1514,16 @@ static int fpux_emu(struct pt_regs *xcp, struct mips_fpu_struct *ctx,
 			break;
 
 		case madd_s_op:
-			if (cpu_has_mac2008_only)
-				handler = ieee754sp_madd;
-			else
-				handler = fpemu_sp_madd;
+			handler = fpemu_sp_madd;
 			goto scoptop;
 		case msub_s_op:
-			if (cpu_has_mac2008_only)
-				handler = ieee754sp_msub;
-			else
-				handler = fpemu_sp_msub;
+			handler = fpemu_sp_msub;
 			goto scoptop;
 		case nmadd_s_op:
-			if (cpu_has_mac2008_only)
-				handler = ieee754sp_nmadd;
-			else
-				handler = fpemu_sp_nmadd;
+			handler = fpemu_sp_nmadd;
 			goto scoptop;
 		case nmsub_s_op:
-			if (cpu_has_mac2008_only)
-				handler = ieee754sp_nmsub;
-			else
-				handler = fpemu_sp_nmsub;
+			handler = fpemu_sp_nmsub;
 			goto scoptop;
 
 		      scoptop:
@@ -1622,27 +1610,15 @@ static int fpux_emu(struct pt_regs *xcp, struct mips_fpu_struct *ctx,
 			break;
 
 		case madd_d_op:
-			if (cpu_has_mac2008_only)
-				handler = ieee754dp_madd;
-			else
-				handler = fpemu_dp_madd;
+			handler = fpemu_dp_madd;
 			goto dcoptop;
 		case msub_d_op:
-			if (cpu_has_mac2008_only)
-				handler = ieee754dp_msub;
-			else
-				handler = fpemu_dp_msub;
+			handler = fpemu_dp_msub;
 			goto dcoptop;
 		case nmadd_d_op:
-			if (cpu_has_mac2008_only)
-				handler = ieee754dp_nmadd;
-			else
-				handler = fpemu_dp_nmadd;
+			handler = fpemu_dp_nmadd;
 			goto dcoptop;
 		case nmsub_d_op:
-			if (cpu_has_mac2008_only)
-				handler = ieee754dp_nmsub;
-			else
 			handler = fpemu_dp_nmsub;
 			goto dcoptop;
 

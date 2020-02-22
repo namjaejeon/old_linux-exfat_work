@@ -133,9 +133,7 @@ int snd_motu_stream_cache_packet_formats(struct snd_motu *motu)
 	return 0;
 }
 
-int snd_motu_stream_reserve_duplex(struct snd_motu *motu, unsigned int rate,
-				   unsigned int frames_per_period,
-				   unsigned int frames_per_buffer)
+int snd_motu_stream_reserve_duplex(struct snd_motu *motu, unsigned int rate)
 {
 	unsigned int curr_rate;
 	int err;
@@ -171,14 +169,6 @@ int snd_motu_stream_reserve_duplex(struct snd_motu *motu, unsigned int rate,
 		err = keep_resources(motu, rate, &motu->rx_stream);
 		if (err < 0) {
 			fw_iso_resources_free(&motu->tx_resources);
-			return err;
-		}
-
-		err = amdtp_domain_set_events_per_period(&motu->domain,
-					frames_per_period, frames_per_buffer);
-		if (err < 0) {
-			fw_iso_resources_free(&motu->tx_resources);
-			fw_iso_resources_free(&motu->rx_resources);
 			return err;
 		}
 	}
@@ -260,7 +250,7 @@ int snd_motu_stream_start_duplex(struct snd_motu *motu)
 		if (err < 0)
 			goto stop_streams;
 
-		err = amdtp_domain_start(&motu->domain, 0);
+		err = amdtp_domain_start(&motu->domain);
 		if (err < 0)
 			goto stop_streams;
 

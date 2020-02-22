@@ -38,7 +38,6 @@
 #define DPU_HW_VER_401	DPU_HW_VER(4, 0, 1) /* sdm845 v2.0 */
 #define DPU_HW_VER_410	DPU_HW_VER(4, 1, 0) /* sdm670 v1.0 */
 #define DPU_HW_VER_500	DPU_HW_VER(5, 0, 0) /* sdm855 v1.0 */
-#define DPU_HW_VER_620	DPU_HW_VER(6, 2, 0) /* sc7180 v1.0 */
 
 
 #define IS_MSM8996_TARGET(rev) IS_DPU_MAJOR_MINOR_SAME((rev), DPU_HW_VER_170)
@@ -46,7 +45,6 @@
 #define IS_SDM845_TARGET(rev) IS_DPU_MAJOR_MINOR_SAME((rev), DPU_HW_VER_400)
 #define IS_SDM670_TARGET(rev) IS_DPU_MAJOR_MINOR_SAME((rev), DPU_HW_VER_410)
 #define IS_SDM855_TARGET(rev) IS_DPU_MAJOR_MINOR_SAME((rev), DPU_HW_VER_500)
-#define IS_SC7180_TARGET(rev) IS_DPU_MAJOR_MINOR_SAME((rev), DPU_HW_VER_620)
 
 
 #define DPU_HW_BLK_NAME_LEN	16
@@ -94,7 +92,6 @@ enum {
  * @DPU_SSPP_SRC             Src and fetch part of the pipes,
  * @DPU_SSPP_SCALER_QSEED2,  QSEED2 algorithm support
  * @DPU_SSPP_SCALER_QSEED3,  QSEED3 alogorithm support
- * @DPU_SSPP_SCALER_QSEED4,  QSEED4 algorithm support
  * @DPU_SSPP_SCALER_RGB,     RGB Scaler, supported by RGB pipes
  * @DPU_SSPP_CSC,            Support of Color space converion
  * @DPU_SSPP_CSC_10BIT,      Support of 10-bit Color space conversion
@@ -113,7 +110,6 @@ enum {
 	DPU_SSPP_SRC = 0x1,
 	DPU_SSPP_SCALER_QSEED2,
 	DPU_SSPP_SCALER_QSEED3,
-	DPU_SSPP_SCALER_QSEED4,
 	DPU_SSPP_SCALER_RGB,
 	DPU_SSPP_CSC,
 	DPU_SSPP_CSC_10BIT,
@@ -170,7 +166,6 @@ enum {
  */
 enum {
 	DPU_CTL_SPLIT_DISPLAY = 0x1,
-	DPU_CTL_ACTIVE_CFG,
 	DPU_CTL_MAX
 };
 
@@ -274,7 +269,7 @@ struct dpu_qos_lut_entry {
  */
 struct dpu_qos_lut_tbl {
 	u32 nentry;
-	const struct dpu_qos_lut_entry *entries;
+	struct dpu_qos_lut_entry *entries;
 };
 
 /**
@@ -288,7 +283,6 @@ struct dpu_qos_lut_tbl {
  * @has_src_split      source split feature status
  * @has_dim_layer      dim layer feature status
  * @has_idle_pc        indicate if idle power collapse feature is supported
- * @has_3d_merge       indicate if 3D merge is supported
  */
 struct dpu_caps {
 	u32 max_mixer_width;
@@ -299,7 +293,6 @@ struct dpu_caps {
 	bool has_src_split;
 	bool has_dim_layer;
 	bool has_idle_pc;
-	bool has_3d_merge;
 };
 
 /**
@@ -327,7 +320,6 @@ struct dpu_sspp_blks_common {
  * @maxupscale:  maxupscale ratio supported
  * @smart_dma_priority: hw priority of rect1 of multirect pipe
  * @max_per_pipe_bw: maximum allowable bandwidth of this pipe in kBps
- * @qseed_ver: qseed version
  * @src_blk:
  * @scaler_blk:
  * @csc_blk:
@@ -348,7 +340,6 @@ struct dpu_sspp_sub_blks {
 	u32 maxupscale;
 	u32 smart_dma_priority;
 	u32 max_per_pipe_bw;
-	u32 qseed_ver;
 	struct dpu_src_blk src_blk;
 	struct dpu_scaler_blk scaler_blk;
 	struct dpu_pp_blk csc_blk;
@@ -520,7 +511,7 @@ struct dpu_vbif_dynamic_ot_cfg {
  */
 struct dpu_vbif_dynamic_ot_tbl {
 	u32 count;
-	const struct dpu_vbif_dynamic_ot_cfg *cfg;
+	struct dpu_vbif_dynamic_ot_cfg *cfg;
 };
 
 /**
@@ -530,7 +521,7 @@ struct dpu_vbif_dynamic_ot_tbl {
  */
 struct dpu_vbif_qos_tbl {
 	u32 npriority_lvl;
-	const u32 *priority_lvl;
+	u32 *priority_lvl;
 };
 
 /**
@@ -655,7 +646,6 @@ struct dpu_perf_cfg {
  * @dma_formats        Supported formats for dma pipe
  * @cursor_formats     Supported formats for cursor pipe
  * @vig_formats        Supported formats for vig pipe
- * @mdss_irqs:         Bitmap with the irqs supported by the target
  */
 struct dpu_mdss_cfg {
 	u32 hwversion;
@@ -663,25 +653,25 @@ struct dpu_mdss_cfg {
 	const struct dpu_caps *caps;
 
 	u32 mdp_count;
-	const struct dpu_mdp_cfg *mdp;
+	struct dpu_mdp_cfg *mdp;
 
 	u32 ctl_count;
-	const struct dpu_ctl_cfg *ctl;
+	struct dpu_ctl_cfg *ctl;
 
 	u32 sspp_count;
-	const struct dpu_sspp_cfg *sspp;
+	struct dpu_sspp_cfg *sspp;
 
 	u32 mixer_count;
-	const struct dpu_lm_cfg *mixer;
+	struct dpu_lm_cfg *mixer;
 
 	u32 pingpong_count;
-	const struct dpu_pingpong_cfg *pingpong;
+	struct dpu_pingpong_cfg *pingpong;
 
 	u32 intf_count;
-	const struct dpu_intf_cfg *intf;
+	struct dpu_intf_cfg *intf;
 
 	u32 vbif_count;
-	const struct dpu_vbif_cfg *vbif;
+	struct dpu_vbif_cfg *vbif;
 
 	u32 reg_dma_count;
 	struct dpu_reg_dma_cfg dma_cfg;
@@ -691,11 +681,9 @@ struct dpu_mdss_cfg {
 	/* Add additional block data structures here */
 
 	struct dpu_perf_cfg perf;
-	const struct dpu_format_extended *dma_formats;
-	const struct dpu_format_extended *cursor_formats;
-	const struct dpu_format_extended *vig_formats;
-
-	unsigned long mdss_irqs;
+	struct dpu_format_extended *dma_formats;
+	struct dpu_format_extended *cursor_formats;
+	struct dpu_format_extended *vig_formats;
 };
 
 struct dpu_mdss_hw_cfg_handler {

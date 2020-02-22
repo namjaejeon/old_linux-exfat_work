@@ -14,8 +14,6 @@
 #include <linux/delay.h>
 #include <linux/pm_runtime.h>
 #include <linux/slab.h>
-#include <linux/mfd/syscon.h>
-#include <linux/regmap.h>
 #include <linux/videodev2.h>
 #include <linux/of_device.h>
 #include <linux/of_graph.h>
@@ -34,8 +32,8 @@
 
 #define CAL_MODULE_NAME "cal"
 
-#define MAX_WIDTH_BYTES (8192 * 8)
-#define MAX_HEIGHT_LINES 16383
+#define MAX_WIDTH 1920
+#define MAX_HEIGHT 1200
 
 #define CAL_VERSION "0.1.0"
 
@@ -73,6 +71,8 @@ static const struct v4l2_fract
 #define CAL_NUM_INPUT 1
 #define CAL_NUM_CONTEXT 2
 
+#define bytes_per_line(pixel, bpp) (ALIGN(pixel * bpp, 16))
+
 #define reg_read(dev, offset) ioread32(dev->base + offset)
 #define reg_write(dev, offset, val) iowrite32(val, dev->base + offset)
 
@@ -91,103 +91,102 @@ static const struct v4l2_fract
 struct cal_fmt {
 	u32	fourcc;
 	u32	code;
-	/* Bits per pixel */
-	u8	bpp;
+	u8	depth;
 };
 
 static struct cal_fmt cal_formats[] = {
 	{
 		.fourcc		= V4L2_PIX_FMT_YUYV,
 		.code		= MEDIA_BUS_FMT_YUYV8_2X8,
-		.bpp		= 16,
+		.depth		= 16,
 	}, {
 		.fourcc		= V4L2_PIX_FMT_UYVY,
 		.code		= MEDIA_BUS_FMT_UYVY8_2X8,
-		.bpp		= 16,
+		.depth		= 16,
 	}, {
 		.fourcc		= V4L2_PIX_FMT_YVYU,
 		.code		= MEDIA_BUS_FMT_YVYU8_2X8,
-		.bpp		= 16,
+		.depth		= 16,
 	}, {
 		.fourcc		= V4L2_PIX_FMT_VYUY,
 		.code		= MEDIA_BUS_FMT_VYUY8_2X8,
-		.bpp		= 16,
+		.depth		= 16,
 	}, {
 		.fourcc		= V4L2_PIX_FMT_RGB565, /* gggbbbbb rrrrrggg */
 		.code		= MEDIA_BUS_FMT_RGB565_2X8_LE,
-		.bpp		= 16,
+		.depth		= 16,
 	}, {
 		.fourcc		= V4L2_PIX_FMT_RGB565X, /* rrrrrggg gggbbbbb */
 		.code		= MEDIA_BUS_FMT_RGB565_2X8_BE,
-		.bpp		= 16,
+		.depth		= 16,
 	}, {
 		.fourcc		= V4L2_PIX_FMT_RGB555, /* gggbbbbb arrrrrgg */
 		.code		= MEDIA_BUS_FMT_RGB555_2X8_PADHI_LE,
-		.bpp		= 16,
+		.depth		= 16,
 	}, {
 		.fourcc		= V4L2_PIX_FMT_RGB555X, /* arrrrrgg gggbbbbb */
 		.code		= MEDIA_BUS_FMT_RGB555_2X8_PADHI_BE,
-		.bpp		= 16,
+		.depth		= 16,
 	}, {
 		.fourcc		= V4L2_PIX_FMT_RGB24, /* rgb */
 		.code		= MEDIA_BUS_FMT_RGB888_2X12_LE,
-		.bpp		= 24,
+		.depth		= 24,
 	}, {
 		.fourcc		= V4L2_PIX_FMT_BGR24, /* bgr */
 		.code		= MEDIA_BUS_FMT_RGB888_2X12_BE,
-		.bpp		= 24,
+		.depth		= 24,
 	}, {
 		.fourcc		= V4L2_PIX_FMT_RGB32, /* argb */
 		.code		= MEDIA_BUS_FMT_ARGB8888_1X32,
-		.bpp		= 32,
+		.depth		= 32,
 	}, {
 		.fourcc		= V4L2_PIX_FMT_SBGGR8,
 		.code		= MEDIA_BUS_FMT_SBGGR8_1X8,
-		.bpp		= 8,
+		.depth		= 8,
 	}, {
 		.fourcc		= V4L2_PIX_FMT_SGBRG8,
 		.code		= MEDIA_BUS_FMT_SGBRG8_1X8,
-		.bpp		= 8,
+		.depth		= 8,
 	}, {
 		.fourcc		= V4L2_PIX_FMT_SGRBG8,
 		.code		= MEDIA_BUS_FMT_SGRBG8_1X8,
-		.bpp		= 8,
+		.depth		= 8,
 	}, {
 		.fourcc		= V4L2_PIX_FMT_SRGGB8,
 		.code		= MEDIA_BUS_FMT_SRGGB8_1X8,
-		.bpp		= 8,
+		.depth		= 8,
 	}, {
 		.fourcc		= V4L2_PIX_FMT_SBGGR10,
 		.code		= MEDIA_BUS_FMT_SBGGR10_1X10,
-		.bpp		= 10,
+		.depth		= 16,
 	}, {
 		.fourcc		= V4L2_PIX_FMT_SGBRG10,
 		.code		= MEDIA_BUS_FMT_SGBRG10_1X10,
-		.bpp		= 10,
+		.depth		= 16,
 	}, {
 		.fourcc		= V4L2_PIX_FMT_SGRBG10,
 		.code		= MEDIA_BUS_FMT_SGRBG10_1X10,
-		.bpp		= 10,
+		.depth		= 16,
 	}, {
 		.fourcc		= V4L2_PIX_FMT_SRGGB10,
 		.code		= MEDIA_BUS_FMT_SRGGB10_1X10,
-		.bpp		= 10,
+		.depth		= 16,
 	}, {
 		.fourcc		= V4L2_PIX_FMT_SBGGR12,
 		.code		= MEDIA_BUS_FMT_SBGGR12_1X12,
-		.bpp		= 12,
+		.depth		= 16,
 	}, {
 		.fourcc		= V4L2_PIX_FMT_SGBRG12,
 		.code		= MEDIA_BUS_FMT_SGBRG12_1X12,
-		.bpp		= 12,
+		.depth		= 16,
 	}, {
 		.fourcc		= V4L2_PIX_FMT_SGRBG12,
 		.code		= MEDIA_BUS_FMT_SGRBG12_1X12,
-		.bpp		= 12,
+		.depth		= 16,
 	}, {
 		.fourcc		= V4L2_PIX_FMT_SRGGB12,
 		.code		= MEDIA_BUS_FMT_SRGGB12_1X12,
-		.bpp		= 12,
+		.depth		= 16,
 	},
 };
 
@@ -221,118 +220,20 @@ struct cal_dmaqueue {
 	int			ini_jiffies;
 };
 
+struct cm_data {
+	void __iomem		*base;
+	struct resource		*res;
+
+	unsigned int		camerrx_control;
+
+	struct platform_device *pdev;
+};
+
 struct cc_data {
 	void __iomem		*base;
 	struct resource		*res;
 
 	struct platform_device *pdev;
-};
-
-/* CTRL_CORE_CAMERRX_CONTROL register field id */
-enum cal_camerarx_field {
-	F_CTRLCLKEN,
-	F_CAMMODE,
-	F_LANEENABLE,
-	F_CSI_MODE,
-
-	F_MAX_FIELDS,
-};
-
-struct cal_csi2_phy {
-	struct regmap_field *fields[F_MAX_FIELDS];
-	struct reg_field *base_fields;
-	const int num_lanes;
-};
-
-struct cal_data {
-	const int num_csi2_phy;
-	struct cal_csi2_phy *csi2_phy_core;
-
-	const unsigned int flags;
-};
-
-static struct reg_field dra72x_ctrl_core_csi0_reg_fields[F_MAX_FIELDS] = {
-	[F_CTRLCLKEN] = REG_FIELD(0, 10, 10),
-	[F_CAMMODE] = REG_FIELD(0, 11, 12),
-	[F_LANEENABLE] = REG_FIELD(0, 13, 16),
-	[F_CSI_MODE] = REG_FIELD(0, 17, 17),
-};
-
-static struct reg_field dra72x_ctrl_core_csi1_reg_fields[F_MAX_FIELDS] = {
-	[F_CTRLCLKEN] = REG_FIELD(0, 0, 0),
-	[F_CAMMODE] = REG_FIELD(0, 1, 2),
-	[F_LANEENABLE] = REG_FIELD(0, 3, 4),
-	[F_CSI_MODE] = REG_FIELD(0, 5, 5),
-};
-
-static struct cal_csi2_phy dra72x_cal_csi_phy[] = {
-	{
-		.base_fields = dra72x_ctrl_core_csi0_reg_fields,
-		.num_lanes = 4,
-	},
-	{
-		.base_fields = dra72x_ctrl_core_csi1_reg_fields,
-		.num_lanes = 2,
-	},
-};
-
-static const struct cal_data dra72x_cal_data = {
-	.csi2_phy_core = dra72x_cal_csi_phy,
-	.num_csi2_phy = ARRAY_SIZE(dra72x_cal_csi_phy),
-};
-
-static const struct cal_data dra72x_es1_cal_data = {
-	.csi2_phy_core = dra72x_cal_csi_phy,
-	.num_csi2_phy = ARRAY_SIZE(dra72x_cal_csi_phy),
-	.flags = DRA72_CAL_PRE_ES2_LDO_DISABLE,
-};
-
-static struct reg_field dra76x_ctrl_core_csi0_reg_fields[F_MAX_FIELDS] = {
-	[F_CTRLCLKEN] = REG_FIELD(0, 8, 8),
-	[F_CAMMODE] = REG_FIELD(0, 9, 10),
-	[F_CSI_MODE] = REG_FIELD(0, 11, 11),
-	[F_LANEENABLE] = REG_FIELD(0, 27, 31),
-};
-
-static struct reg_field dra76x_ctrl_core_csi1_reg_fields[F_MAX_FIELDS] = {
-	[F_CTRLCLKEN] = REG_FIELD(0, 0, 0),
-	[F_CAMMODE] = REG_FIELD(0, 1, 2),
-	[F_CSI_MODE] = REG_FIELD(0, 3, 3),
-	[F_LANEENABLE] = REG_FIELD(0, 24, 26),
-};
-
-static struct cal_csi2_phy dra76x_cal_csi_phy[] = {
-	{
-		.base_fields = dra76x_ctrl_core_csi0_reg_fields,
-		.num_lanes = 5,
-	},
-	{
-		.base_fields = dra76x_ctrl_core_csi1_reg_fields,
-		.num_lanes = 3,
-	},
-};
-
-static const struct cal_data dra76x_cal_data = {
-	.csi2_phy_core = dra76x_cal_csi_phy,
-	.num_csi2_phy = ARRAY_SIZE(dra76x_cal_csi_phy),
-};
-
-static struct reg_field am654_ctrl_core_csi0_reg_fields[F_MAX_FIELDS] = {
-	[F_CTRLCLKEN] = REG_FIELD(0, 15, 15),
-	[F_CAMMODE] = REG_FIELD(0, 24, 25),
-	[F_LANEENABLE] = REG_FIELD(0, 0, 4),
-};
-
-static struct cal_csi2_phy am654_cal_csi_phy[] = {
-	{
-		.base_fields = am654_ctrl_core_csi0_reg_fields,
-		.num_lanes = 5,
-	},
-};
-
-static const struct cal_data am654_cal_data = {
-	.csi2_phy_core = am654_cal_csi_phy,
-	.num_csi2_phy = ARRAY_SIZE(am654_cal_csi_phy),
 };
 
 /*
@@ -346,15 +247,8 @@ struct cal_dev {
 	struct platform_device	*pdev;
 	struct v4l2_device	v4l2_dev;
 
-	/* Controller flags for special cases */
-	unsigned int		flags;
-
-	const struct cal_data	*data;
-
 	/* Control Module handle */
-	struct regmap		*syscon_camerrx;
-	u32			syscon_camerrx_offset;
-
+	struct cm_data		*cm;
 	/* Camera Core Module handle */
 	struct cc_data		*cc[CAL_NUM_CSI2_PORTS];
 
@@ -465,115 +359,73 @@ static inline void set_field(u32 *valp, u32 field, u32 mask)
 	*valp = val;
 }
 
-static u32 cal_data_get_phy_max_lanes(struct cal_ctx *ctx)
-{
-	struct cal_dev *dev = ctx->dev;
-	u32 phy_id = ctx->csi2_port - 1;
-
-	return dev->data->csi2_phy_core[phy_id].num_lanes;
-}
-
-static u32 cal_data_get_num_csi2_phy(struct cal_dev *dev)
-{
-	return dev->data->num_csi2_phy;
-}
-
-static int cal_camerarx_regmap_init(struct cal_dev *dev)
-{
-	struct reg_field *field;
-	struct cal_csi2_phy *phy;
-	int i, j;
-
-	if (!dev->data)
-		return -EINVAL;
-
-	for (i = 0; i < cal_data_get_num_csi2_phy(dev); i++) {
-		phy = &dev->data->csi2_phy_core[i];
-		for (j = 0; j < F_MAX_FIELDS; j++) {
-			field = &phy->base_fields[j];
-			/*
-			 * Here we update the reg offset with the
-			 * value found in DT
-			 */
-			field->reg = dev->syscon_camerrx_offset;
-			phy->fields[j] =
-				devm_regmap_field_alloc(&dev->pdev->dev,
-							dev->syscon_camerrx,
-							*field);
-			if (IS_ERR(phy->fields[j])) {
-				cal_err(dev, "Unable to allocate regmap fields\n");
-				return PTR_ERR(phy->fields[j]);
-			}
-		}
-	}
-	return 0;
-}
-
-static const struct regmap_config cal_regmap_config = {
-	.reg_bits = 32,
-	.val_bits = 32,
-	.reg_stride = 4,
-};
-
-static struct regmap *cal_get_camerarx_regmap(struct cal_dev *dev)
+/*
+ * Control Module block access
+ */
+static struct cm_data *cm_create(struct cal_dev *dev)
 {
 	struct platform_device *pdev = dev->pdev;
-	struct regmap *regmap;
-	void __iomem *base;
-	u32 reg_io_width;
-	struct regmap_config r_config = cal_regmap_config;
-	struct resource *res;
+	struct cm_data *cm;
 
-	res = platform_get_resource_byname(pdev, IORESOURCE_MEM,
-					   "camerrx_control");
-	base = devm_ioremap_resource(&pdev->dev, res);
-	if (IS_ERR(base)) {
+	cm = devm_kzalloc(&pdev->dev, sizeof(*cm), GFP_KERNEL);
+	if (!cm)
+		return ERR_PTR(-ENOMEM);
+
+	cm->res = platform_get_resource_byname(pdev, IORESOURCE_MEM,
+						"camerrx_control");
+	cm->base = devm_ioremap_resource(&pdev->dev, cm->res);
+	if (IS_ERR(cm->base)) {
 		cal_err(dev, "failed to ioremap\n");
-		return ERR_CAST(base);
+		return ERR_CAST(cm->base);
 	}
 
 	cal_dbg(1, dev, "ioresource %s at %pa - %pa\n",
-		res->name, &res->start, &res->end);
+		cm->res->name, &cm->res->start, &cm->res->end);
 
-	reg_io_width = 4;
-	r_config.reg_stride = reg_io_width;
-	r_config.val_bits = reg_io_width * 8;
-	r_config.max_register = resource_size(res) - reg_io_width;
-
-	regmap = regmap_init_mmio(NULL, base, &r_config);
-	if (IS_ERR(regmap))
-		pr_err("regmap init failed\n");
-
-	return regmap;
+	return cm;
 }
 
-/*
- * Control Module CAMERARX block access
- */
 static void camerarx_phy_enable(struct cal_ctx *ctx)
 {
-	struct cal_csi2_phy *phy;
-	u32 phy_id = ctx->csi2_port - 1;
-	u32 max_lanes;
+	u32 val;
 
-	phy = &ctx->dev->data->csi2_phy_core[phy_id];
-	regmap_field_write(phy->fields[F_CAMMODE], 0);
-	/* Always enable all lanes at the phy control level */
-	max_lanes = (1 << cal_data_get_phy_max_lanes(ctx)) - 1;
-	regmap_field_write(phy->fields[F_LANEENABLE], max_lanes);
-	/* F_CSI_MODE is not present on every architecture */
-	if (phy->fields[F_CSI_MODE])
-		regmap_field_write(phy->fields[F_CSI_MODE], 1);
-	regmap_field_write(phy->fields[F_CTRLCLKEN], 1);
+	if (!ctx->dev->cm->base) {
+		ctx_err(ctx, "cm not mapped\n");
+		return;
+	}
+
+	val = reg_read(ctx->dev->cm, CM_CTRL_CORE_CAMERRX_CONTROL);
+	if (ctx->csi2_port == 1) {
+		set_field(&val, 1, CM_CAMERRX_CTRL_CSI0_CTRLCLKEN_MASK);
+		set_field(&val, 0, CM_CAMERRX_CTRL_CSI0_CAMMODE_MASK);
+		/* enable all lanes by default */
+		set_field(&val, 0xf, CM_CAMERRX_CTRL_CSI0_LANEENABLE_MASK);
+		set_field(&val, 1, CM_CAMERRX_CTRL_CSI0_MODE_MASK);
+	} else if (ctx->csi2_port == 2) {
+		set_field(&val, 1, CM_CAMERRX_CTRL_CSI1_CTRLCLKEN_MASK);
+		set_field(&val, 0, CM_CAMERRX_CTRL_CSI1_CAMMODE_MASK);
+		/* enable all lanes by default */
+		set_field(&val, 0x3, CM_CAMERRX_CTRL_CSI1_LANEENABLE_MASK);
+		set_field(&val, 1, CM_CAMERRX_CTRL_CSI1_MODE_MASK);
+	}
+	reg_write(ctx->dev->cm, CM_CTRL_CORE_CAMERRX_CONTROL, val);
 }
 
 static void camerarx_phy_disable(struct cal_ctx *ctx)
 {
-	struct cal_csi2_phy *phy;
-	u32 phy_id = ctx->csi2_port - 1;
+	u32 val;
 
-	phy = &ctx->dev->data->csi2_phy_core[phy_id];
-	regmap_field_write(phy->fields[F_CTRLCLKEN], 0);
+	if (!ctx->dev->cm->base) {
+		ctx_err(ctx, "cm not mapped\n");
+		return;
+	}
+
+	val = reg_read(ctx->dev->cm, CM_CTRL_CORE_CAMERRX_CONTROL);
+	if (ctx->csi2_port == 1)
+		set_field(&val, 0x0, CM_CAMERRX_CTRL_CSI0_CTRLCLKEN_MASK);
+	else if (ctx->csi2_port == 2)
+		set_field(&val, 0x0, CM_CAMERRX_CTRL_CSI1_CTRLCLKEN_MASK);
+	reg_write(ctx->dev->cm, CM_CTRL_CORE_CAMERRX_CONTROL, val);
 }
 
 /*
@@ -622,52 +474,9 @@ static void cal_get_hwinfo(struct cal_dev *dev)
 		hwinfo);
 }
 
-/*
- *   Errata i913: CSI2 LDO Needs to be disabled when module is powered on
- *
- *   Enabling CSI2 LDO shorts it to core supply. It is crucial the 2 CSI2
- *   LDOs on the device are disabled if CSI-2 module is powered on
- *   (0x4845 B304 | 0x4845 B384 [28:27] = 0x1) or in ULPS (0x4845 B304
- *   | 0x4845 B384 [28:27] = 0x2) mode. Common concerns include: high
- *   current draw on the module supply in active mode.
- *
- *   Errata does not apply when CSI-2 module is powered off
- *   (0x4845 B304 | 0x4845 B384 [28:27] = 0x0).
- *
- * SW Workaround:
- *	Set the following register bits to disable the LDO,
- *	which is essentially CSI2 REG10 bit 6:
- *
- *		Core 0:  0x4845 B828 = 0x0000 0040
- *		Core 1:  0x4845 B928 = 0x0000 0040
- */
-static void i913_errata(struct cal_dev *dev, unsigned int port)
+static inline int cal_runtime_get(struct cal_dev *dev)
 {
-	u32 reg10 = reg_read(dev->cc[port], CAL_CSI2_PHY_REG10);
-
-	set_field(&reg10, CAL_CSI2_PHY_REG0_HSCLOCKCONFIG_DISABLE,
-		  CAL_CSI2_PHY_REG10_I933_LDO_DISABLE_MASK);
-
-	cal_dbg(1, dev, "CSI2_%d_REG10 = 0x%08x\n", port, reg10);
-	reg_write(dev->cc[port], CAL_CSI2_PHY_REG10, reg10);
-}
-
-static int cal_runtime_get(struct cal_dev *dev)
-{
-	int r;
-
-	r = pm_runtime_get_sync(&dev->pdev->dev);
-
-	if (dev->flags & DRA72_CAL_PRE_ES2_LDO_DISABLE) {
-		/*
-		 * Apply errata on both port eveytime we (re-)enable
-		 * the clock
-		 */
-		i913_errata(dev, 0);
-		i913_errata(dev, 1);
-	}
-
-	return r;
+	return pm_runtime_get_sync(&dev->pdev->dev);
 }
 
 static inline void cal_runtime_put(struct cal_dev *dev)
@@ -699,6 +508,12 @@ static void cal_quickdump_regs(struct cal_dev *dev)
 			       resource_size(dev->ctx[1]->cc->res),
 			       false);
 	}
+
+	cal_info(dev, "CAMERRX_Control Registers @ %pa:\n",
+		 &dev->cm->res->start);
+	print_hex_dump(KERN_INFO, "", DUMP_PREFIX_OFFSET, 16, 4,
+		       (__force const void *)dev->cm->base,
+		       resource_size(dev->cm->res), false);
 }
 
 /*
@@ -736,76 +551,29 @@ static void disable_irqs(struct cal_ctx *ctx)
 	reg_write(ctx->dev, CAL_CSI2_VC_IRQENABLE(1), 0);
 }
 
-static void csi2_phy_config(struct cal_ctx *ctx);
-
-static void csi2_phy_init(struct cal_ctx *ctx)
+static void csi2_init(struct cal_ctx *ctx)
 {
 	int i;
 	u32 val;
 
-	/* Steps
-	 *  1. Configure D-PHY mode and enable required lanes
-	 *  2. Reset complex IO - Wait for completion of reset
-	 *          Note if the external sensor is not sending byte clock,
-	 *          the reset will timeout
-	 *  3 Program Stop States
-	 *      A. Program THS_TERM, THS_SETTLE, etc... Timings parameters
-	 *              in terms of DDR clock periods
-	 *      B. Enable stop state transition timeouts
-	 *  4.Force FORCERXMODE
-	 *      D. Enable pull down using pad control
-	 *      E. Power up PHY
-	 *      F. Wait for power up completion
-	 *      G. Wait for all enabled lane to reach stop state
-	 *      H. Disable pull down using pad control
-	 */
-
-	/* 1. Configure D-PHY mode and enable required lanes */
-	camerarx_phy_enable(ctx);
-
-	/* 2. Reset complex IO - Do not wait for reset completion */
-	val = reg_read(ctx->dev, CAL_CSI2_COMPLEXIO_CFG(ctx->csi2_port));
-	set_field(&val, CAL_CSI2_COMPLEXIO_CFG_RESET_CTRL_OPERATIONAL,
-		  CAL_CSI2_COMPLEXIO_CFG_RESET_CTRL_MASK);
-	reg_write(ctx->dev, CAL_CSI2_COMPLEXIO_CFG(ctx->csi2_port), val);
-	ctx_dbg(3, ctx, "CAL_CSI2_COMPLEXIO_CFG(%d) = 0x%08x De-assert Complex IO Reset\n",
-		ctx->csi2_port,
-		reg_read(ctx->dev, CAL_CSI2_COMPLEXIO_CFG(ctx->csi2_port)));
-
-	/* Dummy read to allow SCP to complete */
-	val = reg_read(ctx->dev, CAL_CSI2_COMPLEXIO_CFG(ctx->csi2_port));
-
-	/* 3.A. Program Phy Timing Parameters */
-	csi2_phy_config(ctx);
-
-	/* 3.B. Program Stop States */
 	val = reg_read(ctx->dev, CAL_CSI2_TIMING(ctx->csi2_port));
+	set_field(&val, CAL_GEN_ENABLE,
+		  CAL_CSI2_TIMING_FORCE_RX_MODE_IO1_MASK);
 	set_field(&val, CAL_GEN_ENABLE,
 		  CAL_CSI2_TIMING_STOP_STATE_X16_IO1_MASK);
 	set_field(&val, CAL_GEN_DISABLE,
 		  CAL_CSI2_TIMING_STOP_STATE_X4_IO1_MASK);
 	set_field(&val, 407, CAL_CSI2_TIMING_STOP_STATE_COUNTER_IO1_MASK);
 	reg_write(ctx->dev, CAL_CSI2_TIMING(ctx->csi2_port), val);
-	ctx_dbg(3, ctx, "CAL_CSI2_TIMING(%d) = 0x%08x Stop States\n",
-		ctx->csi2_port,
+	ctx_dbg(3, ctx, "CAL_CSI2_TIMING(%d) = 0x%08x\n", ctx->csi2_port,
 		reg_read(ctx->dev, CAL_CSI2_TIMING(ctx->csi2_port)));
 
-	/* 4. Force FORCERXMODE */
-	val = reg_read(ctx->dev, CAL_CSI2_TIMING(ctx->csi2_port));
-	set_field(&val, CAL_GEN_ENABLE,
-		  CAL_CSI2_TIMING_FORCE_RX_MODE_IO1_MASK);
-	reg_write(ctx->dev, CAL_CSI2_TIMING(ctx->csi2_port), val);
-	ctx_dbg(3, ctx, "CAL_CSI2_TIMING(%d) = 0x%08x Force RXMODE\n",
-		ctx->csi2_port,
-		reg_read(ctx->dev, CAL_CSI2_TIMING(ctx->csi2_port)));
-
-	/* E. Power up the PHY using the complex IO */
 	val = reg_read(ctx->dev, CAL_CSI2_COMPLEXIO_CFG(ctx->csi2_port));
+	set_field(&val, CAL_CSI2_COMPLEXIO_CFG_RESET_CTRL_OPERATIONAL,
+		  CAL_CSI2_COMPLEXIO_CFG_RESET_CTRL_MASK);
 	set_field(&val, CAL_CSI2_COMPLEXIO_CFG_PWR_CMD_STATE_ON,
 		  CAL_CSI2_COMPLEXIO_CFG_PWR_CMD_MASK);
 	reg_write(ctx->dev, CAL_CSI2_COMPLEXIO_CFG(ctx->csi2_port), val);
-
-	/* F. Wait for power up completion */
 	for (i = 0; i < 10; i++) {
 		if (reg_read_field(ctx->dev,
 				   CAL_CSI2_COMPLEXIO_CFG(ctx->csi2_port),
@@ -814,104 +582,18 @@ static void csi2_phy_init(struct cal_ctx *ctx)
 			break;
 		usleep_range(1000, 1100);
 	}
-	ctx_dbg(3, ctx, "CAL_CSI2_COMPLEXIO_CFG(%d) = 0x%08x Powered UP %s\n",
-		ctx->csi2_port,
-		reg_read(ctx->dev, CAL_CSI2_COMPLEXIO_CFG(ctx->csi2_port)),
-		(i >= 10) ? "(timeout)" : "");
-}
+	ctx_dbg(3, ctx, "CAL_CSI2_COMPLEXIO_CFG(%d) = 0x%08x\n", ctx->csi2_port,
+		reg_read(ctx->dev, CAL_CSI2_COMPLEXIO_CFG(ctx->csi2_port)));
 
-static void csi2_wait_for_phy(struct cal_ctx *ctx)
-{
-	int i;
-
-	/* Steps
-	 *  2. Wait for completion of reset
-	 *          Note if the external sensor is not sending byte clock,
-	 *          the reset will timeout
-	 *  4.Force FORCERXMODE
-	 *      G. Wait for all enabled lane to reach stop state
-	 *      H. Disable pull down using pad control
-	 */
-
-	/* 2. Wait for reset completion */
-	for (i = 0; i < 250; i++) {
-		if (reg_read_field(ctx->dev,
-				   CAL_CSI2_COMPLEXIO_CFG(ctx->csi2_port),
-				   CAL_CSI2_COMPLEXIO_CFG_RESET_DONE_MASK) ==
-		    CAL_CSI2_COMPLEXIO_CFG_RESET_DONE_RESETCOMPLETED)
-			break;
-		usleep_range(1000, 1100);
-	}
-	ctx_dbg(3, ctx, "CAL_CSI2_COMPLEXIO_CFG(%d) = 0x%08x Complex IO Reset Done (%d) %s\n",
-		ctx->csi2_port,
-		reg_read(ctx->dev, CAL_CSI2_COMPLEXIO_CFG(ctx->csi2_port)), i,
-		(i >= 250) ? "(timeout)" : "");
-
-	/* 4. G. Wait for all enabled lane to reach stop state */
-	for (i = 0; i < 10; i++) {
-		if (reg_read_field(ctx->dev,
-				   CAL_CSI2_TIMING(ctx->csi2_port),
-				   CAL_CSI2_TIMING_FORCE_RX_MODE_IO1_MASK) ==
-		    CAL_GEN_DISABLE)
-			break;
-		usleep_range(1000, 1100);
-	}
-	ctx_dbg(3, ctx, "CAL_CSI2_TIMING(%d) = 0x%08x Stop State Reached %s\n",
-		ctx->csi2_port,
-		reg_read(ctx->dev, CAL_CSI2_TIMING(ctx->csi2_port)),
-		(i >= 10) ? "(timeout)" : "");
-
-	ctx_dbg(1, ctx, "CSI2_%d_REG1 = 0x%08x (Bit(31,28) should be set!)\n",
-		(ctx->csi2_port - 1), reg_read(ctx->cc, CAL_CSI2_PHY_REG1));
-}
-
-static void csi2_phy_deinit(struct cal_ctx *ctx)
-{
-	int i;
-	u32 val;
-
-	/* Power down the PHY using the complex IO */
-	val = reg_read(ctx->dev, CAL_CSI2_COMPLEXIO_CFG(ctx->csi2_port));
-	set_field(&val, CAL_CSI2_COMPLEXIO_CFG_PWR_CMD_STATE_OFF,
-		  CAL_CSI2_COMPLEXIO_CFG_PWR_CMD_MASK);
-	reg_write(ctx->dev, CAL_CSI2_COMPLEXIO_CFG(ctx->csi2_port), val);
-
-	/* Wait for power down completion */
-	for (i = 0; i < 10; i++) {
-		if (reg_read_field(ctx->dev,
-				   CAL_CSI2_COMPLEXIO_CFG(ctx->csi2_port),
-				   CAL_CSI2_COMPLEXIO_CFG_PWR_STATUS_MASK) ==
-		    CAL_CSI2_COMPLEXIO_CFG_PWR_STATUS_STATE_OFF)
-			break;
-		usleep_range(1000, 1100);
-	}
-	ctx_dbg(3, ctx, "CAL_CSI2_COMPLEXIO_CFG(%d) = 0x%08x Powered Down %s\n",
-		ctx->csi2_port,
-		reg_read(ctx->dev, CAL_CSI2_COMPLEXIO_CFG(ctx->csi2_port)),
-		(i >= 10) ? "(timeout)" : "");
-
-	/* Assert Comple IO Reset */
-	val = reg_read(ctx->dev, CAL_CSI2_COMPLEXIO_CFG(ctx->csi2_port));
-	set_field(&val, CAL_CSI2_COMPLEXIO_CFG_RESET_CTRL,
-		  CAL_CSI2_COMPLEXIO_CFG_RESET_CTRL_MASK);
-	reg_write(ctx->dev, CAL_CSI2_COMPLEXIO_CFG(ctx->csi2_port), val);
-
-	/* Wait for power down completion */
-	for (i = 0; i < 10; i++) {
-		if (reg_read_field(ctx->dev,
-				   CAL_CSI2_COMPLEXIO_CFG(ctx->csi2_port),
-				   CAL_CSI2_COMPLEXIO_CFG_RESET_DONE_MASK) ==
-		    CAL_CSI2_COMPLEXIO_CFG_RESET_DONE_RESETONGOING)
-			break;
-		usleep_range(1000, 1100);
-	}
-	ctx_dbg(3, ctx, "CAL_CSI2_COMPLEXIO_CFG(%d) = 0x%08x Complex IO in Reset (%d) %s\n",
-		ctx->csi2_port,
-		reg_read(ctx->dev, CAL_CSI2_COMPLEXIO_CFG(ctx->csi2_port)), i,
-		(i >= 10) ? "(timeout)" : "");
-
-	/* Disable the phy */
-	camerarx_phy_disable(ctx);
+	val = reg_read(ctx->dev, CAL_CTRL);
+	set_field(&val, CAL_CTRL_BURSTSIZE_BURST128, CAL_CTRL_BURSTSIZE_MASK);
+	set_field(&val, 0xF, CAL_CTRL_TAGCNT_MASK);
+	set_field(&val, CAL_CTRL_POSTED_WRITES_NONPOSTED,
+		  CAL_CTRL_POSTED_WRITES_MASK);
+	set_field(&val, 0xFF, CAL_CTRL_MFLAGL_MASK);
+	set_field(&val, 0xFF, CAL_CTRL_MFLAGH_MASK);
+	reg_write(ctx->dev, CAL_CTRL, val);
+	ctx_dbg(3, ctx, "CAL_CTRL = 0x%08x\n", reg_read(ctx->dev, CAL_CTRL));
 }
 
 static void csi2_lane_config(struct cal_ctx *ctx)
@@ -983,48 +665,13 @@ static void csi2_ctx_config(struct cal_ctx *ctx)
 
 static void pix_proc_config(struct cal_ctx *ctx)
 {
-	u32 val, extract, pack;
-
-	switch (ctx->fmt->bpp) {
-	case 8:
-		extract = CAL_PIX_PROC_EXTRACT_B8;
-		pack = CAL_PIX_PROC_PACK_B8;
-		break;
-	case 10:
-		extract = CAL_PIX_PROC_EXTRACT_B10_MIPI;
-		pack = CAL_PIX_PROC_PACK_B16;
-		break;
-	case 12:
-		extract = CAL_PIX_PROC_EXTRACT_B12_MIPI;
-		pack = CAL_PIX_PROC_PACK_B16;
-		break;
-	case 16:
-		extract = CAL_PIX_PROC_EXTRACT_B16_LE;
-		pack = CAL_PIX_PROC_PACK_B16;
-		break;
-	default:
-		/*
-		 * If you see this warning then it means that you added
-		 * some new entry in the cal_formats[] array with a different
-		 * bit per pixel values then the one supported below.
-		 * Either add support for the new bpp value below or adjust
-		 * the new entry to use one of the value below.
-		 *
-		 * Instead of failing here just use 8 bpp as a default.
-		 */
-		dev_warn_once(&ctx->dev->pdev->dev,
-			      "%s:%d:%s: bpp:%d unsupported! Overwritten with 8.\n",
-			      __FILE__, __LINE__, __func__, ctx->fmt->bpp);
-		extract = CAL_PIX_PROC_EXTRACT_B8;
-		pack = CAL_PIX_PROC_PACK_B8;
-		break;
-	}
+	u32 val;
 
 	val = reg_read(ctx->dev, CAL_PIX_PROC(ctx->csi2_port));
-	set_field(&val, extract, CAL_PIX_PROC_EXTRACT_MASK);
+	set_field(&val, CAL_PIX_PROC_EXTRACT_B8, CAL_PIX_PROC_EXTRACT_MASK);
 	set_field(&val, CAL_PIX_PROC_DPCMD_BYPASS, CAL_PIX_PROC_DPCMD_MASK);
 	set_field(&val, CAL_PIX_PROC_DPCME_BYPASS, CAL_PIX_PROC_DPCME_MASK);
-	set_field(&val, pack, CAL_PIX_PROC_PACK_MASK);
+	set_field(&val, CAL_PIX_PROC_PACK_B8, CAL_PIX_PROC_PACK_MASK);
 	set_field(&val, ctx->csi2_port, CAL_PIX_PROC_CPORT_MASK);
 	set_field(&val, CAL_GEN_ENABLE, CAL_PIX_PROC_EN_MASK);
 	reg_write(ctx->dev, CAL_PIX_PROC(ctx->csi2_port), val);
@@ -1033,13 +680,12 @@ static void pix_proc_config(struct cal_ctx *ctx)
 }
 
 static void cal_wr_dma_config(struct cal_ctx *ctx,
-			      unsigned int width, unsigned int height)
+			      unsigned int width)
 {
 	u32 val;
 
 	val = reg_read(ctx->dev, CAL_WR_DMA_CTRL(ctx->csi2_port));
 	set_field(&val, ctx->csi2_port, CAL_WR_DMA_CTRL_CPORT_MASK);
-	set_field(&val, height, CAL_WR_DMA_CTRL_YSIZE_MASK);
 	set_field(&val, CAL_WR_DMA_CTRL_DTAG_PIX_DAT,
 		  CAL_WR_DMA_CTRL_DTAG_MASK);
 	set_field(&val, CAL_WR_DMA_CTRL_MODE_CONST,
@@ -1074,16 +720,6 @@ static void cal_wr_dma_config(struct cal_ctx *ctx,
 	reg_write(ctx->dev, CAL_WR_DMA_XSIZE(ctx->csi2_port), val);
 	ctx_dbg(3, ctx, "CAL_WR_DMA_XSIZE(%d) = 0x%08x\n", ctx->csi2_port,
 		reg_read(ctx->dev, CAL_WR_DMA_XSIZE(ctx->csi2_port)));
-
-	val = reg_read(ctx->dev, CAL_CTRL);
-	set_field(&val, CAL_CTRL_BURSTSIZE_BURST128, CAL_CTRL_BURSTSIZE_MASK);
-	set_field(&val, 0xF, CAL_CTRL_TAGCNT_MASK);
-	set_field(&val, CAL_CTRL_POSTED_WRITES_NONPOSTED,
-		  CAL_CTRL_POSTED_WRITES_MASK);
-	set_field(&val, 0xFF, CAL_CTRL_MFLAGL_MASK);
-	set_field(&val, 0xFF, CAL_CTRL_MFLAGH_MASK);
-	reg_write(ctx->dev, CAL_CTRL, val);
-	ctx_dbg(3, ctx, "CAL_CTRL = 0x%08x\n", reg_read(ctx->dev, CAL_CTRL));
 }
 
 static void cal_wr_dma_addr(struct cal_ctx *ctx, unsigned int dmaaddr)
@@ -1097,28 +733,41 @@ static void cal_wr_dma_addr(struct cal_ctx *ctx, unsigned int dmaaddr)
 #define TCLK_TERM	0
 #define TCLK_MISS	1
 #define TCLK_SETTLE	14
+#define THS_SETTLE	15
 
 static void csi2_phy_config(struct cal_ctx *ctx)
 {
 	unsigned int reg0, reg1;
 	unsigned int ths_term, ths_settle;
-	unsigned int csi2_ddrclk_khz;
-	struct v4l2_fwnode_bus_mipi_csi2 *mipi_csi2 =
-			&ctx->endpoint.bus.mipi_csi2;
-	u32 num_lanes = mipi_csi2->num_data_lanes;
+	unsigned int ddrclkperiod_us;
 
-	/* DPHY timing configuration */
-	/* CSI-2 is DDR and we only count used lanes. */
-	csi2_ddrclk_khz = ctx->external_rate / 1000
-		/ (2 * num_lanes) * ctx->fmt->bpp;
-	ctx_dbg(1, ctx, "csi2_ddrclk_khz: %d\n", csi2_ddrclk_khz);
+	/*
+	 * THS_TERM: Programmed value = floor(20 ns/DDRClk period) - 2.
+	 */
+	ddrclkperiod_us = ctx->external_rate / 2000000;
+	ddrclkperiod_us = 1000000 / ddrclkperiod_us;
+	ctx_dbg(1, ctx, "ddrclkperiod_us: %d\n", ddrclkperiod_us);
 
-	/* THS_TERM: Programmed value = floor(20 ns/DDRClk period) */
-	ths_term = 20 * csi2_ddrclk_khz / 1000000;
+	ths_term = 20000 / ddrclkperiod_us;
+	ths_term = (ths_term >= 2) ? ths_term - 2 : ths_term;
 	ctx_dbg(1, ctx, "ths_term: %d (0x%02x)\n", ths_term, ths_term);
 
-	/* THS_SETTLE: Programmed value = floor(105 ns/DDRClk period) + 4 */
-	ths_settle = (105 * csi2_ddrclk_khz / 1000000) + 4;
+	/*
+	 * THS_SETTLE: Programmed value = floor(176.3 ns/CtrlClk period) - 1.
+	 *	Since CtrlClk is fixed at 96Mhz then we get
+	 *	ths_settle = floor(176.3 / 10.416) - 1 = 15
+	 * If we ever switch to a dynamic clock then this code might be useful
+	 *
+	 * unsigned int ctrlclkperiod_us;
+	 * ctrlclkperiod_us = 96000000 / 1000000;
+	 * ctrlclkperiod_us = 1000000 / ctrlclkperiod_us;
+	 * ctx_dbg(1, ctx, "ctrlclkperiod_us: %d\n", ctrlclkperiod_us);
+
+	 * ths_settle = 176300  / ctrlclkperiod_us;
+	 * ths_settle = (ths_settle > 1) ? ths_settle - 1 : ths_settle;
+	 */
+
+	ths_settle = THS_SETTLE;
 	ctx_dbg(1, ctx, "ths_settle: %d (0x%02x)\n", ths_settle, ths_settle);
 
 	reg0 = reg_read(ctx->cc, CAL_CSI2_PHY_REG0);
@@ -1330,25 +979,15 @@ static int cal_calc_format_size(struct cal_ctx *ctx,
 				const struct cal_fmt *fmt,
 				struct v4l2_format *f)
 {
-	u32 bpl, max_width;
-
 	if (!fmt) {
 		ctx_dbg(3, ctx, "No cal_fmt provided!\n");
 		return -EINVAL;
 	}
 
-	/*
-	 * Maximum width is bound by the DMA max width in bytes.
-	 * We need to recalculate the actual maxi width depending on the
-	 * number of bytes per pixels required.
-	 */
-	max_width = MAX_WIDTH_BYTES / (ALIGN(fmt->bpp, 8) >> 3);
-	v4l_bound_align_image(&f->fmt.pix.width, 48, max_width, 2,
-			      &f->fmt.pix.height, 32, MAX_HEIGHT_LINES, 0, 0);
-
-	bpl = (f->fmt.pix.width * ALIGN(fmt->bpp, 8)) >> 3;
-	f->fmt.pix.bytesperline = ALIGN(bpl, 16);
-
+	v4l_bound_align_image(&f->fmt.pix.width, 48, MAX_WIDTH, 2,
+			      &f->fmt.pix.height, 32, MAX_HEIGHT, 0, 0);
+	f->fmt.pix.bytesperline = bytes_per_line(f->fmt.pix.width,
+						 fmt->depth >> 3);
 	f->fmt.pix.sizeimage = f->fmt.pix.height *
 			       f->fmt.pix.bytesperline;
 
@@ -1493,7 +1132,6 @@ static int cal_enum_framesizes(struct file *file, void *fh,
 	fse.index = fsize->index;
 	fse.pad = 0;
 	fse.code = fmt->code;
-	fse.which = V4L2_SUBDEV_FORMAT_ACTIVE;
 
 	ret = v4l2_subdev_call(ctx->sensor, pad, enum_frame_size, NULL, &fse);
 	if (ret)
@@ -1661,34 +1299,25 @@ static int cal_start_streaming(struct vb2_queue *vq, unsigned int count)
 	if (ret < 0)
 		goto err;
 
-	ret = v4l2_subdev_call(ctx->sensor, core, s_power, 1);
-	if (ret < 0 && ret != -ENOIOCTLCMD && ret != -ENODEV) {
-		ctx_err(ctx, "power on failed in subdev\n");
-		goto err;
-	}
-
 	cal_runtime_get(ctx->dev);
 
+	enable_irqs(ctx);
+	camerarx_phy_enable(ctx);
+	csi2_init(ctx);
+	csi2_phy_config(ctx);
+	csi2_lane_config(ctx);
 	csi2_ctx_config(ctx);
 	pix_proc_config(ctx);
-	cal_wr_dma_config(ctx, ctx->v_fmt.fmt.pix.bytesperline,
-			  ctx->v_fmt.fmt.pix.height);
-	csi2_lane_config(ctx);
-
-	enable_irqs(ctx);
-	csi2_phy_init(ctx);
+	cal_wr_dma_config(ctx, ctx->v_fmt.fmt.pix.bytesperline);
+	cal_wr_dma_addr(ctx, addr);
+	csi2_ppi_enable(ctx);
 
 	ret = v4l2_subdev_call(ctx->sensor, video, s_stream, 1);
 	if (ret) {
-		v4l2_subdev_call(ctx->sensor, core, s_power, 0);
 		ctx_err(ctx, "stream on failed in subdev\n");
 		cal_runtime_put(ctx->dev);
 		goto err;
 	}
-
-	csi2_wait_for_phy(ctx);
-	cal_wr_dma_addr(ctx, addr);
-	csi2_ppi_enable(ctx);
 
 	if (debug >= 4)
 		cal_quickdump_regs(ctx->dev);
@@ -1696,15 +1325,10 @@ static int cal_start_streaming(struct vb2_queue *vq, unsigned int count)
 	return 0;
 
 err:
-	spin_lock_irqsave(&ctx->slock, flags);
-	vb2_buffer_done(&ctx->cur_frm->vb.vb2_buf, VB2_BUF_STATE_QUEUED);
-	ctx->cur_frm = NULL;
-	ctx->next_frm = NULL;
 	list_for_each_entry_safe(buf, tmp, &dma_q->active, list) {
 		list_del(&buf->list);
 		vb2_buffer_done(&buf->vb.vb2_buf, VB2_BUF_STATE_QUEUED);
 	}
-	spin_unlock_irqrestore(&ctx->slock, flags);
 	return ret;
 }
 
@@ -1714,18 +1338,12 @@ static void cal_stop_streaming(struct vb2_queue *vq)
 	struct cal_dmaqueue *dma_q = &ctx->vidq;
 	struct cal_buffer *buf, *tmp;
 	unsigned long flags;
-	int ret;
-
-	csi2_ppi_disable(ctx);
-	disable_irqs(ctx);
-	csi2_phy_deinit(ctx);
 
 	if (v4l2_subdev_call(ctx->sensor, video, s_stream, 0))
 		ctx_err(ctx, "stream off failed in subdev\n");
 
-	ret = v4l2_subdev_call(ctx->sensor, core, s_power, 0);
-	if (ret < 0 && ret != -ENOIOCTLCMD && ret != -ENODEV)
-		ctx_err(ctx, "power off failed in subdev\n");
+	csi2_ppi_disable(ctx);
+	disable_irqs(ctx);
 
 	/* Release all active buffers */
 	spin_lock_irqsave(&ctx->slock, flags);
@@ -1781,7 +1399,6 @@ static const struct v4l2_ioctl_ops cal_ioctl_ops = {
 	.vidioc_querybuf      = vb2_ioctl_querybuf,
 	.vidioc_qbuf          = vb2_ioctl_qbuf,
 	.vidioc_dqbuf         = vb2_ioctl_dqbuf,
-	.vidioc_expbuf        = vb2_ioctl_expbuf,
 	.vidioc_enum_input    = cal_enum_input,
 	.vidioc_g_input       = cal_g_input,
 	.vidioc_s_input       = cal_s_input,
@@ -1834,7 +1451,6 @@ static int cal_async_bound(struct v4l2_async_notifier *notifier,
 
 		memset(&mbus_code, 0, sizeof(mbus_code));
 		mbus_code.index = j;
-		mbus_code.which = V4L2_SUBDEV_FORMAT_ACTIVE;
 		ret = v4l2_subdev_call(subdev, pad, enum_mbus_code,
 				       NULL, &mbus_code);
 		if (ret)
@@ -2188,15 +1804,10 @@ err_exit:
 	return NULL;
 }
 
-static const struct of_device_id cal_of_match[];
-
 static int cal_probe(struct platform_device *pdev)
 {
 	struct cal_dev *dev;
 	struct cal_ctx *ctx;
-	struct device_node *parent = pdev->dev.of_node;
-	struct regmap *syscon_camerrx = NULL;
-	u32 syscon_camerrx_offset = 0;
 	int ret;
 	int irq;
 	int i;
@@ -2205,52 +1816,12 @@ static int cal_probe(struct platform_device *pdev)
 	if (!dev)
 		return -ENOMEM;
 
-	dev->data = of_device_get_match_data(&pdev->dev);
-	if (!dev->data) {
-		dev_err(&pdev->dev, "Could not get feature data based on compatible version\n");
-		return -ENODEV;
-	}
-
-	dev->flags = dev->data->flags;
-
 	/* set pseudo v4l2 device name so we can use v4l2_printk */
 	strscpy(dev->v4l2_dev.name, CAL_MODULE_NAME,
 		sizeof(dev->v4l2_dev.name));
 
 	/* save pdev pointer */
 	dev->pdev = pdev;
-
-	syscon_camerrx = syscon_regmap_lookup_by_phandle(parent,
-							 "ti,camerrx-control");
-	ret = of_property_read_u32_index(parent, "ti,camerrx-control", 1,
-					 &syscon_camerrx_offset);
-	if (IS_ERR(syscon_camerrx))
-		ret = PTR_ERR(syscon_camerrx);
-	if (ret) {
-		dev_warn(&pdev->dev, "failed to get ti,camerrx-control: %d\n",
-			 ret);
-
-		/*
-		 * Backward DTS compatibility.
-		 * If syscon entry is not present then check if the
-		 * camerrx_control resource is present.
-		 */
-		syscon_camerrx = cal_get_camerarx_regmap(dev);
-		if (IS_ERR(syscon_camerrx)) {
-			dev_err(&pdev->dev, "failed to get camerrx_control regmap\n");
-			return PTR_ERR(syscon_camerrx);
-		}
-		/* In this case the base already point to the direct
-		 * CM register so no need for an offset
-		 */
-		syscon_camerrx_offset = 0;
-	}
-
-	dev->syscon_camerrx = syscon_camerrx;
-	dev->syscon_camerrx_offset = syscon_camerrx_offset;
-	ret = cal_camerarx_regmap_init(dev);
-	if (ret)
-		return ret;
 
 	dev->res = platform_get_resource_byname(pdev, IORESOURCE_MEM,
 						"cal_top");
@@ -2270,24 +1841,23 @@ static int cal_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, dev);
 
+	dev->cm = cm_create(dev);
+	if (IS_ERR(dev->cm))
+		return PTR_ERR(dev->cm);
+
 	dev->cc[0] = cc_create(dev, 0);
 	if (IS_ERR(dev->cc[0]))
 		return PTR_ERR(dev->cc[0]);
 
-	if (cal_data_get_num_csi2_phy(dev) > 1) {
-		dev->cc[1] = cc_create(dev, 1);
-		if (IS_ERR(dev->cc[1]))
-			return PTR_ERR(dev->cc[1]);
-	} else {
-		dev->cc[1] = NULL;
-	}
+	dev->cc[1] = cc_create(dev, 1);
+	if (IS_ERR(dev->cc[1]))
+		return PTR_ERR(dev->cc[1]);
 
 	dev->ctx[0] = NULL;
 	dev->ctx[1] = NULL;
 
 	dev->ctx[0] = cal_create_instance(dev, 0);
-	if (cal_data_get_num_csi2_phy(dev) > 1)
-		dev->ctx[1] = cal_create_instance(dev, 1);
+	dev->ctx[1] = cal_create_instance(dev, 1);
 	if (!dev->ctx[0] && !dev->ctx[1]) {
 		cal_err(dev, "Neither port is configured, no point in staying up\n");
 		return -ENODEV;
@@ -2354,22 +1924,7 @@ static int cal_remove(struct platform_device *pdev)
 
 #if defined(CONFIG_OF)
 static const struct of_device_id cal_of_match[] = {
-	{
-		.compatible = "ti,dra72-cal",
-		.data = (void *)&dra72x_cal_data,
-	},
-	{
-		.compatible = "ti,dra72-pre-es2-cal",
-		.data = (void *)&dra72x_es1_cal_data,
-	},
-	{
-		.compatible = "ti,dra76-cal",
-		.data = (void *)&dra76x_cal_data,
-	},
-	{
-		.compatible = "ti,am654-cal",
-		.data = (void *)&am654_cal_data,
-	},
+	{ .compatible = "ti,dra72-cal", },
 	{},
 };
 MODULE_DEVICE_TABLE(of, cal_of_match);

@@ -76,6 +76,11 @@ static enum pci_protocol_version_t pci_protocol_versions[] = {
 	PCI_PROTOCOL_VERSION_1_1,
 };
 
+/*
+ * Protocol version negotiated by hv_pci_protocol_negotiation().
+ */
+static enum pci_protocol_version_t pci_protocol_version;
+
 #define PCI_CONFIG_MMIO_LENGTH	0x2000
 #define CFG_PAGE_OFFSET 0x1000
 #define CFG_PAGE_SIZE (PCI_CONFIG_MMIO_LENGTH - CFG_PAGE_OFFSET)
@@ -302,7 +307,7 @@ struct pci_bus_relations {
 struct pci_q_res_req_response {
 	struct vmpacket_descriptor hdr;
 	s32 status;			/* negative values are failures */
-	u32 probed_bar[PCI_STD_NUM_BARS];
+	u32 probed_bar[6];
 } __packed;
 
 struct pci_set_power {
@@ -450,15 +455,12 @@ enum hv_pcibus_state {
 	hv_pcibus_init = 0,
 	hv_pcibus_probed,
 	hv_pcibus_installed,
-	hv_pcibus_removing,
 	hv_pcibus_removed,
 	hv_pcibus_maximum
 };
 
 struct hv_pcibus_device {
 	struct pci_sysdata sysdata;
-	/* Protocol version negotiated with the host */
-	enum pci_protocol_version_t protocol_version;
 	enum hv_pcibus_state state;
 	refcount_t remove_lock;
 	struct hv_device *hdev;
@@ -537,7 +539,7 @@ struct hv_pci_dev {
 	 * What would be observed if one wrote 0xFFFFFFFF to a BAR and then
 	 * read it back, for each of the BAR offsets within config space.
 	 */
-	u32 probed_bar[PCI_STD_NUM_BARS];
+	u32 probed_bar[6];
 };
 
 struct hv_pci_compl {
@@ -1222,7 +1224,7 @@ static void hv_irq_unmask(struct irq_data *data)
 	 * negative effect (yet?).
 	 */
 
-	if (hbus->protocol_version >= PCI_PROTOCOL_VERSION_1_2) {
+	if (pci_protocol_version >= PCI_PROTOCOL_VERSION_1_2) {
 		/*
 		 * PCI_PROTOCOL_VERSION_1_2 supports the VP_SET version of the
 		 * HVCALL_RETARGET_INTERRUPT hypercall, which also coincides
@@ -1392,7 +1394,7 @@ static void hv_compose_msi_msg(struct irq_data *data, struct msi_msg *msg)
 	ctxt.pci_pkt.completion_func = hv_pci_compose_compl;
 	ctxt.pci_pkt.compl_ctxt = &comp;
 
-	switch (hbus->protocol_version) {
+	switch (pci_protocol_version) {
 	case PCI_PROTOCOL_VERSION_1_1:
 		size = hv_compose_msi_req_v1(&ctxt.int_pkts.v1,
 					dest,
@@ -1608,7 +1610,7 @@ static void survey_child_resources(struct hv_pcibus_device *hbus)
 	 * so it's sufficient to just add them up without tracking alignment.
 	 */
 	list_for_each_entry(hpdev, &hbus->children, list_entry) {
-		for (i = 0; i < PCI_STD_NUM_BARS; i++) {
+		for (i = 0; i < 6; i++) {
 			if (hpdev->probed_bar[i] & PCI_BASE_ADDRESS_SPACE_IO)
 				dev_err(&hbus->hdev->device,
 					"There's an I/O BAR in this list!\n");
@@ -1679,27 +1681,10 @@ static void prepopulate_bars(struct hv_pcibus_device *hbus)
 
 	spin_lock_irqsave(&hbus->device_list_lock, flags);
 
-	/*
-	 * Clear the memory enable bit, in case it's already set. This occurs
-	 * in the suspend path of hibernation, where the device is suspended,
-	 * resumed and suspended again: see hibernation_snapshot() and
-	 * hibernation_platform_enter().
-	 *
-	 * If the memory enable bit is already set, Hyper-V sliently ignores
-	 * the below BAR updates, and the related PCI device driver can not
-	 * work, because reading from the device register(s) always returns
-	 * 0xFFFFFFFF.
-	 */
-	list_for_each_entry(hpdev, &hbus->children, list_entry) {
-		_hv_pcifront_read_config(hpdev, PCI_COMMAND, 2, &command);
-		command &= ~PCI_COMMAND_MEMORY;
-		_hv_pcifront_write_config(hpdev, PCI_COMMAND, 2, command);
-	}
-
 	/* Pick addresses for the BARs. */
 	do {
 		list_for_each_entry(hpdev, &hbus->children, list_entry) {
-			for (i = 0; i < PCI_STD_NUM_BARS; i++) {
+			for (i = 0; i < 6; i++) {
 				bar_val = hpdev->probed_bar[i];
 				if (bar_val == 0)
 					continue;
@@ -1856,7 +1841,7 @@ static void q_resource_requirements(void *context, struct pci_response *resp,
 			"query resource requirements failed: %x\n",
 			resp->status);
 	} else {
-		for (i = 0; i < PCI_STD_NUM_BARS; i++) {
+		for (i = 0; i < 6; i++) {
 			completion->hpdev->probed_bar[i] =
 				q_res_req->probed_bar[i];
 		}
@@ -2122,12 +2107,6 @@ static void hv_pci_devices_present(struct hv_pcibus_device *hbus,
 	unsigned long flags;
 	bool pending_dr;
 
-	if (hbus->state == hv_pcibus_removing) {
-		dev_info(&hbus->hdev->device,
-			 "PCI VMBus BUS_RELATIONS: ignored\n");
-		return;
-	}
-
 	dr_wrk = kzalloc(sizeof(*dr_wrk), GFP_NOWAIT);
 	if (!dr_wrk)
 		return;
@@ -2244,19 +2223,11 @@ static void hv_eject_device_work(struct work_struct *work)
  */
 static void hv_pci_eject_device(struct hv_pci_dev *hpdev)
 {
-	struct hv_pcibus_device *hbus = hpdev->hbus;
-	struct hv_device *hdev = hbus->hdev;
-
-	if (hbus->state == hv_pcibus_removing) {
-		dev_info(&hdev->device, "PCI VMBus EJECT: ignored\n");
-		return;
-	}
-
 	hpdev->state = hv_pcichild_ejecting;
 	get_pcichild(hpdev);
 	INIT_WORK(&hpdev->wrk, hv_eject_device_work);
-	get_hvpcibus(hbus);
-	queue_work(hbus->wq, &hpdev->wrk);
+	get_hvpcibus(hpdev->hbus);
+	queue_work(hpdev->hbus->wq, &hpdev->wrk);
 }
 
 /**
@@ -2408,11 +2379,8 @@ static void hv_pci_onchannelcallback(void *context)
  * failing if the host doesn't support the necessary protocol
  * level.
  */
-static int hv_pci_protocol_negotiation(struct hv_device *hdev,
-				       enum pci_protocol_version_t version[],
-				       int num_version)
+static int hv_pci_protocol_negotiation(struct hv_device *hdev)
 {
-	struct hv_pcibus_device *hbus = hv_get_drvdata(hdev);
 	struct pci_version_request *version_req;
 	struct hv_pci_compl comp_pkt;
 	struct pci_packet *pkt;
@@ -2435,8 +2403,8 @@ static int hv_pci_protocol_negotiation(struct hv_device *hdev,
 	version_req = (struct pci_version_request *)&pkt->message;
 	version_req->message_type.type = PCI_QUERY_PROTOCOL_VERSION;
 
-	for (i = 0; i < num_version; i++) {
-		version_req->protocol_version = version[i];
+	for (i = 0; i < ARRAY_SIZE(pci_protocol_versions); i++) {
+		version_req->protocol_version = pci_protocol_versions[i];
 		ret = vmbus_sendpacket(hdev->channel, version_req,
 				sizeof(struct pci_version_request),
 				(unsigned long)pkt, VM_PKT_DATA_INBAND,
@@ -2452,10 +2420,10 @@ static int hv_pci_protocol_negotiation(struct hv_device *hdev,
 		}
 
 		if (comp_pkt.completion_status >= 0) {
-			hbus->protocol_version = version[i];
+			pci_protocol_version = pci_protocol_versions[i];
 			dev_info(&hdev->device,
 				"PCI VMBus probing: Using version %#x\n",
-				hbus->protocol_version);
+				pci_protocol_version);
 			goto exit;
 		}
 
@@ -2739,7 +2707,7 @@ static int hv_send_resources_allocated(struct hv_device *hdev)
 	u32 wslot;
 	int ret;
 
-	size_res = (hbus->protocol_version < PCI_PROTOCOL_VERSION_1_2)
+	size_res = (pci_protocol_version < PCI_PROTOCOL_VERSION_1_2)
 			? sizeof(*res_assigned) : sizeof(*res_assigned2);
 
 	pkt = kmalloc(sizeof(*pkt) + size_res, GFP_KERNEL);
@@ -2758,7 +2726,7 @@ static int hv_send_resources_allocated(struct hv_device *hdev)
 		pkt->completion_func = hv_pci_generic_compl;
 		pkt->compl_ctxt = &comp_pkt;
 
-		if (hbus->protocol_version < PCI_PROTOCOL_VERSION_1_2) {
+		if (pci_protocol_version < PCI_PROTOCOL_VERSION_1_2) {
 			res_assigned =
 				(struct pci_resources_assigned *)&pkt->message;
 			res_assigned->message_type.type =
@@ -2902,27 +2870,9 @@ static int hv_pci_probe(struct hv_device *hdev,
 	 * hv_pcibus_device contains the hypercall arguments for retargeting in
 	 * hv_irq_unmask(). Those must not cross a page boundary.
 	 */
-	BUILD_BUG_ON(sizeof(*hbus) > HV_HYP_PAGE_SIZE);
+	BUILD_BUG_ON(sizeof(*hbus) > PAGE_SIZE);
 
-	/*
-	 * With the recent 59bb47985c1d ("mm, sl[aou]b: guarantee natural
-	 * alignment for kmalloc(power-of-two)"), kzalloc() is able to allocate
-	 * a 4KB buffer that is guaranteed to be 4KB-aligned. Here the size and
-	 * alignment of hbus is important because hbus's field
-	 * retarget_msi_interrupt_params must not cross a 4KB page boundary.
-	 *
-	 * Here we prefer kzalloc to get_zeroed_page(), because a buffer
-	 * allocated by the latter is not tracked and scanned by kmemleak, and
-	 * hence kmemleak reports the pointer contained in the hbus buffer
-	 * (i.e. the hpdev struct, which is created in new_pcichild_device() and
-	 * is tracked by hbus->children) as memory leak (false positive).
-	 *
-	 * If the kernel doesn't have 59bb47985c1d, get_zeroed_page() *must* be
-	 * used to allocate the hbus buffer and we can avoid the kmemleak false
-	 * positive by using kmemleak_alloc() and kmemleak_free() to ask
-	 * kmemleak to track and scan the hbus buffer.
-	 */
-	hbus = (struct hv_pcibus_device *)kzalloc(HV_HYP_PAGE_SIZE, GFP_KERNEL);
+	hbus = (struct hv_pcibus_device *)get_zeroed_page(GFP_KERNEL);
 	if (!hbus)
 		return -ENOMEM;
 	hbus->state = hv_pcibus_init;
@@ -2980,8 +2930,7 @@ static int hv_pci_probe(struct hv_device *hdev,
 
 	hv_set_drvdata(hdev, hbus);
 
-	ret = hv_pci_protocol_negotiation(hdev, pci_protocol_versions,
-					  ARRAY_SIZE(pci_protocol_versions));
+	ret = hv_pci_protocol_negotiation(hdev);
 	if (ret)
 		goto close;
 
@@ -3062,7 +3011,7 @@ free_bus:
 	return ret;
 }
 
-static int hv_pci_bus_exit(struct hv_device *hdev, bool hibernating)
+static void hv_pci_bus_exit(struct hv_device *hdev)
 {
 	struct hv_pcibus_device *hbus = hv_get_drvdata(hdev);
 	struct {
@@ -3078,20 +3027,16 @@ static int hv_pci_bus_exit(struct hv_device *hdev, bool hibernating)
 	 * access the per-channel ringbuffer any longer.
 	 */
 	if (hdev->channel->rescind)
-		return 0;
+		return;
 
-	if (!hibernating) {
-		/* Delete any children which might still exist. */
-		memset(&relations, 0, sizeof(relations));
-		hv_pci_devices_present(hbus, &relations);
-	}
+	/* Delete any children which might still exist. */
+	memset(&relations, 0, sizeof(relations));
+	hv_pci_devices_present(hbus, &relations);
 
 	ret = hv_send_resources_released(hdev);
-	if (ret) {
+	if (ret)
 		dev_err(&hdev->device,
 			"Couldn't send resources released packet(s)\n");
-		return ret;
-	}
 
 	memset(&pkt.teardown_packet, 0, sizeof(pkt.teardown_packet));
 	init_completion(&comp_pkt.host_event);
@@ -3104,13 +3049,8 @@ static int hv_pci_bus_exit(struct hv_device *hdev, bool hibernating)
 			       (unsigned long)&pkt.teardown_packet,
 			       VM_PKT_DATA_INBAND,
 			       VMBUS_DATA_PACKET_FLAG_COMPLETION_REQUESTED);
-	if (ret)
-		return ret;
-
-	if (wait_for_completion_timeout(&comp_pkt.host_event, 10 * HZ) == 0)
-		return -ETIMEDOUT;
-
-	return 0;
+	if (!ret)
+		wait_for_completion_timeout(&comp_pkt.host_event, 10 * HZ);
 }
 
 /**
@@ -3122,7 +3062,6 @@ static int hv_pci_bus_exit(struct hv_device *hdev, bool hibernating)
 static int hv_pci_remove(struct hv_device *hdev)
 {
 	struct hv_pcibus_device *hbus;
-	int ret;
 
 	hbus = hv_get_drvdata(hdev);
 	if (hbus->state == hv_pcibus_installed) {
@@ -3135,7 +3074,7 @@ static int hv_pci_remove(struct hv_device *hdev)
 		hbus->state = hv_pcibus_removed;
 	}
 
-	ret = hv_pci_bus_exit(hdev, false);
+	hv_pci_bus_exit(hdev);
 
 	vmbus_close(hdev->channel);
 
@@ -3151,95 +3090,8 @@ static int hv_pci_remove(struct hv_device *hdev)
 
 	hv_put_dom_num(hbus->sysdata.domain);
 
-	kfree(hbus);
-	return ret;
-}
-
-static int hv_pci_suspend(struct hv_device *hdev)
-{
-	struct hv_pcibus_device *hbus = hv_get_drvdata(hdev);
-	enum hv_pcibus_state old_state;
-	int ret;
-
-	/*
-	 * hv_pci_suspend() must make sure there are no pending work items
-	 * before calling vmbus_close(), since it runs in a process context
-	 * as a callback in dpm_suspend().  When it starts to run, the channel
-	 * callback hv_pci_onchannelcallback(), which runs in a tasklet
-	 * context, can be still running concurrently and scheduling new work
-	 * items onto hbus->wq in hv_pci_devices_present() and
-	 * hv_pci_eject_device(), and the work item handlers can access the
-	 * vmbus channel, which can be being closed by hv_pci_suspend(), e.g.
-	 * the work item handler pci_devices_present_work() ->
-	 * new_pcichild_device() writes to the vmbus channel.
-	 *
-	 * To eliminate the race, hv_pci_suspend() disables the channel
-	 * callback tasklet, sets hbus->state to hv_pcibus_removing, and
-	 * re-enables the tasklet. This way, when hv_pci_suspend() proceeds,
-	 * it knows that no new work item can be scheduled, and then it flushes
-	 * hbus->wq and safely closes the vmbus channel.
-	 */
-	tasklet_disable(&hdev->channel->callback_event);
-
-	/* Change the hbus state to prevent new work items. */
-	old_state = hbus->state;
-	if (hbus->state == hv_pcibus_installed)
-		hbus->state = hv_pcibus_removing;
-
-	tasklet_enable(&hdev->channel->callback_event);
-
-	if (old_state != hv_pcibus_installed)
-		return -EINVAL;
-
-	flush_workqueue(hbus->wq);
-
-	ret = hv_pci_bus_exit(hdev, true);
-	if (ret)
-		return ret;
-
-	vmbus_close(hdev->channel);
-
+	free_page((unsigned long)hbus);
 	return 0;
-}
-
-static int hv_pci_resume(struct hv_device *hdev)
-{
-	struct hv_pcibus_device *hbus = hv_get_drvdata(hdev);
-	enum pci_protocol_version_t version[1];
-	int ret;
-
-	hbus->state = hv_pcibus_init;
-
-	ret = vmbus_open(hdev->channel, pci_ring_size, pci_ring_size, NULL, 0,
-			 hv_pci_onchannelcallback, hbus);
-	if (ret)
-		return ret;
-
-	/* Only use the version that was in use before hibernation. */
-	version[0] = hbus->protocol_version;
-	ret = hv_pci_protocol_negotiation(hdev, version, 1);
-	if (ret)
-		goto out;
-
-	ret = hv_pci_query_relations(hdev);
-	if (ret)
-		goto out;
-
-	ret = hv_pci_enter_d0(hdev);
-	if (ret)
-		goto out;
-
-	ret = hv_send_resources_allocated(hdev);
-	if (ret)
-		goto out;
-
-	prepopulate_bars(hbus);
-
-	hbus->state = hv_pcibus_installed;
-	return 0;
-out:
-	vmbus_close(hdev->channel);
-	return ret;
 }
 
 static const struct hv_vmbus_device_id hv_pci_id_table[] = {
@@ -3256,8 +3108,6 @@ static struct hv_driver hv_pci_drv = {
 	.id_table	= hv_pci_id_table,
 	.probe		= hv_pci_probe,
 	.remove		= hv_pci_remove,
-	.suspend	= hv_pci_suspend,
-	.resume		= hv_pci_resume,
 };
 
 static void __exit exit_hv_pci_drv(void)

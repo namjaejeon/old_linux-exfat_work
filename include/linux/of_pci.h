@@ -2,10 +2,11 @@
 #ifndef __OF_PCI_H
 #define __OF_PCI_H
 
-#include <linux/types.h>
-#include <linux/errno.h>
+#include <linux/pci.h>
+#include <linux/msi.h>
 
 struct pci_dev;
+struct of_phandle_args;
 struct device_node;
 
 #if IS_ENABLED(CONFIG_OF) && IS_ENABLED(CONFIG_PCI)

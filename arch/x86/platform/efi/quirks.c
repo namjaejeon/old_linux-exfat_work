@@ -16,7 +16,6 @@
 #include <asm/efi.h>
 #include <asm/uv/uv.h>
 #include <asm/cpu_device_id.h>
-#include <asm/realmode.h>
 #include <asm/reboot.h>
 
 #define EFI_MIN_RESERVE 5120
@@ -244,7 +243,7 @@ EXPORT_SYMBOL_GPL(efi_query_variable_store);
  */
 void __init efi_arch_mem_reserve(phys_addr_t addr, u64 size)
 {
-	struct efi_memory_map_data data = { 0 };
+	phys_addr_t new_phys, new_size;
 	struct efi_mem_range mr;
 	efi_memory_desc_t md;
 	int num_entries;
@@ -261,6 +260,10 @@ void __init efi_arch_mem_reserve(phys_addr_t addr, u64 size)
 		return;
 	}
 
+	/* No need to reserve regions that will never be freed. */
+	if (md.attribute & EFI_MEMORY_RUNTIME)
+		return;
+
 	size += addr % EFI_PAGE_SIZE;
 	size = round_up(size, EFI_PAGE_SIZE);
 	addr = round_down(addr, EFI_PAGE_SIZE);
@@ -272,23 +275,24 @@ void __init efi_arch_mem_reserve(phys_addr_t addr, u64 size)
 	num_entries = efi_memmap_split_count(&md, &mr.range);
 	num_entries += efi.memmap.nr_map;
 
-	if (efi_memmap_alloc(num_entries, &data) != 0) {
+	new_size = efi.memmap.desc_size * num_entries;
+
+	new_phys = efi_memmap_alloc(num_entries);
+	if (!new_phys) {
 		pr_err("Could not allocate boot services memmap\n");
 		return;
 	}
 
-	new = early_memremap(data.phys_map, data.size);
+	new = early_memremap(new_phys, new_size);
 	if (!new) {
 		pr_err("Failed to map new boot services memmap\n");
 		return;
 	}
 
 	efi_memmap_insert(&efi.memmap, new, &mr);
-	early_memunmap(new, data.size);
+	early_memunmap(new, new_size);
 
-	efi_memmap_install(&data);
-	e820__range_update(addr, size, E820_TYPE_RAM, E820_TYPE_RESERVED);
-	e820__update_table(e820_table);
+	efi_memmap_install(new_phys, num_entries);
 }
 
 /*
@@ -315,9 +319,6 @@ static __init bool can_free_region(u64 start, u64 size)
 void __init efi_reserve_boot_services(void)
 {
 	efi_memory_desc_t *md;
-
-	if (!efi_enabled(EFI_MEMMAP))
-		return;
 
 	for_each_efi_memory_desc(md) {
 		u64 start = md->phys_addr;
@@ -382,10 +383,10 @@ static void __init efi_unmap_pages(efi_memory_desc_t *md)
 
 	/*
 	 * To Do: Remove this check after adding functionality to unmap EFI boot
-	 * services code/data regions from direct mapping area because the UV1
-	 * memory map maps EFI regions in swapper_pg_dir.
+	 * services code/data regions from direct mapping area because
+	 * "efi=old_map" maps EFI regions in swapper_pg_dir.
 	 */
-	if (efi_have_uv1_memmap())
+	if (efi_enabled(EFI_OLD_MEMMAP))
 		return;
 
 	/*
@@ -393,7 +394,7 @@ static void __init efi_unmap_pages(efi_memory_desc_t *md)
 	 * EFI runtime calls, hence don't unmap EFI boot services code/data
 	 * regions.
 	 */
-	if (efi_is_mixed())
+	if (!efi_is_native())
 		return;
 
 	if (kernel_unmap_pages_in_pgd(pgd, pa, md->num_pages))
@@ -405,7 +406,7 @@ static void __init efi_unmap_pages(efi_memory_desc_t *md)
 
 void __init efi_free_boot_services(void)
 {
-	struct efi_memory_map_data data = { 0 };
+	phys_addr_t new_phys, new_size;
 	efi_memory_desc_t *md;
 	int num_entries = 0;
 	void *new, *new_md;
@@ -460,12 +461,14 @@ void __init efi_free_boot_services(void)
 	if (!num_entries)
 		return;
 
-	if (efi_memmap_alloc(num_entries, &data) != 0) {
+	new_size = efi.memmap.desc_size * num_entries;
+	new_phys = efi_memmap_alloc(num_entries);
+	if (!new_phys) {
 		pr_err("Failed to allocate new EFI memmap\n");
 		return;
 	}
 
-	new = memremap(data.phys_map, data.size, MEMREMAP_WB);
+	new = memremap(new_phys, new_size, MEMREMAP_WB);
 	if (!new) {
 		pr_err("Failed to map new EFI memmap\n");
 		return;
@@ -489,7 +492,7 @@ void __init efi_free_boot_services(void)
 
 	memunmap(new);
 
-	if (efi_memmap_install(&data) != 0) {
+	if (efi_memmap_install(new_phys, num_entries)) {
 		pr_err("Could not install new EFI memmap\n");
 		return;
 	}
@@ -554,7 +557,7 @@ out:
 	return ret;
 }
 
-static const struct dmi_system_id sgi_uv1_dmi[] __initconst = {
+static const struct dmi_system_id sgi_uv1_dmi[] = {
 	{ NULL, "SGI UV1",
 		{	DMI_MATCH(DMI_PRODUCT_NAME,	"Stoutland Platform"),
 			DMI_MATCH(DMI_PRODUCT_VERSION,	"1.0"),
@@ -577,15 +580,8 @@ void __init efi_apply_memmap_quirks(void)
 	}
 
 	/* UV2+ BIOS has a fix for this issue.  UV1 still needs the quirk. */
-	if (dmi_check_system(sgi_uv1_dmi)) {
-		if (IS_ENABLED(CONFIG_X86_UV)) {
-			set_bit(EFI_UV1_MEMMAP, &efi.flags);
-		} else {
-			pr_warn("EFI runtime disabled, needs CONFIG_X86_UV=y on UV1\n");
-			clear_bit(EFI_RUNTIME_SERVICES, &efi.flags);
-			efi_memmap_unmap();
-		}
-	}
+	if (dmi_check_system(sgi_uv1_dmi))
+		set_bit(EFI_OLD_MEMMAP, &efi.flags);
 }
 
 /*
@@ -723,7 +719,7 @@ void efi_recover_from_page_fault(unsigned long phys_addr)
 	/*
 	 * Make sure that an efi runtime service caused the page fault.
 	 * "efi_mm" cannot be used to check if the page fault had occurred
-	 * in the firmware context because the UV1 memmap doesn't use efi_pgd.
+	 * in the firmware context because efi=old_map doesn't use efi_pgd.
 	 */
 	if (efi_rts_work.efi_rts_id == EFI_NONE)
 		return;

@@ -12,7 +12,6 @@
 #include "xfs_trans.h"
 #include "xfs_bmap.h"
 #include "xfs_iomap.h"
-#include "xfs_pnfs.h"
 
 /*
  * Ensure that we do not have any outstanding pNFS layouts that can be used by
@@ -60,7 +59,7 @@ xfs_fs_get_uuid(
 
 	printk_once(KERN_NOTICE
 "XFS (%s): using experimental pNFS feature, use at your own risk!\n",
-		mp->m_super->s_id);
+		mp->m_fsname);
 
 	if (*len < sizeof(uuid_t))
 		return -EINVAL;
@@ -143,38 +142,43 @@ xfs_fs_map_blocks(
 	lock_flags = xfs_ilock_data_map_shared(ip);
 	error = xfs_bmapi_read(ip, offset_fsb, end_fsb - offset_fsb,
 				&imap, &nimaps, bmapi_flags);
+	xfs_iunlock(ip, lock_flags);
 
-	ASSERT(!nimaps || imap.br_startblock != DELAYSTARTBLOCK);
+	if (error)
+		goto out_unlock;
 
-	if (!error && write &&
-	    (!nimaps || imap.br_startblock == HOLESTARTBLOCK)) {
-		if (offset + length > XFS_ISIZE(ip))
-			end_fsb = xfs_iomap_eof_align_last_fsb(ip, end_fsb);
-		else if (nimaps && imap.br_startblock == HOLESTARTBLOCK)
-			end_fsb = min(end_fsb, imap.br_startoff +
-					       imap.br_blockcount);
-		xfs_iunlock(ip, lock_flags);
+	if (write) {
+		enum xfs_prealloc_flags	flags = 0;
 
-		error = xfs_iomap_write_direct(ip, offset_fsb,
-				end_fsb - offset_fsb, &imap);
+		ASSERT(imap.br_startblock != DELAYSTARTBLOCK);
+
+		if (!nimaps || imap.br_startblock == HOLESTARTBLOCK) {
+			/*
+			 * xfs_iomap_write_direct() expects to take ownership of
+			 * the shared ilock.
+			 */
+			xfs_ilock(ip, XFS_ILOCK_SHARED);
+			error = xfs_iomap_write_direct(ip, offset, length,
+						       &imap, nimaps);
+			if (error)
+				goto out_unlock;
+
+			/*
+			 * Ensure the next transaction is committed
+			 * synchronously so that the blocks allocated and
+			 * handed out to the client are guaranteed to be
+			 * present even after a server crash.
+			 */
+			flags |= XFS_PREALLOC_SET | XFS_PREALLOC_SYNC;
+		}
+
+		error = xfs_update_prealloc_flags(ip, flags);
 		if (error)
 			goto out_unlock;
-
-		/*
-		 * Ensure the next transaction is committed synchronously so
-		 * that the blocks allocated and handed out to the client are
-		 * guaranteed to be present even after a server crash.
-		 */
-		error = xfs_update_prealloc_flags(ip,
-				XFS_PREALLOC_SET | XFS_PREALLOC_SYNC);
-		if (error)
-			goto out_unlock;
-	} else {
-		xfs_iunlock(ip, lock_flags);
 	}
 	xfs_iunlock(ip, XFS_IOLOCK_EXCL);
 
-	error = xfs_bmbt_to_iomap(ip, iomap, &imap, 0);
+	error = xfs_bmbt_to_iomap(ip, iomap, &imap, false);
 	*device_generation = mp->m_generation;
 	return error;
 out_unlock:

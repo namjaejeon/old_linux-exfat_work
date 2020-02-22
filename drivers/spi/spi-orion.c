@@ -467,7 +467,8 @@ orion_spi_write_read(struct spi_device *spi, struct spi_transfer *xfer)
 			if (orion_spi_write_read_8bit(spi, &tx, &rx) < 0)
 				goto out;
 			count--;
-			spi_delay_exec(&xfer->word_delay, xfer);
+			if (xfer->word_delay_usecs)
+				udelay(xfer->word_delay_usecs);
 		} while (count);
 	} else if (word_len == 16) {
 		const u16 *tx = xfer->tx_buf;
@@ -477,7 +478,8 @@ orion_spi_write_read(struct spi_device *spi, struct spi_transfer *xfer)
 			if (orion_spi_write_read_16bit(spi, &tx, &rx) < 0)
 				goto out;
 			count -= 2;
-			spi_delay_exec(&xfer->word_delay, xfer);
+			if (xfer->word_delay_usecs)
+				udelay(xfer->word_delay_usecs);
 		} while (count);
 	}
 
@@ -646,7 +648,8 @@ static int orion_spi_probe(struct platform_device *pdev)
 
 	/* The following clock is only used by some SoCs */
 	spi->axi_clk = devm_clk_get(&pdev->dev, "axi");
-	if (PTR_ERR(spi->axi_clk) == -EPROBE_DEFER) {
+	if (IS_ERR(spi->axi_clk) &&
+	    PTR_ERR(spi->axi_clk) == -EPROBE_DEFER) {
 		status = -EPROBE_DEFER;
 		goto out_rel_clk;
 	}
@@ -768,6 +771,9 @@ static int orion_spi_probe(struct platform_device *pdev)
 	status = orion_spi_reset(spi);
 	if (status < 0)
 		goto out_rel_pm;
+
+	pm_runtime_mark_last_busy(&pdev->dev);
+	pm_runtime_put_autosuspend(&pdev->dev);
 
 	master->dev.of_node = pdev->dev.of_node;
 	status = spi_register_master(master);

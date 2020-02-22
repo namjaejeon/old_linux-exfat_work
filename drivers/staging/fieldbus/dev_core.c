@@ -23,6 +23,9 @@ static dev_t fieldbus_devt;
 static DEFINE_IDA(fieldbus_ida);
 static DEFINE_MUTEX(fieldbus_mtx);
 
+static const char ctrl_enabled[] = "enabled";
+static const char ctrl_disabled[] = "disabled";
+
 static ssize_t online_show(struct device *dev, struct device_attribute *attr,
 			   char *buf)
 {

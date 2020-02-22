@@ -10,7 +10,6 @@
 #include <linux/module.h>
 #include <linux/rio.h>
 #include <linux/rio_ids.h>
-#include <linux/rio_drv.h>
 
 #include "rio.h"
 

@@ -469,27 +469,22 @@ void dce110_timing_generator_set_drr(
 
 void dce110_timing_generator_set_static_screen_control(
 	struct timing_generator *tg,
-	uint32_t event_triggers,
-	uint32_t num_frames)
+	uint32_t value)
 {
 	struct dce110_timing_generator *tg110 = DCE110TG_FROM_TG(tg);
 	uint32_t static_screen_cntl = 0;
 	uint32_t addr = 0;
 
-	// By register spec, it only takes 8 bit value
-	if (num_frames > 0xFF)
-		num_frames = 0xFF;
-
 	addr = CRTC_REG(mmCRTC_STATIC_SCREEN_CONTROL);
 	static_screen_cntl = dm_read_reg(tg->ctx, addr);
 
 	set_reg_field_value(static_screen_cntl,
-				event_triggers,
+				value,
 				CRTC_STATIC_SCREEN_CONTROL,
 				CRTC_STATIC_SCREEN_EVENT_MASK);
 
 	set_reg_field_value(static_screen_cntl,
-				num_frames,
+				2,
 				CRTC_STATIC_SCREEN_CONTROL,
 				CRTC_STATIC_SCREEN_FRAME_COUNT);
 

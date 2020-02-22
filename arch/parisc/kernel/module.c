@@ -43,7 +43,6 @@
 #include <linux/elf.h>
 #include <linux/vmalloc.h>
 #include <linux/fs.h>
-#include <linux/ftrace.h>
 #include <linux/string.h>
 #include <linux/kernel.h>
 #include <linux/bug.h>
@@ -863,7 +862,7 @@ int module_finalize(const Elf_Ehdr *hdr,
 	const char *strtab = NULL;
 	const Elf_Shdr *s;
 	char *secstrings;
-	int symindex = -1;
+	int err, symindex = -1;
 	Elf_Sym *newptr, *oldptr;
 	Elf_Shdr *symhdr = NULL;
 #ifdef DEBUG
@@ -947,13 +946,11 @@ int module_finalize(const Elf_Ehdr *hdr,
 			/* patch .altinstructions */
 			apply_alternatives(aseg, aseg + s->sh_size, me->name);
 
-#ifdef CONFIG_DYNAMIC_FTRACE
 		/* For 32 bit kernels we're compiling modules with
 		 * -ffunction-sections so we must relocate the addresses in the
-		 *  ftrace callsite section.
+		 *__mcount_loc section.
 		 */
-		if (symindex != -1 && !strcmp(secname, FTRACE_CALLSITE_SECTION)) {
-			int err;
+		if (symindex != -1 && !strcmp(secname, "__mcount_loc")) {
 			if (s->sh_type == SHT_REL)
 				err = apply_relocate((Elf_Shdr *)sechdrs,
 							strtab, symindex,
@@ -965,7 +962,6 @@ int module_finalize(const Elf_Ehdr *hdr,
 			if (err)
 				return err;
 		}
-#endif
 	}
 	return 0;
 }

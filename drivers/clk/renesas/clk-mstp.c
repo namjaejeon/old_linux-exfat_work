@@ -189,8 +189,10 @@ static void __init cpg_mstp_clocks_init(struct device_node *np)
 	unsigned int i;
 
 	group = kzalloc(struct_size(group, clks, MSTP_MAX_CLOCKS), GFP_KERNEL);
-	if (!group)
+	if (group == NULL) {
+		kfree(group);
 		return;
+	}
 
 	clks = group->clks;
 	spin_lock_init(&group->lock);

@@ -21,6 +21,7 @@
 #include <mach/common.h>
 #include <mach/cputype.h>
 #include <mach/da8xx.h>
+#include <mach/time.h>
 
 #include "asp.h"
 #include "cpuidle.h"

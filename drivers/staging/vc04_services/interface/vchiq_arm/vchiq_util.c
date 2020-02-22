@@ -24,9 +24,9 @@ int vchiu_queue_init(struct vchiu_queue *queue, int size)
 				 GFP_KERNEL);
 	if (!queue->storage) {
 		vchiu_queue_delete(queue);
-		return -ENOMEM;
+		return 0;
 	}
-	return 0;
+	return 1;
 }
 
 void vchiu_queue_delete(struct vchiu_queue *queue)

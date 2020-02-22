@@ -875,9 +875,11 @@ static const struct snd_pcm_hardware mtk_btcvsd_hardware = {
 	.fifo_size = 0,
 };
 
-static int mtk_pcm_btcvsd_open(struct snd_soc_component *component,
-			       struct snd_pcm_substream *substream)
+static int mtk_pcm_btcvsd_open(struct snd_pcm_substream *substream)
 {
+	struct snd_soc_pcm_runtime *rtd = substream->private_data;
+	struct snd_soc_component *component =
+		snd_soc_rtdcom_lookup(rtd, BTCVSD_SND_NAME);
 	struct mtk_btcvsd_snd *bt = snd_soc_component_get_drvdata(component);
 	int ret;
 
@@ -897,9 +899,11 @@ static int mtk_pcm_btcvsd_open(struct snd_soc_component *component,
 	return ret;
 }
 
-static int mtk_pcm_btcvsd_close(struct snd_soc_component *component,
-				struct snd_pcm_substream *substream)
+static int mtk_pcm_btcvsd_close(struct snd_pcm_substream *substream)
 {
+	struct snd_soc_pcm_runtime *rtd = substream->private_data;
+	struct snd_soc_component *component =
+		snd_soc_rtdcom_lookup(rtd, BTCVSD_SND_NAME);
 	struct mtk_btcvsd_snd *bt = snd_soc_component_get_drvdata(component);
 	struct mtk_btcvsd_snd_stream *bt_stream = get_bt_stream(bt, substream);
 
@@ -910,10 +914,12 @@ static int mtk_pcm_btcvsd_close(struct snd_soc_component *component,
 	return 0;
 }
 
-static int mtk_pcm_btcvsd_hw_params(struct snd_soc_component *component,
-				    struct snd_pcm_substream *substream,
+static int mtk_pcm_btcvsd_hw_params(struct snd_pcm_substream *substream,
 				    struct snd_pcm_hw_params *hw_params)
 {
+	struct snd_soc_pcm_runtime *rtd = substream->private_data;
+	struct snd_soc_component *component =
+		snd_soc_rtdcom_lookup(rtd, BTCVSD_SND_NAME);
 	struct mtk_btcvsd_snd *bt = snd_soc_component_get_drvdata(component);
 
 	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK &&
@@ -928,9 +934,11 @@ static int mtk_pcm_btcvsd_hw_params(struct snd_soc_component *component,
 	return 0;
 }
 
-static int mtk_pcm_btcvsd_hw_free(struct snd_soc_component *component,
-				  struct snd_pcm_substream *substream)
+static int mtk_pcm_btcvsd_hw_free(struct snd_pcm_substream *substream)
 {
+	struct snd_soc_pcm_runtime *rtd = substream->private_data;
+	struct snd_soc_component *component =
+		snd_soc_rtdcom_lookup(rtd, BTCVSD_SND_NAME);
 	struct mtk_btcvsd_snd *bt = snd_soc_component_get_drvdata(component);
 
 	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK)
@@ -939,9 +947,11 @@ static int mtk_pcm_btcvsd_hw_free(struct snd_soc_component *component,
 	return 0;
 }
 
-static int mtk_pcm_btcvsd_prepare(struct snd_soc_component *component,
-				  struct snd_pcm_substream *substream)
+static int mtk_pcm_btcvsd_prepare(struct snd_pcm_substream *substream)
 {
+	struct snd_soc_pcm_runtime *rtd = substream->private_data;
+	struct snd_soc_component *component =
+		snd_soc_rtdcom_lookup(rtd, BTCVSD_SND_NAME);
 	struct mtk_btcvsd_snd *bt = snd_soc_component_get_drvdata(component);
 	struct mtk_btcvsd_snd_stream *bt_stream = get_bt_stream(bt, substream);
 
@@ -951,9 +961,11 @@ static int mtk_pcm_btcvsd_prepare(struct snd_soc_component *component,
 	return 0;
 }
 
-static int mtk_pcm_btcvsd_trigger(struct snd_soc_component *component,
-				  struct snd_pcm_substream *substream, int cmd)
+static int mtk_pcm_btcvsd_trigger(struct snd_pcm_substream *substream, int cmd)
 {
+	struct snd_soc_pcm_runtime *rtd = substream->private_data;
+	struct snd_soc_component *component =
+		snd_soc_rtdcom_lookup(rtd, BTCVSD_SND_NAME);
 	struct mtk_btcvsd_snd *bt = snd_soc_component_get_drvdata(component);
 	struct mtk_btcvsd_snd_stream *bt_stream = get_bt_stream(bt, substream);
 	int stream = substream->stream;
@@ -981,10 +993,12 @@ static int mtk_pcm_btcvsd_trigger(struct snd_soc_component *component,
 	}
 }
 
-static snd_pcm_uframes_t mtk_pcm_btcvsd_pointer(
-	struct snd_soc_component *component,
-	struct snd_pcm_substream *substream)
+static snd_pcm_uframes_t mtk_pcm_btcvsd_pointer
+	(struct snd_pcm_substream *substream)
 {
+	struct snd_soc_pcm_runtime *rtd = substream->private_data;
+	struct snd_soc_component *component =
+		snd_soc_rtdcom_lookup(rtd, BTCVSD_SND_NAME);
 	struct mtk_btcvsd_snd *bt = snd_soc_component_get_drvdata(component);
 	struct mtk_btcvsd_snd_stream *bt_stream;
 	snd_pcm_uframes_t frame = 0;
@@ -1030,11 +1044,13 @@ static snd_pcm_uframes_t mtk_pcm_btcvsd_pointer(
 	return frame;
 }
 
-static int mtk_pcm_btcvsd_copy(struct snd_soc_component *component,
-			       struct snd_pcm_substream *substream,
+static int mtk_pcm_btcvsd_copy(struct snd_pcm_substream *substream,
 			       int channel, unsigned long pos,
 			       void __user *buf, unsigned long count)
 {
+	struct snd_soc_pcm_runtime *rtd = substream->private_data;
+	struct snd_soc_component *component =
+		snd_soc_rtdcom_lookup(rtd, BTCVSD_SND_NAME);
 	struct mtk_btcvsd_snd *bt = snd_soc_component_get_drvdata(component);
 
 	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK)
@@ -1044,6 +1060,18 @@ static int mtk_pcm_btcvsd_copy(struct snd_soc_component *component,
 
 	return 0;
 }
+
+static struct snd_pcm_ops mtk_btcvsd_ops = {
+	.open = mtk_pcm_btcvsd_open,
+	.close = mtk_pcm_btcvsd_close,
+	.ioctl = snd_pcm_lib_ioctl,
+	.hw_params = mtk_pcm_btcvsd_hw_params,
+	.hw_free = mtk_pcm_btcvsd_hw_free,
+	.prepare = mtk_pcm_btcvsd_prepare,
+	.trigger = mtk_pcm_btcvsd_trigger,
+	.pointer = mtk_pcm_btcvsd_pointer,
+	.copy_user = mtk_pcm_btcvsd_copy,
+};
 
 /* kcontrol */
 static const char *const btsco_band_str[] = {"NB", "WB"};
@@ -1267,16 +1295,9 @@ static int mtk_btcvsd_snd_component_probe(struct snd_soc_component *component)
 }
 
 static const struct snd_soc_component_driver mtk_btcvsd_snd_platform = {
-	.name		= BTCVSD_SND_NAME,
-	.probe		= mtk_btcvsd_snd_component_probe,
-	.open		= mtk_pcm_btcvsd_open,
-	.close		= mtk_pcm_btcvsd_close,
-	.hw_params	= mtk_pcm_btcvsd_hw_params,
-	.hw_free	= mtk_pcm_btcvsd_hw_free,
-	.prepare	= mtk_pcm_btcvsd_prepare,
-	.trigger	= mtk_pcm_btcvsd_trigger,
-	.pointer	= mtk_pcm_btcvsd_pointer,
-	.copy_user	= mtk_pcm_btcvsd_copy,
+	.name = BTCVSD_SND_NAME,
+	.ops = &mtk_btcvsd_ops,
+	.probe = mtk_btcvsd_snd_component_probe,
 };
 
 static int mtk_btcvsd_snd_probe(struct platform_device *pdev)

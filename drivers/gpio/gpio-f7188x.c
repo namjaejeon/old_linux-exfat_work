@@ -250,10 +250,7 @@ static int f7188x_gpio_get_direction(struct gpio_chip *chip, unsigned offset)
 
 	superio_exit(sio->addr);
 
-	if (dir & 1 << offset)
-		return GPIO_LINE_DIRECTION_OUT;
-
-	return GPIO_LINE_DIRECTION_IN;
+	return !(dir & 1 << offset);
 }
 
 static int f7188x_gpio_direction_in(struct gpio_chip *chip, unsigned offset)

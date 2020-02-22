@@ -157,6 +157,10 @@ static long mdp4_round_pixclk(struct msm_kms *kms, unsigned long rate,
 	}
 }
 
+static const char * const iommu_ports[] = {
+	"mdp_port0_cb0", "mdp_port1_cb0",
+};
+
 static void mdp4_destroy(struct msm_kms *kms)
 {
 	struct mdp4_kms *mdp4_kms = to_mdp4_kms(to_mdp_kms(kms));
@@ -168,7 +172,8 @@ static void mdp4_destroy(struct msm_kms *kms)
 	drm_gem_object_put_unlocked(mdp4_kms->blank_cursor_bo);
 
 	if (aspace) {
-		aspace->mmu->funcs->detach(aspace->mmu);
+		aspace->mmu->funcs->detach(aspace->mmu,
+				iommu_ports, ARRAY_SIZE(iommu_ports));
 		msm_gem_address_space_put(aspace);
 	}
 
@@ -519,7 +524,8 @@ struct msm_kms *mdp4_kms_init(struct drm_device *dev)
 
 		kms->aspace = aspace;
 
-		ret = aspace->mmu->funcs->attach(aspace->mmu);
+		ret = aspace->mmu->funcs->attach(aspace->mmu, iommu_ports,
+				ARRAY_SIZE(iommu_ports));
 		if (ret)
 			goto fail;
 	} else {

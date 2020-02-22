@@ -1285,7 +1285,7 @@ out:
 	return rc;
 }
 
-static void wl3501_tx_timeout(struct net_device *dev, unsigned int txqueue)
+static void wl3501_tx_timeout(struct net_device *dev)
 {
 	struct net_device_stats *stats = &dev->stats;
 	int rc;

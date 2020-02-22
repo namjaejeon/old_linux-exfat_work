@@ -10,6 +10,8 @@
 #ifndef LINUX_LOCKD_LOCKD_H
 #define LINUX_LOCKD_LOCKD_H
 
+#ifdef __KERNEL__
+
 #include <linux/in.h>
 #include <linux/in6.h>
 #include <net/ipv6.h>
@@ -370,5 +372,7 @@ static inline int nlm_compare_locks(const struct file_lock *fl1,
 }
 
 extern const struct lock_manager_operations nlmsvc_lock_operations;
+
+#endif /* __KERNEL__ */
 
 #endif /* LINUX_LOCKD_LOCKD_H */

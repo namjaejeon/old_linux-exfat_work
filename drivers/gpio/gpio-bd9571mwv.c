@@ -37,10 +37,8 @@ static int bd9571mwv_gpio_get_direction(struct gpio_chip *chip,
 	ret = regmap_read(gpio->bd->regmap, BD9571MWV_GPIO_DIR, &val);
 	if (ret < 0)
 		return ret;
-	if (val & BIT(offset))
-		return GPIO_LINE_DIRECTION_IN;
 
-	return GPIO_LINE_DIRECTION_OUT;
+	return val & BIT(offset);
 }
 
 static int bd9571mwv_gpio_direction_input(struct gpio_chip *chip,

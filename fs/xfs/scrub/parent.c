@@ -32,10 +32,8 @@ xchk_setup_parent(
 
 struct xchk_parent_ctx {
 	struct dir_context	dc;
-	struct xfs_scrub	*sc;
 	xfs_ino_t		ino;
 	xfs_nlink_t		nlink;
-	bool			cancelled;
 };
 
 /* Look for a single entry in a directory pointing to an inode. */
@@ -49,21 +47,11 @@ xchk_parent_actor(
 	unsigned		type)
 {
 	struct xchk_parent_ctx	*spc;
-	int			error = 0;
 
 	spc = container_of(dc, struct xchk_parent_ctx, dc);
 	if (spc->ino == ino)
 		spc->nlink++;
-
-	/*
-	 * If we're facing a fatal signal, bail out.  Store the cancellation
-	 * status separately because the VFS readdir code squashes error codes
-	 * into short directory reads.
-	 */
-	if (xchk_should_terminate(spc->sc, &error))
-		spc->cancelled = true;
-
-	return error;
+	return 0;
 }
 
 /* Count the number of dentries in the parent dir that point to this inode. */
@@ -74,9 +62,10 @@ xchk_parent_count_parent_dentries(
 	xfs_nlink_t		*nlink)
 {
 	struct xchk_parent_ctx	spc = {
-		.dc.actor	= xchk_parent_actor,
-		.ino		= sc->ip->i_ino,
-		.sc		= sc,
+		.dc.actor = xchk_parent_actor,
+		.dc.pos = 0,
+		.ino = sc->ip->i_ino,
+		.nlink = 0,
 	};
 	size_t			bufsize;
 	loff_t			oldpos;
@@ -91,7 +80,7 @@ xchk_parent_count_parent_dentries(
 	 */
 	lock_mode = xfs_ilock_data_map_shared(parent);
 	if (parent->i_d.di_nextents > 0)
-		error = xfs_dir3_data_readahead(parent, 0, 0);
+		error = xfs_dir3_data_readahead(parent, 0, -1);
 	xfs_iunlock(parent, lock_mode);
 	if (error)
 		return error;
@@ -108,10 +97,6 @@ xchk_parent_count_parent_dentries(
 		error = xfs_readdir(sc->tp, parent, &spc.dc, bufsize);
 		if (error)
 			goto out;
-		if (spc.cancelled) {
-			error = -EAGAIN;
-			goto out;
-		}
 		if (oldpos == spc.dc.pos)
 			break;
 		oldpos = spc.dc.pos;

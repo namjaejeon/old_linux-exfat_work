@@ -220,7 +220,8 @@ static bool dpu_encoder_phys_vid_mode_fixup(
 		const struct drm_display_mode *mode,
 		struct drm_display_mode *adj_mode)
 {
-	DPU_DEBUG_VIDENC(phys_enc, "\n");
+	if (phys_enc)
+		DPU_DEBUG_VIDENC(phys_enc, "\n");
 
 	/*
 	 * Modifying mode has consequences when the mode comes back to us
@@ -238,7 +239,7 @@ static void dpu_encoder_phys_vid_setup_timing_engine(
 	unsigned long lock_flags;
 	struct dpu_hw_intf_cfg intf_cfg = { 0 };
 
-	if (!phys_enc->hw_ctl->ops.setup_intf_cfg) {
+	if (!phys_enc || !phys_enc->hw_ctl->ops.setup_intf_cfg) {
 		DPU_ERROR("invalid encoder %d\n", phys_enc != 0);
 		return;
 	}
@@ -279,14 +280,6 @@ static void dpu_encoder_phys_vid_setup_timing_engine(
 	phys_enc->hw_intf->ops.setup_timing_gen(phys_enc->hw_intf,
 			&timing_params, fmt);
 	phys_enc->hw_ctl->ops.setup_intf_cfg(phys_enc->hw_ctl, &intf_cfg);
-
-	/* setup which pp blk will connect to this intf */
-	if (phys_enc->hw_intf->ops.bind_pingpong_blk)
-		phys_enc->hw_intf->ops.bind_pingpong_blk(
-				phys_enc->hw_intf,
-				true,
-				phys_enc->hw_pp->idx);
-
 	spin_unlock_irqrestore(phys_enc->enc_spinlock, lock_flags);
 
 	programmable_fetch_config(phys_enc, &timing_params);
@@ -300,7 +293,12 @@ static void dpu_encoder_phys_vid_vblank_irq(void *arg, int irq_idx)
 	u32 flush_register = 0;
 	int new_cnt = -1, old_cnt = -1;
 
+	if (!phys_enc)
+		return;
+
 	hw_ctl = phys_enc->hw_ctl;
+	if (!hw_ctl)
+		return;
 
 	DPU_ATRACE_BEGIN("vblank_irq");
 
@@ -316,7 +314,7 @@ static void dpu_encoder_phys_vid_vblank_irq(void *arg, int irq_idx)
 	 * so we need to double-check with hw that it accepted the flush bits
 	 */
 	spin_lock_irqsave(phys_enc->enc_spinlock, lock_flags);
-	if (hw_ctl->ops.get_flush_register)
+	if (hw_ctl && hw_ctl->ops.get_flush_register)
 		flush_register = hw_ctl->ops.get_flush_register(hw_ctl);
 
 	if (!(flush_register & hw_ctl->ops.get_pending_flush(hw_ctl)))
@@ -336,6 +334,9 @@ static void dpu_encoder_phys_vid_vblank_irq(void *arg, int irq_idx)
 static void dpu_encoder_phys_vid_underrun_irq(void *arg, int irq_idx)
 {
 	struct dpu_encoder_phys *phys_enc = arg;
+
+	if (!phys_enc)
+		return;
 
 	if (phys_enc->parent_ops->handle_underrun_virt)
 		phys_enc->parent_ops->handle_underrun_virt(phys_enc->parent,
@@ -373,6 +374,11 @@ static void dpu_encoder_phys_vid_mode_set(
 		struct drm_display_mode *mode,
 		struct drm_display_mode *adj_mode)
 {
+	if (!phys_enc || !phys_enc->dpu_kms) {
+		DPU_ERROR("invalid encoder/kms\n");
+		return;
+	}
+
 	if (adj_mode) {
 		phys_enc->cached_mode = *adj_mode;
 		drm_mode_debug_printmodeline(adj_mode);
@@ -388,6 +394,11 @@ static int dpu_encoder_phys_vid_control_vblank_irq(
 {
 	int ret = 0;
 	int refcount;
+
+	if (!phys_enc) {
+		DPU_ERROR("invalid encoder\n");
+		return -EINVAL;
+	}
 
 	refcount = atomic_read(&phys_enc->vblank_refcount);
 
@@ -424,7 +435,6 @@ static void dpu_encoder_phys_vid_enable(struct dpu_encoder_phys *phys_enc)
 {
 	struct dpu_hw_ctl *ctl;
 	u32 flush_mask = 0;
-	u32 intf_flush_mask = 0;
 
 	ctl = phys_enc->hw_ctl;
 
@@ -449,18 +459,10 @@ static void dpu_encoder_phys_vid_enable(struct dpu_encoder_phys *phys_enc)
 	ctl->ops.get_bitmask_intf(ctl, &flush_mask, phys_enc->hw_intf->idx);
 	ctl->ops.update_pending_flush(ctl, flush_mask);
 
-	if (ctl->ops.get_bitmask_active_intf)
-		ctl->ops.get_bitmask_active_intf(ctl, &intf_flush_mask,
-			phys_enc->hw_intf->idx);
-
-	if (ctl->ops.update_pending_intf_flush)
-		ctl->ops.update_pending_intf_flush(ctl, intf_flush_mask);
-
 skip_flush:
 	DPU_DEBUG_VIDENC(phys_enc,
-		"update pending flush ctl %d flush_mask 0%x intf_mask 0x%x\n",
-		ctl->idx - CTL_0, flush_mask, intf_flush_mask);
-
+			 "update pending flush ctl %d flush_mask %x\n",
+			 ctl->idx - CTL_0, flush_mask);
 
 	/* ctl_flush & timing engine enable will be triggered by framework */
 	if (phys_enc->enable_state == DPU_ENC_DISABLED)
@@ -469,6 +471,11 @@ skip_flush:
 
 static void dpu_encoder_phys_vid_destroy(struct dpu_encoder_phys *phys_enc)
 {
+	if (!phys_enc) {
+		DPU_ERROR("invalid encoder\n");
+		return;
+	}
+
 	DPU_DEBUG_VIDENC(phys_enc, "\n");
 	kfree(phys_enc);
 }
@@ -485,6 +492,11 @@ static int dpu_encoder_phys_vid_wait_for_vblank(
 {
 	struct dpu_encoder_wait_info wait_info;
 	int ret;
+
+	if (!phys_enc) {
+		pr_err("invalid encoder\n");
+		return -EINVAL;
+	}
 
 	wait_info.wq = &phys_enc->pending_kickoff_wq;
 	wait_info.atomic_cnt = &phys_enc->pending_kickoff_cnt;
@@ -531,8 +543,13 @@ static void dpu_encoder_phys_vid_prepare_for_kickoff(
 	struct dpu_hw_ctl *ctl;
 	int rc;
 
+	if (!phys_enc) {
+		DPU_ERROR("invalid encoder/parameters\n");
+		return;
+	}
+
 	ctl = phys_enc->hw_ctl;
-	if (!ctl->ops.wait_reset_status)
+	if (!ctl || !ctl->ops.wait_reset_status)
 		return;
 
 	/*
@@ -549,15 +566,18 @@ static void dpu_encoder_phys_vid_prepare_for_kickoff(
 
 static void dpu_encoder_phys_vid_disable(struct dpu_encoder_phys *phys_enc)
 {
+	struct msm_drm_private *priv;
 	unsigned long lock_flags;
 	int ret;
 
-	if (!phys_enc->parent || !phys_enc->parent->dev) {
+	if (!phys_enc || !phys_enc->parent || !phys_enc->parent->dev ||
+			!phys_enc->parent->dev->dev_private) {
 		DPU_ERROR("invalid encoder/device\n");
 		return;
 	}
+	priv = phys_enc->parent->dev->dev_private;
 
-	if (!phys_enc->hw_intf) {
+	if (!phys_enc->hw_intf || !phys_enc->hw_ctl) {
 		DPU_ERROR("invalid hw_intf %d hw_ctl %d\n",
 				phys_enc->hw_intf != 0, phys_enc->hw_ctl != 0);
 		return;
@@ -622,6 +642,9 @@ static void dpu_encoder_phys_vid_irq_control(struct dpu_encoder_phys *phys_enc,
 {
 	int ret;
 
+	if (!phys_enc)
+		return;
+
 	trace_dpu_enc_phys_vid_irq_ctrl(DRMID(phys_enc->parent),
 			    phys_enc->hw_intf->idx - INTF_0,
 			    enable,
@@ -642,6 +665,9 @@ static void dpu_encoder_phys_vid_irq_control(struct dpu_encoder_phys *phys_enc,
 static int dpu_encoder_phys_vid_get_line_count(
 		struct dpu_encoder_phys *phys_enc)
 {
+	if (!phys_enc)
+		return -EINVAL;
+
 	if (!dpu_encoder_phys_vid_is_master(phys_enc))
 		return -EINVAL;
 

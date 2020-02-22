@@ -1,4 +1,3 @@
-// SPDX-License-Identifier: GPL-2.0-only
 /*
  * TI VPFE capture Driver
  *
@@ -6,6 +5,19 @@
  *
  * Benoit Parrot <bparrot@ti.com>
  * Lad, Prabhakar <prabhakar.csengg@gmail.com>
+ *
+ * This program is free software; you may redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; version 2 of the License.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
+ * BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
+ * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+ * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
  */
 
 #include <linux/delay.h>
@@ -57,64 +69,125 @@ static const struct vpfe_standard vpfe_standards[] = {
 	{V4L2_STD_625_50, 720, 576, {54, 59}, 1},
 };
 
-static struct vpfe_fmt formats[VPFE_NUM_FORMATS] = {
+struct bus_format {
+	unsigned int width;
+	unsigned int bpp;
+};
+
+/*
+ * struct vpfe_fmt - VPFE media bus format information
+ * @code: V4L2 media bus format code
+ * @shifted: V4L2 media bus format code for the same pixel layout but
+ *	shifted to be 8 bits per pixel. =0 if format is not shiftable.
+ * @pixelformat: V4L2 pixel format FCC identifier
+ * @width: Bits per pixel (when transferred over a bus)
+ * @bpp: Bytes per pixel (when stored in memory)
+ * @supported: Indicates format supported by subdev
+ */
+struct vpfe_fmt {
+	u32 fourcc;
+	u32 code;
+	struct bus_format l;
+	struct bus_format s;
+	bool supported;
+	u32 index;
+};
+
+static struct vpfe_fmt formats[] = {
 	{
 		.fourcc		= V4L2_PIX_FMT_YUYV,
 		.code		= MEDIA_BUS_FMT_YUYV8_2X8,
-		.bitsperpixel	= 16,
+		.l.width	= 10,
+		.l.bpp		= 4,
+		.s.width	= 8,
+		.s.bpp		= 2,
+		.supported	= false,
 	}, {
 		.fourcc		= V4L2_PIX_FMT_UYVY,
 		.code		= MEDIA_BUS_FMT_UYVY8_2X8,
-		.bitsperpixel	= 16,
+		.l.width	= 10,
+		.l.bpp		= 4,
+		.s.width	= 8,
+		.s.bpp		= 2,
+		.supported	= false,
 	}, {
 		.fourcc		= V4L2_PIX_FMT_YVYU,
 		.code		= MEDIA_BUS_FMT_YVYU8_2X8,
-		.bitsperpixel	= 16,
+		.l.width	= 10,
+		.l.bpp		= 4,
+		.s.width	= 8,
+		.s.bpp		= 2,
+		.supported	= false,
 	}, {
 		.fourcc		= V4L2_PIX_FMT_VYUY,
 		.code		= MEDIA_BUS_FMT_VYUY8_2X8,
-		.bitsperpixel	= 16,
+		.l.width	= 10,
+		.l.bpp		= 4,
+		.s.width	= 8,
+		.s.bpp		= 2,
+		.supported	= false,
 	}, {
 		.fourcc		= V4L2_PIX_FMT_SBGGR8,
 		.code		= MEDIA_BUS_FMT_SBGGR8_1X8,
-		.bitsperpixel	= 8,
+		.l.width	= 10,
+		.l.bpp		= 2,
+		.s.width	= 8,
+		.s.bpp		= 1,
+		.supported	= false,
 	}, {
 		.fourcc		= V4L2_PIX_FMT_SGBRG8,
 		.code		= MEDIA_BUS_FMT_SGBRG8_1X8,
-		.bitsperpixel	= 8,
+		.l.width	= 10,
+		.l.bpp		= 2,
+		.s.width	= 8,
+		.s.bpp		= 1,
+		.supported	= false,
 	}, {
 		.fourcc		= V4L2_PIX_FMT_SGRBG8,
 		.code		= MEDIA_BUS_FMT_SGRBG8_1X8,
-		.bitsperpixel	= 8,
+		.l.width	= 10,
+		.l.bpp		= 2,
+		.s.width	= 8,
+		.s.bpp		= 1,
+		.supported	= false,
 	}, {
 		.fourcc		= V4L2_PIX_FMT_SRGGB8,
 		.code		= MEDIA_BUS_FMT_SRGGB8_1X8,
-		.bitsperpixel	= 8,
+		.l.width	= 10,
+		.l.bpp		= 2,
+		.s.width	= 8,
+		.s.bpp		= 1,
+		.supported	= false,
 	}, {
 		.fourcc		= V4L2_PIX_FMT_RGB565,
 		.code		= MEDIA_BUS_FMT_RGB565_2X8_LE,
-		.bitsperpixel	= 16,
+		.l.width	= 10,
+		.l.bpp		= 4,
+		.s.width	= 8,
+		.s.bpp		= 2,
+		.supported	= false,
 	}, {
 		.fourcc		= V4L2_PIX_FMT_RGB565X,
 		.code		= MEDIA_BUS_FMT_RGB565_2X8_BE,
-		.bitsperpixel	= 16,
+		.l.width	= 10,
+		.l.bpp		= 4,
+		.s.width	= 8,
+		.s.bpp		= 2,
+		.supported	= false,
 	},
 };
 
-static int __subdev_get_format(struct vpfe_device *vpfe,
-			       struct v4l2_mbus_framefmt *fmt);
-static int vpfe_calc_format_size(struct vpfe_device *vpfe,
-				 const struct vpfe_fmt *fmt,
-				 struct v4l2_format *f);
+static int
+__vpfe_get_format(struct vpfe_device *vpfe,
+		  struct v4l2_format *format, unsigned int *bpp);
 
-static struct vpfe_fmt *find_format_by_code(struct vpfe_device *vpfe,
-					    unsigned int code)
+static struct vpfe_fmt *find_format_by_code(unsigned int code)
 {
 	struct vpfe_fmt *fmt;
 	unsigned int k;
 
-	for (k = 0; k < vpfe->num_active_fmt; k++) {
-		fmt = vpfe->active_fmt[k];
+	for (k = 0; k < ARRAY_SIZE(formats); k++) {
+		fmt = &formats[k];
 		if (fmt->code == code)
 			return fmt;
 	}
@@ -122,14 +195,13 @@ static struct vpfe_fmt *find_format_by_code(struct vpfe_device *vpfe,
 	return NULL;
 }
 
-static struct vpfe_fmt *find_format_by_pix(struct vpfe_device *vpfe,
-					   unsigned int pixelformat)
+static struct vpfe_fmt *find_format_by_pix(unsigned int pixelformat)
 {
 	struct vpfe_fmt *fmt;
 	unsigned int k;
 
-	for (k = 0; k < vpfe->num_active_fmt; k++) {
-		fmt = vpfe->active_fmt[k];
+	for (k = 0; k < ARRAY_SIZE(formats); k++) {
+		fmt = &formats[k];
 		if (fmt->fourcc == pixelformat)
 			return fmt;
 	}
@@ -137,18 +209,48 @@ static struct vpfe_fmt *find_format_by_pix(struct vpfe_device *vpfe,
 	return NULL;
 }
 
-static unsigned int __get_bytesperpixel(struct vpfe_device *vpfe,
-					const struct vpfe_fmt *fmt)
+static void
+mbus_to_pix(struct vpfe_device *vpfe,
+	    const struct v4l2_mbus_framefmt *mbus,
+	    struct v4l2_pix_format *pix, unsigned int *bpp)
 {
 	struct vpfe_subdev_info *sdinfo = vpfe->current_subdev;
 	unsigned int bus_width = sdinfo->vpfe_param.bus_width;
-	u32 bpp, bus_width_bytes, clocksperpixel;
+	struct vpfe_fmt *fmt;
 
-	bus_width_bytes = ALIGN(bus_width, 8) >> 3;
-	clocksperpixel = DIV_ROUND_UP(fmt->bitsperpixel, bus_width);
-	bpp = clocksperpixel * bus_width_bytes;
+	fmt = find_format_by_code(mbus->code);
+	if (WARN_ON(fmt == NULL)) {
+		pr_err("Invalid mbus code set\n");
+		*bpp = 1;
+		return;
+	}
 
-	return bpp;
+	memset(pix, 0, sizeof(*pix));
+	v4l2_fill_pix_format(pix, mbus);
+	pix->pixelformat = fmt->fourcc;
+	*bpp = (bus_width == 10) ?  fmt->l.bpp : fmt->s.bpp;
+
+	/* pitch should be 32 bytes aligned */
+	pix->bytesperline = ALIGN(pix->width * *bpp, 32);
+	pix->sizeimage = pix->bytesperline * pix->height;
+}
+
+static void pix_to_mbus(struct vpfe_device *vpfe,
+			struct v4l2_pix_format *pix_fmt,
+			struct v4l2_mbus_framefmt *mbus_fmt)
+{
+	struct vpfe_fmt *fmt;
+
+	fmt = find_format_by_pix(pix_fmt->pixelformat);
+	if (!fmt) {
+		/* default to first entry */
+		vpfe_dbg(3, vpfe, "Invalid pixel code: %x, default used instead\n",
+			pix_fmt->pixelformat);
+		fmt = &formats[0];
+	}
+
+	memset(mbus_fmt, 0, sizeof(*mbus_fmt));
+	v4l2_fill_mbus_format(mbus_fmt, pix_fmt, fmt->code);
 }
 
 /*  Print Four-character-code (FOURCC) */
@@ -163,6 +265,20 @@ static char *print_fourcc(u32 fmt)
 	code[4] = '\0';
 
 	return code;
+}
+
+static int
+cmp_v4l2_format(const struct v4l2_format *lhs, const struct v4l2_format *rhs)
+{
+	return lhs->type == rhs->type &&
+		lhs->fmt.pix.width == rhs->fmt.pix.width &&
+		lhs->fmt.pix.height == rhs->fmt.pix.height &&
+		lhs->fmt.pix.pixelformat == rhs->fmt.pix.pixelformat &&
+		lhs->fmt.pix.field == rhs->fmt.pix.field &&
+		lhs->fmt.pix.colorspace == rhs->fmt.pix.colorspace &&
+		lhs->fmt.pix.ycbcr_enc == rhs->fmt.pix.ycbcr_enc &&
+		lhs->fmt.pix.quantization == rhs->fmt.pix.quantization &&
+		lhs->fmt.pix.xfer_func == rhs->fmt.pix.xfer_func;
 }
 
 static inline u32 vpfe_reg_read(struct vpfe_ccdc *ccdc, u32 offset)
@@ -229,9 +345,13 @@ static void vpfe_ccdc_setwin(struct vpfe_ccdc *ccdc,
 	if (frm_fmt == CCDC_FRMFMT_INTERLACED) {
 		vert_nr_lines = (image_win->height >> 1) - 1;
 		vert_start >>= 1;
+		/* Since first line doesn't have any data */
+		vert_start += 1;
 		/* configure VDINT0 */
 		val = (vert_start << VPFE_VDINT_VDINT0_SHIFT);
 	} else {
+		/* Since first line doesn't have any data */
+		vert_start += 1;
 		vert_nr_lines = image_win->height - 1;
 		/*
 		 * configure VDINT0 and VDINT1. VDINT1 will be at half
@@ -285,6 +405,7 @@ vpfe_ccdc_validate_param(struct vpfe_ccdc *ccdc,
 	max_data = ccdc_data_size_max_bit(ccdcparam->data_sz);
 
 	if (ccdcparam->alaw.gamma_wd > VPFE_CCDC_GAMMA_BITS_09_0 ||
+	    ccdcparam->alaw.gamma_wd < VPFE_CCDC_GAMMA_BITS_15_6 ||
 	    max_gamma > max_data) {
 		vpfe_dbg(1, vpfe, "Invalid data line select\n");
 		return -EINVAL;
@@ -324,25 +445,40 @@ static void vpfe_ccdc_restore_defaults(struct vpfe_ccdc *ccdc)
 
 static int vpfe_ccdc_close(struct vpfe_ccdc *ccdc, struct device *dev)
 {
-	struct vpfe_device *vpfe = container_of(ccdc, struct vpfe_device, ccdc);
-	u32 dma_cntl, pcr;
+	int dma_cntl, i, pcr;
 
-	pcr = vpfe_reg_read(ccdc, VPFE_PCR);
-	if (pcr)
-		vpfe_dbg(1, vpfe, "VPFE_PCR is still set (%x)", pcr);
+	/* If the CCDC module is still busy wait for it to be done */
+	for (i = 0; i < 10; i++) {
+		usleep_range(5000, 6000);
+		pcr = vpfe_reg_read(ccdc, VPFE_PCR);
+		if (!pcr)
+			break;
 
-	dma_cntl = vpfe_reg_read(ccdc, VPFE_DMA_CNTL);
-	if ((dma_cntl & VPFE_DMA_CNTL_OVERFLOW))
-		vpfe_dbg(1, vpfe, "VPFE_DMA_CNTL_OVERFLOW is still set (%x)",
-			 dma_cntl);
+		/* make sure it it is disabled */
+		vpfe_pcr_enable(ccdc, 0);
+	}
 
 	/* Disable CCDC by resetting all register to default POR values */
 	vpfe_ccdc_restore_defaults(ccdc);
+
+	/* if DMA_CNTL overflow bit is set. Clear it
+	 *  It appears to take a while for this to become quiescent ~20ms
+	 */
+	for (i = 0; i < 10; i++) {
+		dma_cntl = vpfe_reg_read(ccdc, VPFE_DMA_CNTL);
+		if (!(dma_cntl & VPFE_DMA_CNTL_OVERFLOW))
+			break;
+
+		/* Clear the overflow bit */
+		vpfe_reg_write(ccdc, dma_cntl, VPFE_DMA_CNTL);
+		usleep_range(5000, 6000);
+	}
 
 	/* Disabled the module at the CONFIG level */
 	vpfe_config_enable(ccdc, 0);
 
 	pm_runtime_put_sync(dev);
+
 	return 0;
 }
 
@@ -358,8 +494,8 @@ static int vpfe_ccdc_set_params(struct vpfe_ccdc *ccdc, void __user *params)
 	x = copy_from_user(&raw_params, params, sizeof(raw_params));
 	if (x) {
 		vpfe_dbg(1, vpfe,
-			 "%s: error in copying ccdc params, %d\n",
-			 __func__, x);
+			"vpfe_ccdc_set_params: error in copying ccdc params, %d\n",
+			x);
 		return -EFAULT;
 	}
 
@@ -377,9 +513,11 @@ static int vpfe_ccdc_set_params(struct vpfe_ccdc *ccdc, void __user *params)
  */
 static void vpfe_ccdc_config_ycbcr(struct vpfe_ccdc *ccdc)
 {
+	struct vpfe_device *vpfe = container_of(ccdc, struct vpfe_device, ccdc);
 	struct ccdc_params_ycbcr *params = &ccdc->ccdc_cfg.ycbcr;
 	u32 syn_mode;
 
+	vpfe_dbg(3, vpfe, "vpfe_ccdc_config_ycbcr:\n");
 	/*
 	 * first restore the CCDC registers to default values
 	 * This is important since we assume default values to be set in
@@ -511,6 +649,8 @@ static void vpfe_ccdc_config_raw(struct vpfe_ccdc *ccdc)
 	unsigned int syn_mode;
 	unsigned int val;
 
+	vpfe_dbg(3, vpfe, "vpfe_ccdc_config_raw:\n");
+
 	/* Reset CCDC */
 	vpfe_ccdc_restore_defaults(ccdc);
 
@@ -611,8 +751,8 @@ static int vpfe_ccdc_set_pixel_format(struct vpfe_ccdc *ccdc, u32 pixfmt)
 {
 	struct vpfe_device *vpfe = container_of(ccdc, struct vpfe_device, ccdc);
 
-	vpfe_dbg(1, vpfe, "%s: if_type: %d, pixfmt:%s\n",
-		 __func__, ccdc->ccdc_cfg.if_type, print_fourcc(pixfmt));
+	vpfe_dbg(1, vpfe, "vpfe_ccdc_set_pixel_format: if_type: %d, pixfmt:%s\n",
+		 ccdc->ccdc_cfg.if_type, print_fourcc(pixfmt));
 
 	if (ccdc->ccdc_cfg.if_type == VPFE_RAW_BAYER) {
 		ccdc->ccdc_cfg.bayer.pix_fmt = CCDC_PIXFMT_RAW;
@@ -896,8 +1036,9 @@ static int vpfe_get_ccdc_image_format(struct vpfe_device *vpfe,
 static int vpfe_config_ccdc_image_format(struct vpfe_device *vpfe)
 {
 	enum ccdc_frmfmt frm_fmt = CCDC_FRMFMT_INTERLACED;
-	u32 bpp;
 	int ret = 0;
+
+	vpfe_dbg(2, vpfe, "vpfe_config_ccdc_image_format\n");
 
 	vpfe_dbg(1, vpfe, "pixelformat: %s\n",
 		print_fourcc(vpfe->fmt.fmt.pix.pixelformat));
@@ -909,8 +1050,7 @@ static int vpfe_config_ccdc_image_format(struct vpfe_device *vpfe)
 	}
 
 	/* configure the image window */
-	bpp = __get_bytesperpixel(vpfe, vpfe->current_vpfe_fmt);
-	vpfe_ccdc_set_image_window(&vpfe->ccdc, &vpfe->crop, bpp);
+	vpfe_ccdc_set_image_window(&vpfe->ccdc, &vpfe->crop, vpfe->bpp);
 
 	switch (vpfe->fmt.fmt.pix.field) {
 	case V4L2_FIELD_INTERLACED:
@@ -954,8 +1094,7 @@ static int vpfe_config_ccdc_image_format(struct vpfe_device *vpfe)
 static int vpfe_config_image_format(struct vpfe_device *vpfe,
 				    v4l2_std_id std_id)
 {
-	struct vpfe_fmt *fmt;
-	struct v4l2_mbus_framefmt mbus_fmt;
+	struct v4l2_pix_format *pix = &vpfe->fmt.fmt.pix;
 	int i, ret;
 
 	for (i = 0; i < ARRAY_SIZE(vpfe_standards); i++) {
@@ -977,29 +1116,26 @@ static int vpfe_config_image_format(struct vpfe_device *vpfe,
 		return -EINVAL;
 	}
 
-	ret = __subdev_get_format(vpfe, &mbus_fmt);
+	vpfe->crop.top = vpfe->crop.left = 0;
+	vpfe->crop.width = vpfe->std_info.active_pixels;
+	vpfe->crop.height = vpfe->std_info.active_lines;
+	pix->width = vpfe->crop.width;
+	pix->height = vpfe->crop.height;
+	pix->pixelformat = V4L2_PIX_FMT_YUYV;
+
+	/* first field and frame format based on standard frame format */
+	if (vpfe->std_info.frame_format)
+		pix->field = V4L2_FIELD_INTERLACED;
+	else
+		pix->field = V4L2_FIELD_NONE;
+
+	ret = __vpfe_get_format(vpfe, &vpfe->fmt, &vpfe->bpp);
 	if (ret)
 		return ret;
 
-	fmt = find_format_by_code(vpfe, mbus_fmt.code);
-	if (!fmt) {
-		vpfe_dbg(3, vpfe, "mbus code format (0x%08x) not found.\n",
-			 mbus_fmt.code);
-		return -EINVAL;
-	}
-
-	/* Save current subdev format */
-	v4l2_fill_pix_format(&vpfe->fmt.fmt.pix, &mbus_fmt);
-	vpfe->fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-	vpfe->fmt.fmt.pix.pixelformat = fmt->fourcc;
-	vpfe_calc_format_size(vpfe, fmt, &vpfe->fmt);
-	vpfe->current_vpfe_fmt = fmt;
-
 	/* Update the crop window based on found values */
-	vpfe->crop.top = 0;
-	vpfe->crop.left = 0;
-	vpfe->crop.width = mbus_fmt.width;
-	vpfe->crop.height = mbus_fmt.height;
+	vpfe->crop.width = pix->width;
+	vpfe->crop.height = pix->height;
 
 	return vpfe_config_ccdc_image_format(vpfe);
 }
@@ -1101,29 +1237,22 @@ unlock:
  * This function will get next buffer from the dma queue and
  * set the buffer address in the vpfe register for capture.
  * the buffer is marked active
+ *
+ * Assumes caller is holding vpfe->dma_queue_lock already
  */
-static void vpfe_schedule_next_buffer(struct vpfe_device *vpfe)
+static inline void vpfe_schedule_next_buffer(struct vpfe_device *vpfe)
 {
-	dma_addr_t addr;
-
-	spin_lock(&vpfe->dma_queue_lock);
-	if (list_empty(&vpfe->dma_queue)) {
-		spin_unlock(&vpfe->dma_queue_lock);
-		return;
-	}
-
 	vpfe->next_frm = list_entry(vpfe->dma_queue.next,
 				    struct vpfe_cap_buffer, list);
 	list_del(&vpfe->next_frm->list);
-	spin_unlock(&vpfe->dma_queue_lock);
 
-	addr = vb2_dma_contig_plane_dma_addr(&vpfe->next_frm->vb.vb2_buf, 0);
-	vpfe_set_sdr_addr(&vpfe->ccdc, addr);
+	vpfe_set_sdr_addr(&vpfe->ccdc,
+	       vb2_dma_contig_plane_dma_addr(&vpfe->next_frm->vb.vb2_buf, 0));
 }
 
 static inline void vpfe_schedule_bottom_field(struct vpfe_device *vpfe)
 {
-	dma_addr_t addr;
+	unsigned long addr;
 
 	addr = vb2_dma_contig_plane_dma_addr(&vpfe->next_frm->vb.vb2_buf, 0) +
 					vpfe->field_off;
@@ -1148,58 +1277,6 @@ static inline void vpfe_process_buffer_complete(struct vpfe_device *vpfe)
 	vpfe->cur_frm = vpfe->next_frm;
 }
 
-static void vpfe_handle_interlaced_irq(struct vpfe_device *vpfe,
-				       enum v4l2_field field)
-{
-	int fid;
-
-	/* interlaced or TB capture check which field
-	 * we are in hardware
-	 */
-	fid = vpfe_ccdc_getfid(&vpfe->ccdc);
-
-	/* switch the software maintained field id */
-	vpfe->field ^= 1;
-	if (fid == vpfe->field) {
-		/* we are in-sync here,continue */
-		if (fid == 0) {
-			/*
-			 * One frame is just being captured. If the
-			 * next frame is available, release the
-			 * current frame and move on
-			 */
-			if (vpfe->cur_frm != vpfe->next_frm)
-				vpfe_process_buffer_complete(vpfe);
-
-			if (vpfe->stopping)
-				return;
-
-			/*
-			 * based on whether the two fields are stored
-			 * interleave or separately in memory,
-			 * reconfigure the CCDC memory address
-			 */
-			if (field == V4L2_FIELD_SEQ_TB)
-				vpfe_schedule_bottom_field(vpfe);
-		} else {
-			/*
-			 * if one field is just being captured configure
-			 * the next frame get the next frame from the empty
-			 * queue if no frame is available hold on to the
-			 * current buffer
-			 */
-			if (vpfe->cur_frm == vpfe->next_frm)
-				vpfe_schedule_next_buffer(vpfe);
-		}
-	} else if (fid == 0) {
-		/*
-		 * out of sync. Recover from any hardware out-of-sync.
-		 * May loose one frame
-		 */
-		vpfe->field = fid;
-	}
-}
-
 /*
  * vpfe_isr : ISR handler for vpfe capture (VINT0)
  * @irq: irq number
@@ -1211,28 +1288,76 @@ static void vpfe_handle_interlaced_irq(struct vpfe_device *vpfe,
 static irqreturn_t vpfe_isr(int irq, void *dev)
 {
 	struct vpfe_device *vpfe = (struct vpfe_device *)dev;
-	enum v4l2_field field = vpfe->fmt.fmt.pix.field;
-	int intr_status, stopping = vpfe->stopping;
+	enum v4l2_field field;
+	int intr_status;
+	int fid;
 
 	intr_status = vpfe_reg_read(&vpfe->ccdc, VPFE_IRQ_STS);
 
 	if (intr_status & VPFE_VDINT0) {
+		field = vpfe->fmt.fmt.pix.field;
+
 		if (field == V4L2_FIELD_NONE) {
+			/* handle progressive frame capture */
 			if (vpfe->cur_frm != vpfe->next_frm)
 				vpfe_process_buffer_complete(vpfe);
-		} else {
-			vpfe_handle_interlaced_irq(vpfe, field);
+			goto next_intr;
 		}
-		if (stopping) {
-			vpfe->stopping = false;
-			complete(&vpfe->capture_stop);
+
+		/* interlaced or TB capture check which field
+		   we are in hardware */
+		fid = vpfe_ccdc_getfid(&vpfe->ccdc);
+
+		/* switch the software maintained field id */
+		vpfe->field ^= 1;
+		if (fid == vpfe->field) {
+			/* we are in-sync here,continue */
+			if (fid == 0) {
+				/*
+				 * One frame is just being captured. If the
+				 * next frame is available, release the
+				 * current frame and move on
+				 */
+				if (vpfe->cur_frm != vpfe->next_frm)
+					vpfe_process_buffer_complete(vpfe);
+				/*
+				 * based on whether the two fields are stored
+				 * interleave or separately in memory,
+				 * reconfigure the CCDC memory address
+				 */
+				if (field == V4L2_FIELD_SEQ_TB)
+					vpfe_schedule_bottom_field(vpfe);
+
+				goto next_intr;
+			}
+			/*
+			 * if one field is just being captured configure
+			 * the next frame get the next frame from the empty
+			 * queue if no frame is available hold on to the
+			 * current buffer
+			 */
+			spin_lock(&vpfe->dma_queue_lock);
+			if (!list_empty(&vpfe->dma_queue) &&
+			    vpfe->cur_frm == vpfe->next_frm)
+				vpfe_schedule_next_buffer(vpfe);
+			spin_unlock(&vpfe->dma_queue_lock);
+		} else if (fid == 0) {
+			/*
+			 * out of sync. Recover from any hardware out-of-sync.
+			 * May loose one frame
+			 */
+			vpfe->field = fid;
 		}
 	}
 
-	if (intr_status & VPFE_VDINT1 && !stopping) {
-		if (field == V4L2_FIELD_NONE &&
+next_intr:
+	if (intr_status & VPFE_VDINT1) {
+		spin_lock(&vpfe->dma_queue_lock);
+		if (vpfe->fmt.fmt.pix.field == V4L2_FIELD_NONE &&
+		    !list_empty(&vpfe->dma_queue) &&
 		    vpfe->cur_frm == vpfe->next_frm)
 			vpfe_schedule_next_buffer(vpfe);
+		spin_unlock(&vpfe->dma_queue_lock);
 	}
 
 	vpfe_clear_intr(&vpfe->ccdc, intr_status);
@@ -1269,6 +1394,8 @@ static int vpfe_querycap(struct file *file, void  *priv,
 {
 	struct vpfe_device *vpfe = video_drvdata(file);
 
+	vpfe_dbg(2, vpfe, "vpfe_querycap\n");
+
 	strscpy(cap->driver, VPFE_MODULE_NAME, sizeof(cap->driver));
 	strscpy(cap->card, "TI AM437x VPFE", sizeof(cap->card));
 	snprintf(cap->bus_info, sizeof(cap->bus_info),
@@ -1277,74 +1404,83 @@ static int vpfe_querycap(struct file *file, void  *priv,
 }
 
 /* get the format set at output pad of the adjacent subdev */
-static int __subdev_get_format(struct vpfe_device *vpfe,
-			       struct v4l2_mbus_framefmt *fmt)
+static int __vpfe_get_format(struct vpfe_device *vpfe,
+			     struct v4l2_format *format, unsigned int *bpp)
 {
-	struct v4l2_subdev *sd = vpfe->current_subdev->sd;
-	struct v4l2_subdev_format sd_fmt;
-	struct v4l2_mbus_framefmt *mbus_fmt = &sd_fmt.format;
+	struct v4l2_mbus_framefmt mbus_fmt;
+	struct vpfe_subdev_info *sdinfo;
+	struct v4l2_subdev_format fmt;
 	int ret;
 
-	sd_fmt.which = V4L2_SUBDEV_FORMAT_ACTIVE;
-	sd_fmt.pad = 0;
+	sdinfo = vpfe->current_subdev;
+	if (!sdinfo->sd)
+		return -EINVAL;
 
-	ret = v4l2_subdev_call(sd, pad, get_fmt, NULL, &sd_fmt);
-	if (ret)
+	fmt.which = V4L2_SUBDEV_FORMAT_ACTIVE;
+	fmt.pad = 0;
+
+	ret = v4l2_subdev_call(sdinfo->sd, pad, get_fmt, NULL, &fmt);
+	if (ret && ret != -ENOIOCTLCMD && ret != -ENODEV)
 		return ret;
 
-	*fmt = *mbus_fmt;
+	if (!ret) {
+		v4l2_fill_pix_format(&format->fmt.pix, &fmt.format);
+		mbus_to_pix(vpfe, &fmt.format, &format->fmt.pix, bpp);
+	} else {
+		ret = v4l2_device_call_until_err(&vpfe->v4l2_dev,
+						 sdinfo->grp_id,
+						 pad, get_fmt,
+						 NULL, &fmt);
+		if (ret && ret != -ENOIOCTLCMD && ret != -ENODEV)
+			return ret;
+		v4l2_fill_pix_format(&format->fmt.pix, &mbus_fmt);
+		mbus_to_pix(vpfe, &mbus_fmt, &format->fmt.pix, bpp);
+	}
 
-	vpfe_dbg(1, vpfe, "%s: %dx%d code:%04X\n", __func__,
-		 fmt->width, fmt->height, fmt->code);
+	format->type = vpfe->fmt.type;
+
+	vpfe_dbg(1, vpfe,
+		 "%s size %dx%d (%s) bytesperline = %d, size = %d, bpp = %d\n",
+		 __func__, format->fmt.pix.width, format->fmt.pix.height,
+		 print_fourcc(format->fmt.pix.pixelformat),
+		 format->fmt.pix.bytesperline, format->fmt.pix.sizeimage, *bpp);
 
 	return 0;
 }
 
 /* set the format at output pad of the adjacent subdev */
-static int __subdev_set_format(struct vpfe_device *vpfe,
-			       struct v4l2_mbus_framefmt *fmt)
+static int __vpfe_set_format(struct vpfe_device *vpfe,
+			     struct v4l2_format *format, unsigned int *bpp)
 {
-	struct v4l2_subdev *sd = vpfe->current_subdev->sd;
-	struct v4l2_subdev_format sd_fmt;
-	struct v4l2_mbus_framefmt *mbus_fmt = &sd_fmt.format;
+	struct vpfe_subdev_info *sdinfo;
+	struct v4l2_subdev_format fmt;
 	int ret;
 
-	sd_fmt.which = V4L2_SUBDEV_FORMAT_ACTIVE;
-	sd_fmt.pad = 0;
-	*mbus_fmt = *fmt;
+	vpfe_dbg(2, vpfe, "__vpfe_set_format\n");
 
-	ret = v4l2_subdev_call(sd, pad, set_fmt, NULL, &sd_fmt);
+	sdinfo = vpfe->current_subdev;
+	if (!sdinfo->sd)
+		return -EINVAL;
+
+	fmt.which = V4L2_SUBDEV_FORMAT_ACTIVE;
+	fmt.pad = 0;
+
+	pix_to_mbus(vpfe, &format->fmt.pix, &fmt.format);
+
+	ret = v4l2_subdev_call(sdinfo->sd, pad, set_fmt, NULL, &fmt);
 	if (ret)
 		return ret;
 
-	vpfe_dbg(1, vpfe, "%s %dx%d code:%04X\n", __func__,
-		 fmt->width, fmt->height, fmt->code);
+	v4l2_fill_pix_format(&format->fmt.pix, &fmt.format);
+	mbus_to_pix(vpfe, &fmt.format, &format->fmt.pix, bpp);
 
-	return 0;
-}
+	format->type = vpfe->fmt.type;
 
-static int vpfe_calc_format_size(struct vpfe_device *vpfe,
-				 const struct vpfe_fmt *fmt,
-				 struct v4l2_format *f)
-{
-	u32 bpp;
-
-	if (!fmt) {
-		vpfe_dbg(3, vpfe, "No vpfe_fmt provided!\n");
-		return -EINVAL;
-	}
-
-	bpp = __get_bytesperpixel(vpfe, fmt);
-
-	/* pitch should be 32 bytes aligned */
-	f->fmt.pix.bytesperline = ALIGN(f->fmt.pix.width * bpp, 32);
-	f->fmt.pix.sizeimage = f->fmt.pix.bytesperline *
-			       f->fmt.pix.height;
-
-	vpfe_dbg(3, vpfe, "%s: fourcc: %s size: %dx%d bpl:%d img_size:%d\n",
-		 __func__, print_fourcc(f->fmt.pix.pixelformat),
-		 f->fmt.pix.width, f->fmt.pix.height,
-		 f->fmt.pix.bytesperline, f->fmt.pix.sizeimage);
+	vpfe_dbg(1, vpfe,
+		 "%s size %dx%d (%s) bytesperline = %d, size = %d, bpp = %d\n",
+		 __func__,  format->fmt.pix.width, format->fmt.pix.height,
+		 print_fourcc(format->fmt.pix.pixelformat),
+		 format->fmt.pix.bytesperline, format->fmt.pix.sizeimage, *bpp);
 
 	return 0;
 }
@@ -1353,6 +1489,8 @@ static int vpfe_g_fmt(struct file *file, void *priv,
 		      struct v4l2_format *fmt)
 {
 	struct vpfe_device *vpfe = video_drvdata(file);
+
+	vpfe_dbg(2, vpfe, "vpfe_g_fmt\n");
 
 	*fmt = vpfe->fmt;
 
@@ -1364,91 +1502,56 @@ static int vpfe_enum_fmt(struct file *file, void  *priv,
 {
 	struct vpfe_device *vpfe = video_drvdata(file);
 	struct vpfe_subdev_info *sdinfo;
-	struct vpfe_fmt *fmt;
+	struct vpfe_fmt *fmt = NULL;
+	unsigned int k;
+
+	vpfe_dbg(2, vpfe, "vpfe_enum_format index:%d\n",
+		f->index);
 
 	sdinfo = vpfe->current_subdev;
 	if (!sdinfo->sd)
 		return -EINVAL;
 
-	if (f->index >= vpfe->num_active_fmt)
+	if (f->index > ARRAY_SIZE(formats))
 		return -EINVAL;
 
-	fmt = vpfe->active_fmt[f->index];
+	for (k = 0; k < ARRAY_SIZE(formats); k++) {
+		if (formats[k].index == f->index) {
+			fmt = &formats[k];
+			break;
+		}
+	}
+	if (!fmt)
+		return -EINVAL;
 
 	f->pixelformat = fmt->fourcc;
 
-	vpfe_dbg(1, vpfe, "%s: mbus index: %d code: %x pixelformat: %s\n",
-		 __func__, f->index, fmt->code, print_fourcc(fmt->fourcc));
+	vpfe_dbg(1, vpfe, "vpfe_enum_format: mbus index: %d code: %x pixelformat: %s\n",
+		 f->index, fmt->code, print_fourcc(fmt->fourcc));
 
 	return 0;
 }
 
 static int vpfe_try_fmt(struct file *file, void *priv,
-			struct v4l2_format *f)
+			struct v4l2_format *fmt)
 {
 	struct vpfe_device *vpfe = video_drvdata(file);
-	struct v4l2_subdev *sd = vpfe->current_subdev->sd;
-	const struct vpfe_fmt *fmt;
-	struct v4l2_subdev_frame_size_enum fse;
-	int ret, found;
+	unsigned int bpp;
 
-	fmt = find_format_by_pix(vpfe, f->fmt.pix.pixelformat);
-	if (!fmt) {
-		/* default to first entry */
-		vpfe_dbg(3, vpfe, "Invalid pixel code: %x, default used instead\n",
-			 f->fmt.pix.pixelformat);
-		fmt = vpfe->active_fmt[0];
-		f->fmt.pix.pixelformat = fmt->fourcc;
-	}
+	vpfe_dbg(2, vpfe, "vpfe_try_fmt\n");
 
-	f->fmt.pix.field = vpfe->fmt.fmt.pix.field;
-
-	/* check for/find a valid width/height */
-	ret = 0;
-	found = false;
-	fse.pad = 0;
-	fse.code = fmt->code;
-	fse.which = V4L2_SUBDEV_FORMAT_ACTIVE;
-	for (fse.index = 0; ; fse.index++) {
-		ret = v4l2_subdev_call(sd, pad, enum_frame_size,
-				       NULL, &fse);
-		if (ret)
-			break;
-
-		if (f->fmt.pix.width == fse.max_width &&
-		    f->fmt.pix.height == fse.max_height) {
-			found = true;
-			break;
-		} else if (f->fmt.pix.width >= fse.min_width &&
-			   f->fmt.pix.width <= fse.max_width &&
-			   f->fmt.pix.height >= fse.min_height &&
-			   f->fmt.pix.height <= fse.max_height) {
-			found = true;
-			break;
-		}
-	}
-
-	if (!found) {
-		/* use existing values as default */
-		f->fmt.pix.width = vpfe->fmt.fmt.pix.width;
-		f->fmt.pix.height =  vpfe->fmt.fmt.pix.height;
-	}
-
-	/*
-	 * Use current colorspace for now, it will get
-	 * updated properly during s_fmt
-	 */
-	f->fmt.pix.colorspace = vpfe->fmt.fmt.pix.colorspace;
-	return vpfe_calc_format_size(vpfe, fmt, f);
+	return __vpfe_get_format(vpfe, fmt, &bpp);
 }
 
 static int vpfe_s_fmt(struct file *file, void *priv,
 		      struct v4l2_format *fmt)
 {
 	struct vpfe_device *vpfe = video_drvdata(file);
-	struct vpfe_fmt *f;
-	struct v4l2_mbus_framefmt mbus_fmt;
+	struct v4l2_format format;
+	unsigned int bpp;
 	int ret;
+
+	vpfe_dbg(2, vpfe, "vpfe_s_fmt\n");
 
 	/* If streaming is started, return error */
 	if (vb2_is_busy(&vpfe->buffer_queue)) {
@@ -1456,32 +1559,25 @@ static int vpfe_s_fmt(struct file *file, void *priv,
 		return -EBUSY;
 	}
 
-	ret = vpfe_try_fmt(file, priv, fmt);
-	if (ret < 0)
-		return ret;
-
-	f = find_format_by_pix(vpfe, fmt->fmt.pix.pixelformat);
-
-	v4l2_fill_mbus_format(&mbus_fmt, &fmt->fmt.pix, f->code);
-
-	ret = __subdev_set_format(vpfe, &mbus_fmt);
+	ret = __vpfe_get_format(vpfe, &format, &bpp);
 	if (ret)
 		return ret;
 
-	/* Just double check nothing has gone wrong */
-	if (mbus_fmt.code != f->code) {
-		vpfe_dbg(3, vpfe,
-			 "%s subdev changed format on us, this should not happen\n",
-			 __func__);
-		return -EINVAL;
-	}
 
-	v4l2_fill_pix_format(&vpfe->fmt.fmt.pix, &mbus_fmt);
-	vpfe->fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-	vpfe->fmt.fmt.pix.pixelformat  = f->fourcc;
-	vpfe_calc_format_size(vpfe, f, &vpfe->fmt);
-	*fmt = vpfe->fmt;
-	vpfe->current_vpfe_fmt = f;
+	if (!cmp_v4l2_format(fmt, &format)) {
+		/* Sensor format is different from the requested format
+		 * so we need to change it
+		 */
+		ret = __vpfe_set_format(vpfe, fmt, &bpp);
+		if (ret)
+			return ret;
+	} else /* Just make sure all of the fields are consistent */
+		*fmt = format;
+
+	/* First detach any IRQ if currently attached */
+	vpfe_detach_irq(vpfe);
+	vpfe->fmt = *fmt;
+	vpfe->bpp = bpp;
 
 	/* Update the crop window based on found values */
 	vpfe->crop.width = fmt->fmt.pix.width;
@@ -1496,40 +1592,57 @@ static int vpfe_enum_size(struct file *file, void  *priv,
 {
 	struct vpfe_device *vpfe = video_drvdata(file);
 	struct v4l2_subdev_frame_size_enum fse;
-	struct v4l2_subdev *sd = vpfe->current_subdev->sd;
+	struct vpfe_subdev_info *sdinfo;
+	struct v4l2_mbus_framefmt mbus;
+	struct v4l2_pix_format pix;
 	struct vpfe_fmt *fmt;
 	int ret;
 
+	vpfe_dbg(2, vpfe, "vpfe_enum_size\n");
+
 	/* check for valid format */
-	fmt = find_format_by_pix(vpfe, fsize->pixel_format);
+	fmt = find_format_by_pix(fsize->pixel_format);
 	if (!fmt) {
-		vpfe_dbg(3, vpfe, "Invalid pixel code: %x\n",
-			 fsize->pixel_format);
+		vpfe_dbg(3, vpfe, "Invalid pixel code: %x, default used instead\n",
+			fsize->pixel_format);
 		return -EINVAL;
 	}
 
 	memset(fsize->reserved, 0x0, sizeof(fsize->reserved));
 
+	sdinfo = vpfe->current_subdev;
+	if (!sdinfo->sd)
+		return -EINVAL;
+
+	memset(&pix, 0x0, sizeof(pix));
+	/* Construct pix from parameter and use default for the rest */
+	pix.pixelformat = fsize->pixel_format;
+	pix.width = 640;
+	pix.height = 480;
+	pix.colorspace = V4L2_COLORSPACE_SRGB;
+	pix.field = V4L2_FIELD_NONE;
+	pix_to_mbus(vpfe, &pix, &mbus);
+
 	memset(&fse, 0x0, sizeof(fse));
 	fse.index = fsize->index;
 	fse.pad = 0;
-	fse.code = fmt->code;
+	fse.code = mbus.code;
 	fse.which = V4L2_SUBDEV_FORMAT_ACTIVE;
-	ret = v4l2_subdev_call(sd, pad, enum_frame_size, NULL, &fse);
+	ret = v4l2_subdev_call(sdinfo->sd, pad, enum_frame_size, NULL, &fse);
 	if (ret)
-		return ret;
+		return -EINVAL;
 
-	vpfe_dbg(1, vpfe, "%s: index: %d code: %x W:[%d,%d] H:[%d,%d]\n",
-		 __func__, fse.index, fse.code, fse.min_width, fse.max_width,
-		 fse.min_height, fse.max_height);
+	vpfe_dbg(1, vpfe, "vpfe_enum_size: index: %d code: %x W:[%d,%d] H:[%d,%d]\n",
+		fse.index, fse.code, fse.min_width, fse.max_width,
+		fse.min_height, fse.max_height);
 
 	fsize->type = V4L2_FRMSIZE_TYPE_DISCRETE;
 	fsize->discrete.width = fse.max_width;
 	fsize->discrete.height = fse.max_height;
 
-	vpfe_dbg(1, vpfe, "%s: index: %d pixformat: %s size: %dx%d\n",
-		 __func__, fsize->index, print_fourcc(fsize->pixel_format),
-		 fsize->discrete.width, fsize->discrete.height);
+	vpfe_dbg(1, vpfe, "vpfe_enum_size: index: %d pixformat: %s size: %dx%d\n",
+		fsize->index, print_fourcc(fsize->pixel_format),
+		fsize->discrete.width, fsize->discrete.height);
 
 	return 0;
 }
@@ -1594,6 +1707,8 @@ static int vpfe_enum_input(struct file *file, void *priv,
 	struct vpfe_subdev_info *sdinfo;
 	int subdev, index;
 
+	vpfe_dbg(2, vpfe, "vpfe_enum_input\n");
+
 	if (vpfe_get_subdev_input_index(vpfe, &subdev, &index,
 					inp->index) < 0) {
 		vpfe_dbg(1, vpfe,
@@ -1610,6 +1725,8 @@ static int vpfe_g_input(struct file *file, void *priv, unsigned int *index)
 {
 	struct vpfe_device *vpfe = video_drvdata(file);
 
+	vpfe_dbg(2, vpfe, "vpfe_g_input\n");
+
 	return vpfe_get_app_input_index(vpfe, index);
 }
 
@@ -1621,6 +1738,8 @@ static int vpfe_set_input(struct vpfe_device *vpfe, unsigned int index)
 	struct vpfe_route *route;
 	u32 input, output;
 	int ret;
+
+	vpfe_dbg(2, vpfe, "vpfe_set_input: index: %d\n", index);
 
 	/* If streaming is started, return error */
 	if (vb2_is_busy(&vpfe->buffer_queue)) {
@@ -1677,6 +1796,9 @@ static int vpfe_s_input(struct file *file, void *priv, unsigned int index)
 {
 	struct vpfe_device *vpfe = video_drvdata(file);
 
+	vpfe_dbg(2, vpfe,
+		"vpfe_s_input: index: %d\n", index);
+
 	return vpfe_set_input(vpfe, index);
 }
 
@@ -1684,6 +1806,8 @@ static int vpfe_querystd(struct file *file, void *priv, v4l2_std_id *std_id)
 {
 	struct vpfe_device *vpfe = video_drvdata(file);
 	struct vpfe_subdev_info *sdinfo;
+
+	vpfe_dbg(2, vpfe, "vpfe_querystd\n");
 
 	sdinfo = vpfe->current_subdev;
 	if (!(sdinfo->inputs[0].capabilities & V4L2_IN_CAP_STD))
@@ -1700,13 +1824,11 @@ static int vpfe_s_std(struct file *file, void *priv, v4l2_std_id std_id)
 	struct vpfe_subdev_info *sdinfo;
 	int ret;
 
+	vpfe_dbg(2, vpfe, "vpfe_s_std\n");
+
 	sdinfo = vpfe->current_subdev;
 	if (!(sdinfo->inputs[0].capabilities & V4L2_IN_CAP_STD))
 		return -ENODATA;
-
-	/* if trying to set the same std then nothing to do */
-	if (vpfe_standards[vpfe->std_index].std_id == std_id)
-		return 0;
 
 	/* If streaming is started, return error */
 	if (vb2_is_busy(&vpfe->buffer_queue)) {
@@ -1731,6 +1853,8 @@ static int vpfe_g_std(struct file *file, void *priv, v4l2_std_id *std_id)
 	struct vpfe_device *vpfe = video_drvdata(file);
 	struct vpfe_subdev_info *sdinfo;
 
+	vpfe_dbg(2, vpfe, "vpfe_g_std\n");
+
 	sdinfo = vpfe->current_subdev;
 	if (sdinfo->inputs[0].capabilities != V4L2_IN_CAP_STD)
 		return -ENODATA;
@@ -1747,6 +1871,8 @@ static int vpfe_g_std(struct file *file, void *priv, v4l2_std_id *std_id)
 static void vpfe_calculate_offsets(struct vpfe_device *vpfe)
 {
 	struct v4l2_rect image_win;
+
+	vpfe_dbg(2, vpfe, "vpfe_calculate_offsets\n");
 
 	vpfe_ccdc_get_image_window(&vpfe->ccdc, &image_win);
 	vpfe->field_off = image_win.height * image_win.width;
@@ -1831,29 +1957,6 @@ static void vpfe_buffer_queue(struct vb2_buffer *vb)
 	spin_unlock_irqrestore(&vpfe->dma_queue_lock, flags);
 }
 
-static void vpfe_return_all_buffers(struct vpfe_device *vpfe,
-				    enum vb2_buffer_state state)
-{
-	struct vpfe_cap_buffer *buf, *node;
-	unsigned long flags;
-
-	spin_lock_irqsave(&vpfe->dma_queue_lock, flags);
-	list_for_each_entry_safe(buf, node, &vpfe->dma_queue, list) {
-		vb2_buffer_done(&buf->vb.vb2_buf, state);
-		list_del(&buf->list);
-	}
-
-	if (vpfe->cur_frm)
-		vb2_buffer_done(&vpfe->cur_frm->vb.vb2_buf, state);
-
-	if (vpfe->next_frm && vpfe->next_frm != vpfe->cur_frm)
-		vb2_buffer_done(&vpfe->next_frm->vb.vb2_buf, state);
-
-	vpfe->cur_frm = NULL;
-	vpfe->next_frm = NULL;
-	spin_unlock_irqrestore(&vpfe->dma_queue_lock, flags);
-}
-
 /*
  * vpfe_start_streaming : Starts the DMA engine for streaming
  * @vb: ptr to vb2_buffer
@@ -1862,6 +1965,7 @@ static void vpfe_return_all_buffers(struct vpfe_device *vpfe,
 static int vpfe_start_streaming(struct vb2_queue *vq, unsigned int count)
 {
 	struct vpfe_device *vpfe = vb2_get_drv_priv(vq);
+	struct vpfe_cap_buffer *buf, *tmp;
 	struct vpfe_subdev_info *sdinfo;
 	unsigned long flags;
 	unsigned long addr;
@@ -1875,9 +1979,6 @@ static int vpfe_start_streaming(struct vb2_queue *vq, unsigned int count)
 	sdinfo = vpfe->current_subdev;
 
 	vpfe_attach_irq(vpfe);
-
-	vpfe->stopping = false;
-	init_completion(&vpfe->capture_stop);
 
 	if (vpfe->ccdc.ccdc_cfg.if_type == VPFE_RAW_BAYER)
 		vpfe_ccdc_config_raw(&vpfe->ccdc);
@@ -1907,8 +2008,11 @@ static int vpfe_start_streaming(struct vb2_queue *vq, unsigned int count)
 	return 0;
 
 err:
-	vpfe_return_all_buffers(vpfe, VB2_BUF_STATE_QUEUED);
-	vpfe_pcr_enable(&vpfe->ccdc, 0);
+	list_for_each_entry_safe(buf, tmp, &vpfe->dma_queue, list) {
+		list_del(&buf->list);
+		vb2_buffer_done(&buf->vb.vb2_buf, VB2_BUF_STATE_QUEUED);
+	}
+
 	return ret;
 }
 
@@ -1923,14 +2027,10 @@ static void vpfe_stop_streaming(struct vb2_queue *vq)
 {
 	struct vpfe_device *vpfe = vb2_get_drv_priv(vq);
 	struct vpfe_subdev_info *sdinfo;
+	unsigned long flags;
 	int ret;
 
 	vpfe_pcr_enable(&vpfe->ccdc, 0);
-
-	/* Wait for the last frame to be captured */
-	vpfe->stopping = true;
-	wait_for_completion_timeout(&vpfe->capture_stop,
-				    msecs_to_jiffies(250));
 
 	vpfe_detach_irq(vpfe);
 
@@ -1940,13 +2040,35 @@ static void vpfe_stop_streaming(struct vb2_queue *vq)
 		vpfe_dbg(1, vpfe, "stream off failed in subdev\n");
 
 	/* release all active buffers */
-	vpfe_return_all_buffers(vpfe, VB2_BUF_STATE_ERROR);
+	spin_lock_irqsave(&vpfe->dma_queue_lock, flags);
+	if (vpfe->cur_frm == vpfe->next_frm) {
+		vb2_buffer_done(&vpfe->cur_frm->vb.vb2_buf,
+				VB2_BUF_STATE_ERROR);
+	} else {
+		if (vpfe->cur_frm != NULL)
+			vb2_buffer_done(&vpfe->cur_frm->vb.vb2_buf,
+					VB2_BUF_STATE_ERROR);
+		if (vpfe->next_frm != NULL)
+			vb2_buffer_done(&vpfe->next_frm->vb.vb2_buf,
+					VB2_BUF_STATE_ERROR);
+	}
+
+	while (!list_empty(&vpfe->dma_queue)) {
+		vpfe->next_frm = list_entry(vpfe->dma_queue.next,
+						struct vpfe_cap_buffer, list);
+		list_del(&vpfe->next_frm->list);
+		vb2_buffer_done(&vpfe->next_frm->vb.vb2_buf,
+				VB2_BUF_STATE_ERROR);
+	}
+	spin_unlock_irqrestore(&vpfe->dma_queue_lock, flags);
 }
 
 static int vpfe_g_pixelaspect(struct file *file, void *priv,
 			      int type, struct v4l2_fract *f)
 {
 	struct vpfe_device *vpfe = video_drvdata(file);
+
+	vpfe_dbg(2, vpfe, "vpfe_g_pixelaspect\n");
 
 	if (type != V4L2_BUF_TYPE_VIDEO_CAPTURE ||
 	    vpfe->std_index >= ARRAY_SIZE(vpfe_standards))
@@ -2006,7 +2128,6 @@ vpfe_s_selection(struct file *file, void *fh, struct v4l2_selection *s)
 	struct vpfe_device *vpfe = video_drvdata(file);
 	struct v4l2_rect cr = vpfe->crop;
 	struct v4l2_rect r = s->r;
-	u32 bpp;
 
 	/* If streaming is started, return error */
 	if (vb2_is_busy(&vpfe->buffer_queue)) {
@@ -2032,12 +2153,10 @@ vpfe_s_selection(struct file *file, void *fh, struct v4l2_selection *s)
 
 	s->r = vpfe->crop = r;
 
-	bpp = __get_bytesperpixel(vpfe, vpfe->current_vpfe_fmt);
-	vpfe_ccdc_set_image_window(&vpfe->ccdc, &r, bpp);
+	vpfe_ccdc_set_image_window(&vpfe->ccdc, &r, vpfe->bpp);
 	vpfe->fmt.fmt.pix.width = r.width;
 	vpfe->fmt.fmt.pix.height = r.height;
-	vpfe->fmt.fmt.pix.bytesperline =
-		vpfe_ccdc_get_line_length(&vpfe->ccdc);
+	vpfe->fmt.fmt.pix.bytesperline = vpfe_ccdc_get_line_length(&vpfe->ccdc);
 	vpfe->fmt.fmt.pix.sizeimage = vpfe->fmt.fmt.pix.bytesperline *
 						vpfe->fmt.fmt.pix.height;
 
@@ -2052,6 +2171,8 @@ static long vpfe_ioctl_default(struct file *file, void *priv,
 {
 	struct vpfe_device *vpfe = video_drvdata(file);
 	int ret;
+
+	vpfe_dbg(2, vpfe, "vpfe_ioctl_default\n");
 
 	if (!valid_prio) {
 		vpfe_err(vpfe, "%s device busy\n", __func__);
@@ -2158,10 +2279,10 @@ vpfe_async_bound(struct v4l2_async_notifier *notifier,
 					       struct vpfe_device, v4l2_dev);
 	struct v4l2_subdev_mbus_code_enum mbus_code;
 	struct vpfe_subdev_info *sdinfo;
-	struct vpfe_fmt *fmt;
-	int ret = 0;
 	bool found = false;
-	int i, j, k;
+	int i, j;
+
+	vpfe_dbg(1, vpfe, "vpfe_async_bound\n");
 
 	for (i = 0; i < ARRAY_SIZE(vpfe->cfg->asd); i++) {
 		if (vpfe->cfg->asd[i]->match.fwnode ==
@@ -2181,37 +2302,27 @@ vpfe_async_bound(struct v4l2_async_notifier *notifier,
 
 	vpfe->video_dev.tvnorms |= sdinfo->inputs[0].std;
 
-	vpfe->num_active_fmt = 0;
-	for (j = 0, i = 0; (ret != -EINVAL); ++j) {
+	/* setup the supported formats & indexes */
+	for (j = 0, i = 0; ; ++j) {
+		struct vpfe_fmt *fmt;
+		int ret;
+
 		memset(&mbus_code, 0, sizeof(mbus_code));
 		mbus_code.index = j;
 		mbus_code.which = V4L2_SUBDEV_FORMAT_ACTIVE;
 		ret = v4l2_subdev_call(subdev, pad, enum_mbus_code,
-				       NULL, &mbus_code);
+			       NULL, &mbus_code);
 		if (ret)
+			break;
+
+		fmt = find_format_by_code(mbus_code.code);
+		if (!fmt)
 			continue;
 
-		vpfe_dbg(3, vpfe,
-			 "subdev %s: code: %04x idx: %d\n",
-			 subdev->name, mbus_code.code, j);
-
-		for (k = 0; k < ARRAY_SIZE(formats); k++) {
-			fmt = &formats[k];
-			if (mbus_code.code != fmt->code)
-				continue;
-			vpfe->active_fmt[i] = fmt;
-			vpfe_dbg(3, vpfe,
-				 "matched fourcc: %s code: %04x idx: %d\n",
-				 print_fourcc(fmt->fourcc), mbus_code.code, i);
-			vpfe->num_active_fmt = ++i;
-		}
+		fmt->supported = true;
+		fmt->index = i++;
 	}
 
-	if (!i) {
-		vpfe_err(vpfe, "No suitable format reported by subdev %s\n",
-			 subdev->name);
-		return -EINVAL;
-	}
 	return 0;
 }
 
@@ -2494,6 +2605,8 @@ static int vpfe_remove(struct platform_device *pdev)
 {
 	struct vpfe_device *vpfe = platform_get_drvdata(pdev);
 
+	vpfe_dbg(2, vpfe, "vpfe_remove\n");
+
 	pm_runtime_disable(&pdev->dev);
 
 	v4l2_async_notifier_unregister(&vpfe->notifier);
@@ -2540,21 +2653,22 @@ static int vpfe_suspend(struct device *dev)
 	struct vpfe_device *vpfe = dev_get_drvdata(dev);
 	struct vpfe_ccdc *ccdc = &vpfe->ccdc;
 
-	/* only do full suspend if streaming has started */
-	if (vb2_start_streaming_called(&vpfe->buffer_queue)) {
-		pm_runtime_get_sync(dev);
-		vpfe_config_enable(ccdc, 1);
+	/* if streaming has not started we don't care */
+	if (!vb2_start_streaming_called(&vpfe->buffer_queue))
+		return 0;
 
-		/* Save VPFE context */
-		vpfe_save_context(ccdc);
+	pm_runtime_get_sync(dev);
+	vpfe_config_enable(ccdc, 1);
 
-		/* Disable CCDC */
-		vpfe_pcr_enable(ccdc, 0);
-		vpfe_config_enable(ccdc, 0);
+	/* Save VPFE context */
+	vpfe_save_context(ccdc);
 
-		/* Disable both master and slave clock */
-		pm_runtime_put_sync(dev);
-	}
+	/* Disable CCDC */
+	vpfe_pcr_enable(ccdc, 0);
+	vpfe_config_enable(ccdc, 0);
+
+	/* Disable both master and slave clock */
+	pm_runtime_put_sync(dev);
 
 	/* Select sleep pin state */
 	pinctrl_pm_select_sleep_state(dev);
@@ -2596,18 +2710,19 @@ static int vpfe_resume(struct device *dev)
 	struct vpfe_device *vpfe = dev_get_drvdata(dev);
 	struct vpfe_ccdc *ccdc = &vpfe->ccdc;
 
-	/* only do full resume if streaming has started */
-	if (vb2_start_streaming_called(&vpfe->buffer_queue)) {
-		/* Enable both master and slave clock */
-		pm_runtime_get_sync(dev);
-		vpfe_config_enable(ccdc, 1);
+	/* if streaming has not started we don't care */
+	if (!vb2_start_streaming_called(&vpfe->buffer_queue))
+		return 0;
 
-		/* Restore VPFE context */
-		vpfe_restore_context(ccdc);
+	/* Enable both master and slave clock */
+	pm_runtime_get_sync(dev);
+	vpfe_config_enable(ccdc, 1);
 
-		vpfe_config_enable(ccdc, 0);
-		pm_runtime_put_sync(dev);
-	}
+	/* Restore VPFE context */
+	vpfe_restore_context(ccdc);
+
+	vpfe_config_enable(ccdc, 0);
+	pm_runtime_put_sync(dev);
 
 	/* Select default pin state */
 	pinctrl_pm_select_default_state(dev);

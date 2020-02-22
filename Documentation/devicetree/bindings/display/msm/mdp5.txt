@@ -76,8 +76,6 @@ Required properties:
 Optional properties:
 - clock-names: the following clocks are optional:
   * "lut"
-  * "tbu"
-  * "tbu_rt"
 
 Example:
 

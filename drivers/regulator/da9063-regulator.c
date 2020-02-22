@@ -225,7 +225,7 @@ static unsigned da9063_buck_get_mode(struct regulator_dev *rdev)
 {
 	struct da9063_regulator *regl = rdev_get_drvdata(rdev);
 	struct regmap_field *field;
-	unsigned int val;
+	unsigned int val, mode = 0;
 	int ret;
 
 	ret = regmap_field_read(regl->mode, &val);
@@ -235,6 +235,7 @@ static unsigned da9063_buck_get_mode(struct regulator_dev *rdev)
 	switch (val) {
 	default:
 	case BUCK_MODE_MANUAL:
+		mode = REGULATOR_MODE_FAST | REGULATOR_MODE_STANDBY;
 		/* Sleep flag bit decides the mode */
 		break;
 	case BUCK_MODE_SLEEP:
@@ -261,9 +262,11 @@ static unsigned da9063_buck_get_mode(struct regulator_dev *rdev)
 		return 0;
 
 	if (val)
-		return REGULATOR_MODE_STANDBY;
+		mode &= REGULATOR_MODE_STANDBY;
 	else
-		return REGULATOR_MODE_FAST;
+		mode &= REGULATOR_MODE_NORMAL | REGULATOR_MODE_FAST;
+
+	return mode;
 }
 
 /*

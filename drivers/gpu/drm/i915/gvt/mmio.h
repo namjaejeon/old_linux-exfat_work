@@ -36,8 +36,6 @@
 #ifndef _GVT_MMIO_H_
 #define _GVT_MMIO_H_
 
-#include <linux/types.h>
-
 struct intel_gvt;
 struct intel_vgpu;
 

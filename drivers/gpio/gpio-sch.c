@@ -127,10 +127,7 @@ static int sch_gpio_get_direction(struct gpio_chip *gc, unsigned gpio_num)
 {
 	struct sch_gpio *sch = gpiochip_get_data(gc);
 
-	if (sch_gpio_reg_get(sch, gpio_num, GIO))
-		return GPIO_LINE_DIRECTION_IN;
-
-	return GPIO_LINE_DIRECTION_OUT;
+	return sch_gpio_reg_get(sch, gpio_num, GIO);
 }
 
 static const struct gpio_chip sch_gpio_chip = {

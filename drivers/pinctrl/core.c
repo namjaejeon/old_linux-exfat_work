@@ -1376,15 +1376,8 @@ void devm_pinctrl_put(struct pinctrl *p)
 }
 EXPORT_SYMBOL_GPL(devm_pinctrl_put);
 
-/**
- * pinctrl_register_mappings() - register a set of pin controller mappings
- * @maps: the pincontrol mappings table to register. Note the pinctrl-core
- *	keeps a reference to the passed in maps, so they should _not_ be
- *	marked with __initdata.
- * @num_maps: the number of maps in the mapping table
- */
-int pinctrl_register_mappings(const struct pinctrl_map *maps,
-			      unsigned num_maps)
+int pinctrl_register_map(const struct pinctrl_map *maps, unsigned num_maps,
+			 bool dup)
 {
 	int i, ret;
 	struct pinctrl_maps *maps_node;
@@ -1437,8 +1430,17 @@ int pinctrl_register_mappings(const struct pinctrl_map *maps,
 	if (!maps_node)
 		return -ENOMEM;
 
-	maps_node->maps = maps;
 	maps_node->num_maps = num_maps;
+	if (dup) {
+		maps_node->maps = kmemdup(maps, sizeof(*maps) * num_maps,
+					  GFP_KERNEL);
+		if (!maps_node->maps) {
+			kfree(maps_node);
+			return -ENOMEM;
+		}
+	} else {
+		maps_node->maps = maps;
+	}
 
 	mutex_lock(&pinctrl_maps_mutex);
 	list_add_tail(&maps_node->node, &pinctrl_maps);
@@ -1446,14 +1448,22 @@ int pinctrl_register_mappings(const struct pinctrl_map *maps,
 
 	return 0;
 }
-EXPORT_SYMBOL_GPL(pinctrl_register_mappings);
 
 /**
- * pinctrl_unregister_mappings() - unregister a set of pin controller mappings
- * @maps: the pincontrol mappings table passed to pinctrl_register_mappings()
- *	when registering the mappings.
+ * pinctrl_register_mappings() - register a set of pin controller mappings
+ * @maps: the pincontrol mappings table to register. This should probably be
+ *	marked with __initdata so it can be discarded after boot. This
+ *	function will perform a shallow copy for the mapping entries.
+ * @num_maps: the number of maps in the mapping table
  */
-void pinctrl_unregister_mappings(const struct pinctrl_map *map)
+int pinctrl_register_mappings(const struct pinctrl_map *maps,
+			      unsigned num_maps)
+{
+	return pinctrl_register_map(maps, num_maps, true);
+}
+EXPORT_SYMBOL_GPL(pinctrl_register_mappings);
+
+void pinctrl_unregister_map(const struct pinctrl_map *map)
 {
 	struct pinctrl_maps *maps_node;
 
@@ -1468,7 +1478,6 @@ void pinctrl_unregister_mappings(const struct pinctrl_map *map)
 	}
 	mutex_unlock(&pinctrl_maps_mutex);
 }
-EXPORT_SYMBOL_GPL(pinctrl_unregister_mappings);
 
 /**
  * pinctrl_force_sleep() - turn a given controller device into sleep state
@@ -1526,8 +1535,15 @@ int pinctrl_init_done(struct device *dev)
 	return ret;
 }
 
-static int pinctrl_select_bound_state(struct device *dev,
-				      struct pinctrl_state *state)
+#ifdef CONFIG_PM
+
+/**
+ * pinctrl_pm_select_state() - select pinctrl state for PM
+ * @dev: device to select default state for
+ * @state: state to set
+ */
+static int pinctrl_pm_select_state(struct device *dev,
+				   struct pinctrl_state *state)
 {
 	struct dev_pin_info *pins = dev->pins;
 	int ret;
@@ -1542,27 +1558,15 @@ static int pinctrl_select_bound_state(struct device *dev,
 }
 
 /**
- * pinctrl_select_default_state() - select default pinctrl state
- * @dev: device to select default state for
- */
-int pinctrl_select_default_state(struct device *dev)
-{
-	if (!dev->pins)
-		return 0;
-
-	return pinctrl_select_bound_state(dev, dev->pins->default_state);
-}
-EXPORT_SYMBOL_GPL(pinctrl_select_default_state);
-
-#ifdef CONFIG_PM
-
-/**
  * pinctrl_pm_select_default_state() - select default pinctrl state for PM
  * @dev: device to select default state for
  */
 int pinctrl_pm_select_default_state(struct device *dev)
 {
-	return pinctrl_select_default_state(dev);
+	if (!dev->pins)
+		return 0;
+
+	return pinctrl_pm_select_state(dev, dev->pins->default_state);
 }
 EXPORT_SYMBOL_GPL(pinctrl_pm_select_default_state);
 
@@ -1575,7 +1579,7 @@ int pinctrl_pm_select_sleep_state(struct device *dev)
 	if (!dev->pins)
 		return 0;
 
-	return pinctrl_select_bound_state(dev, dev->pins->sleep_state);
+	return pinctrl_pm_select_state(dev, dev->pins->sleep_state);
 }
 EXPORT_SYMBOL_GPL(pinctrl_pm_select_sleep_state);
 
@@ -1588,7 +1592,7 @@ int pinctrl_pm_select_idle_state(struct device *dev)
 	if (!dev->pins)
 		return 0;
 
-	return pinctrl_select_bound_state(dev, dev->pins->idle_state);
+	return pinctrl_pm_select_state(dev, dev->pins->idle_state);
 }
 EXPORT_SYMBOL_GPL(pinctrl_pm_select_idle_state);
 #endif

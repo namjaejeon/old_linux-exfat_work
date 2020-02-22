@@ -34,8 +34,8 @@ asmlinkage void do_page_fault(struct pt_regs *regs)
 	int code = SEGV_MAPERR;
 	vm_fault_t fault;
 
-	cause = regs->cause;
-	addr = regs->badaddr;
+	cause = regs->scause;
+	addr = regs->sbadaddr;
 
 	tsk = current;
 	mm = tsk->mm;
@@ -53,7 +53,7 @@ asmlinkage void do_page_fault(struct pt_regs *regs)
 		goto vmalloc_fault;
 
 	/* Enable interrupts if they were enabled in the parent context. */
-	if (likely(regs->status & SR_PIE))
+	if (likely(regs->sstatus & SR_SPIE))
 		local_irq_enable();
 
 	/*

@@ -205,7 +205,7 @@ int ad_sd_reset(struct ad_sigma_delta *sigma_delta,
 }
 EXPORT_SYMBOL_GPL(ad_sd_reset);
 
-int ad_sd_calibrate(struct ad_sigma_delta *sigma_delta,
+static int ad_sd_calibrate(struct ad_sigma_delta *sigma_delta,
 	unsigned int mode, unsigned int channel)
 {
 	int ret;
@@ -242,7 +242,6 @@ out:
 
 	return ret;
 }
-EXPORT_SYMBOL_GPL(ad_sd_calibrate);
 
 /**
  * ad_sd_calibrate_all() - Performs channel calibration
@@ -500,7 +499,7 @@ static int ad_sd_probe_trigger(struct iio_dev *indio_dev)
 
 	ret = request_irq(sigma_delta->spi->irq,
 			  ad_sd_data_rdy_trig_poll,
-			  sigma_delta->info->irq_flags,
+			  IRQF_TRIGGER_LOW,
 			  indio_dev->name,
 			  sigma_delta);
 	if (ret)

@@ -49,6 +49,13 @@ static int amdgpu_vm_cpu_prepare(struct amdgpu_vm_update_params *p, void *owner,
 {
 	int r;
 
+	/* Wait for PT BOs to be idle. PTs share the same resv. object
+	 * as the root PD BO
+	 */
+	r = amdgpu_bo_sync_wait(p->vm->root.base.bo, owner, true);
+	if (unlikely(r))
+		return r;
+
 	/* Wait for any BO move to be completed */
 	if (exclusive) {
 		r = dma_fence_wait(exclusive, true);
@@ -56,14 +63,7 @@ static int amdgpu_vm_cpu_prepare(struct amdgpu_vm_update_params *p, void *owner,
 			return r;
 	}
 
-	/* Don't wait for submissions during page fault */
-	if (p->direct)
-		return 0;
-
-	/* Wait for PT BOs to be idle. PTs share the same resv. object
-	 * as the root PD BO
-	 */
-	return amdgpu_bo_sync_wait(p->vm->root.base.bo, owner, true);
+	return 0;
 }
 
 /**
@@ -89,7 +89,7 @@ static int amdgpu_vm_cpu_update(struct amdgpu_vm_update_params *p,
 
 	pe += (unsigned long)amdgpu_bo_kptr(bo);
 
-	trace_amdgpu_vm_set_ptes(pe, addr, count, incr, flags, p->direct);
+	trace_amdgpu_vm_set_ptes(pe, addr, count, incr, flags);
 
 	for (i = 0; i < count; i++) {
 		value = p->pages_addr ?

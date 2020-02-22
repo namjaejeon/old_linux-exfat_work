@@ -39,14 +39,10 @@ static pte_t *kmap_pte;
 void __init kmap_init(void)
 {
 	unsigned long address;
-	p4d_t *p4d;
-	pud_t *pud;
 	pmd_t *dir;
 
 	address = __fix_to_virt(FIX_KMAP_BEGIN);
-	p4d = p4d_offset(pgd_offset_k(address), address);
-	pud = pud_offset(p4d, address);
-	dir = pmd_offset(pud, address);
+	dir = pmd_offset(pgd_offset_k(address), address);
 
         /* cache the first kmap pte */
         kmap_pte = pte_offset_kernel(dir, address);

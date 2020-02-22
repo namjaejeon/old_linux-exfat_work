@@ -37,7 +37,7 @@ static int ssbd_prctl_set(struct task_struct *task, unsigned long ctrl)
 
 	/* Unsupported */
 	if (state == ARM64_SSBD_UNKNOWN)
-		return -ENODEV;
+		return -EINVAL;
 
 	/* Treat the unaffected/mitigated state separately */
 	if (state == ARM64_SSBD_MITIGATED) {
@@ -102,7 +102,7 @@ static int ssbd_prctl_get(struct task_struct *task)
 {
 	switch (arm64_get_ssbd_state()) {
 	case ARM64_SSBD_UNKNOWN:
-		return -ENODEV;
+		return -EINVAL;
 	case ARM64_SSBD_FORCE_ENABLE:
 		return PR_SPEC_DISABLE;
 	case ARM64_SSBD_KERNEL:

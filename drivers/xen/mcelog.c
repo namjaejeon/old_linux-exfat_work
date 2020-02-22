@@ -222,7 +222,7 @@ static int convert_log(struct mc_info *mi)
 	struct mcinfo_global *mc_global;
 	struct mcinfo_bank *mc_bank;
 	struct xen_mce m;
-	unsigned int i, j;
+	uint32_t i;
 
 	mic = NULL;
 	x86_mcinfo_lookup(&mic, mi, MC_TYPE_GLOBAL);
@@ -248,17 +248,7 @@ static int convert_log(struct mc_info *mi)
 	m.socketid = g_physinfo[i].mc_chipid;
 	m.cpu = m.extcpu = g_physinfo[i].mc_cpunr;
 	m.cpuvendor = (__u8)g_physinfo[i].mc_vendor;
-	for (j = 0; j < g_physinfo[i].mc_nmsrvals; ++j)
-		switch (g_physinfo[i].mc_msrvalues[j].reg) {
-		case MSR_IA32_MCG_CAP:
-			m.mcgcap = g_physinfo[i].mc_msrvalues[j].value;
-			break;
-
-		case MSR_PPIN:
-		case MSR_AMD_PPIN:
-			m.ppin = g_physinfo[i].mc_msrvalues[j].value;
-			break;
-		}
+	m.mcgcap = g_physinfo[i].mc_msrvalues[__MC_MSR_MCGCAP].value;
 
 	mic = NULL;
 	x86_mcinfo_lookup(&mic, mi, MC_TYPE_BANK);

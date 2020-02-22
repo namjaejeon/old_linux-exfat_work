@@ -65,6 +65,9 @@ void __init mic_create_card_debug_dir(struct mic_driver *mdrv)
  */
 void mic_delete_card_debug_dir(struct mic_driver *mdrv)
 {
+	if (!mdrv->dbg_dir)
+		return;
+
 	debugfs_remove_recursive(mdrv->dbg_dir);
 }
 

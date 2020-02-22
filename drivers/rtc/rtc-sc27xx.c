@@ -661,6 +661,12 @@ static int sprd_rtc_probe(struct platform_device *pdev)
 	return 0;
 }
 
+static int sprd_rtc_remove(struct platform_device *pdev)
+{
+	device_init_wakeup(&pdev->dev, 0);
+	return 0;
+}
+
 static const struct of_device_id sprd_rtc_of_match[] = {
 	{ .compatible = "sprd,sc2731-rtc", },
 	{ },
@@ -673,6 +679,7 @@ static struct platform_driver sprd_rtc_driver = {
 		.of_match_table = sprd_rtc_of_match,
 	},
 	.probe	= sprd_rtc_probe,
+	.remove = sprd_rtc_remove,
 };
 module_platform_driver(sprd_rtc_driver);
 

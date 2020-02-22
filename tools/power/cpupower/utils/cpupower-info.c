@@ -10,7 +10,6 @@
 #include <errno.h>
 #include <string.h>
 #include <getopt.h>
-#include <sys/utsname.h>
 
 #include "helpers/helpers.h"
 #include "helpers/sysfs.h"
@@ -31,7 +30,6 @@ int cmd_info(int argc, char **argv)
 	extern char *optarg;
 	extern int optind, opterr, optopt;
 	unsigned int cpu;
-	struct utsname uts;
 
 	union {
 		struct {
@@ -40,13 +38,6 @@ int cmd_info(int argc, char **argv)
 		int params;
 	} params = {};
 	int ret = 0;
-
-	ret = uname(&uts);
-	if (!ret && (!strcmp(uts.machine, "ppc64le") ||
-		     !strcmp(uts.machine, "ppc64"))) {
-		fprintf(stderr, _("Subcommand not supported on POWER.\n"));
-		return ret;
-	}
 
 	setlocale(LC_ALL, "");
 	textdomain(PACKAGE);

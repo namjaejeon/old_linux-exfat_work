@@ -97,7 +97,8 @@ properties:
 
   memory-region: true
 
-  mali-supply: true
+  mali-supply:
+    maxItems: 1
 
   power-domains:
     maxItems: 1

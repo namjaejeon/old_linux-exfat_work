@@ -327,9 +327,7 @@ int msm_hdmi_modeset_init(struct hdmi *hdmi,
 		goto fail;
 	}
 
-	ret = drm_bridge_attach(encoder, hdmi->bridge, NULL);
-	if (ret)
-		goto fail;
+	encoder->bridge = hdmi->bridge;
 
 	priv->bridges[priv->num_bridges++]       = hdmi->bridge;
 	priv->connectors[priv->num_connectors++] = hdmi->connector;

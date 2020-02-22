@@ -18,10 +18,6 @@ ccflags-vdso := \
 	$(filter -mno-loongson-%,$(KBUILD_CFLAGS)) \
 	-D__VDSO__
 
-ifndef CONFIG_64BIT
-ccflags-vdso += -DBUILD_VDSO32
-endif
-
 ifdef CONFIG_CC_IS_CLANG
 ccflags-vdso += $(filter --target=%,$(KBUILD_CFLAGS))
 endif
@@ -79,7 +75,6 @@ CFLAGS_REMOVE_vdso.o = -pg
 
 GCOV_PROFILE := n
 UBSAN_SANITIZE := n
-KCOV_INSTRUMENT := n
 
 #
 # Shared build commands.
@@ -100,7 +95,7 @@ $(obj)/%.so.raw: OBJCOPYFLAGS := -S
 $(obj)/%.so.raw: $(obj)/%.so.dbg.raw FORCE
 	$(call if_changed,objcopy)
 
-hostprogs := genvdso
+hostprogs-y := genvdso
 
 quiet_cmd_genvdso = GENVDSO $@
 define cmd_genvdso

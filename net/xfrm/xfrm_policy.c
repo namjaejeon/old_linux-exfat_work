@@ -39,9 +39,6 @@
 #ifdef CONFIG_XFRM_STATISTICS
 #include <net/snmp.h>
 #endif
-#ifdef CONFIG_INET_ESPINTCP
-#include <net/espintcp.h>
-#endif
 
 #include "xfrm_hash.h"
 
@@ -3189,7 +3186,7 @@ struct dst_entry *xfrm_lookup_route(struct net *net, struct dst_entry *dst_orig,
 					    flags | XFRM_LOOKUP_QUEUE |
 					    XFRM_LOOKUP_KEEP_DST_REF);
 
-	if (PTR_ERR(dst) == -EREMOTE)
+	if (IS_ERR(dst) && PTR_ERR(dst) == -EREMOTE)
 		return make_blackhole(net, dst_orig->ops->family, dst_orig);
 
 	if (IS_ERR(dst))
@@ -4159,10 +4156,6 @@ void __init xfrm_init(void)
 	xfrm_dev_init();
 	seqcount_init(&xfrm_policy_hash_generation);
 	xfrm_input_init();
-
-#ifdef CONFIG_INET_ESPINTCP
-	espintcp_init();
-#endif
 
 	RCU_INIT_POINTER(xfrm_if_cb, NULL);
 	synchronize_rcu();

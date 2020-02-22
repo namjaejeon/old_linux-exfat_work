@@ -26,7 +26,7 @@
 #include <linux/sched.h>
 #include <linux/fs_struct.h>
 #include <linux/namei.h>
-#include <linux/random.h>
+
 #include <linux/string.h>
 #include <linux/nls.h>
 #include <linux/mutex.h>
@@ -38,8 +38,8 @@
 
 static struct kmem_cache *exfat_inode_cachep;
 
-static int exfat_default_codepage = CONFIG_STAGING_EXFAT_DEFAULT_CODEPAGE;
-static char exfat_default_iocharset[] = CONFIG_STAGING_EXFAT_DEFAULT_IOCHARSET;
+static int exfat_default_codepage = CONFIG_EXFAT_DEFAULT_CODEPAGE;
+static char exfat_default_iocharset[] = CONFIG_EXFAT_DEFAULT_IOCHARSET;
 
 #define INC_IVERSION(x) (inode_inc_iversion(x))
 #define GET_IVERSION(x) (inode_peek_iversion_raw(x))
@@ -284,12 +284,12 @@ static const struct dentry_operations exfat_dentry_ops = {
 	.d_compare      = exfat_cmp,
 };
 
-static DEFINE_MUTEX(z_mutex);
+static DEFINE_SEMAPHORE(z_sem);
 
 static inline void fs_sync(struct super_block *sb, bool do_sync)
 {
 	if (do_sync)
-		exfat_bdev_sync(sb);
+		bdev_sync(sb);
 }
 
 /*
@@ -353,28 +353,26 @@ static int ffsMountVol(struct super_block *sb)
 
 	pr_info("[EXFAT] trying to mount...\n");
 
-	mutex_lock(&z_mutex);
+	down(&z_sem);
 
-	exfat_buf_init(sb);
+	buf_init(sb);
 
-	mutex_init(&p_fs->v_mutex);
+	sema_init(&p_fs->v_sem, 1);
 	p_fs->dev_ejected = 0;
 
 	/* open the block device */
-	exfat_bdev_open(sb);
+	bdev_open(sb);
 
 	if (p_bd->sector_size < sb->s_blocksize) {
-		printk(KERN_INFO "EXFAT: mount failed - sector size %d less than blocksize %ld\n",
-		       p_bd->sector_size,  sb->s_blocksize);
-		ret = -EINVAL;
+		ret = FFS_MEDIAERR;
 		goto out;
 	}
 	if (p_bd->sector_size > sb->s_blocksize)
 		sb_set_blocksize(sb, p_bd->sector_size);
 
 	/* read Sector 0 */
-	if (sector_read(sb, 0, &tmp_bh, 1) != 0) {
-		ret = -EIO;
+	if (sector_read(sb, 0, &tmp_bh, 1) != FFS_SUCCESS) {
+		ret = FFS_MEDIAERR;
 		goto out;
 	}
 
@@ -385,8 +383,8 @@ static int ffsMountVol(struct super_block *sb)
 	/* check the validity of PBR */
 	if (GET16_A(p_pbr->signature) != PBR_SIGNATURE) {
 		brelse(tmp_bh);
-		exfat_bdev_close(sb);
-		ret = -EFSCORRUPTED;
+		bdev_close(sb);
+		ret = FFS_FORMATERR;
 		goto out;
 	}
 
@@ -396,10 +394,16 @@ static int ffsMountVol(struct super_block *sb)
 			break;
 
 	if (i < 53) {
-		/* Not sure how we'd get here, but complain if it does */
+#ifdef CONFIG_EXFAT_DONT_MOUNT_VFAT
 		ret = -EINVAL;
-		pr_info("EXFAT: Attempted to mount VFAT filesystem\n");
+		printk(KERN_INFO "EXFAT: Attempted to mount VFAT filesystem\n");
 		goto out;
+#else
+		if (GET16(p_pbr->bpb + 11)) /* num_fat_sectors */
+			ret = fat16_mount(sb, p_pbr);
+		else
+			ret = fat32_mount(sb, p_pbr);
+#endif
 	} else {
 		ret = exfat_mount(sb, p_pbr);
 	}
@@ -407,34 +411,38 @@ static int ffsMountVol(struct super_block *sb)
 	brelse(tmp_bh);
 
 	if (ret) {
-		exfat_bdev_close(sb);
+		bdev_close(sb);
 		goto out;
 	}
 
-	ret = load_alloc_bitmap(sb);
-	if (ret) {
-		exfat_bdev_close(sb);
-		goto out;
-	}
-	ret = load_upcase_table(sb);
-	if (ret) {
-		free_alloc_bitmap(sb);
-		exfat_bdev_close(sb);
-		goto out;
+	if (p_fs->vol_type == EXFAT) {
+		ret = load_alloc_bitmap(sb);
+		if (ret) {
+			bdev_close(sb);
+			goto out;
+		}
+		ret = load_upcase_table(sb);
+		if (ret) {
+			free_alloc_bitmap(sb);
+			bdev_close(sb);
+			goto out;
+		}
 	}
 
 	if (p_fs->dev_ejected) {
-		free_upcase_table(sb);
-		free_alloc_bitmap(sb);
-		exfat_bdev_close(sb);
-		ret = -EIO;
+		if (p_fs->vol_type == EXFAT) {
+			free_upcase_table(sb);
+			free_alloc_bitmap(sb);
+		}
+		bdev_close(sb);
+		ret = FFS_MEDIAERR;
 		goto out;
 	}
 
 	pr_info("[EXFAT] mounted successfully\n");
 
 out:
-	mutex_unlock(&z_mutex);
+	up(&z_sem);
 
 	return ret;
 }
@@ -442,37 +450,39 @@ out:
 static int ffsUmountVol(struct super_block *sb)
 {
 	struct fs_info_t *p_fs = &(EXFAT_SB(sb)->fs_info);
-	int err = 0;
+	int err = FFS_SUCCESS;
 
 	pr_info("[EXFAT] trying to unmount...\n");
 
-	mutex_lock(&z_mutex);
+	down(&z_sem);
 
 	/* acquire the lock for file system critical section */
-	mutex_lock(&p_fs->v_mutex);
+	down(&p_fs->v_sem);
 
-	fs_sync(sb, true);
+	fs_sync(sb, false);
 	fs_set_vol_flags(sb, VOL_CLEAN);
 
-	free_upcase_table(sb);
-	free_alloc_bitmap(sb);
+	if (p_fs->vol_type == EXFAT) {
+		free_upcase_table(sb);
+		free_alloc_bitmap(sb);
+	}
 
-	exfat_fat_release_all(sb);
-	exfat_buf_release_all(sb);
+	FAT_release_all(sb);
+	buf_release_all(sb);
 
 	/* close the block device */
-	exfat_bdev_close(sb);
+	bdev_close(sb);
 
 	if (p_fs->dev_ejected) {
 		pr_info("[EXFAT] unmounted with media errors. Device is already ejected.\n");
-		err = -EIO;
+		err = FFS_MEDIAERR;
 	}
 
-	exfat_buf_shutdown(sb);
+	buf_shutdown(sb);
 
 	/* release the lock for file system critical section */
-	mutex_unlock(&p_fs->v_mutex);
-	mutex_unlock(&z_mutex);
+	up(&p_fs->v_sem);
+	up(&z_sem);
 
 	pr_info("[EXFAT] unmounted successfully\n");
 
@@ -481,18 +491,18 @@ static int ffsUmountVol(struct super_block *sb)
 
 static int ffsGetVolInfo(struct super_block *sb, struct vol_info_t *info)
 {
-	int err = 0;
+	int err = FFS_SUCCESS;
 	struct fs_info_t *p_fs = &(EXFAT_SB(sb)->fs_info);
 
 	/* check the validity of pointer parameters */
 	if (!info)
-		return -EINVAL;
+		return FFS_ERROR;
 
 	/* acquire the lock for file system critical section */
-	mutex_lock(&p_fs->v_mutex);
+	down(&p_fs->v_sem);
 
 	if (p_fs->used_clusters == UINT_MAX)
-		p_fs->used_clusters = exfat_count_used_clusters(sb);
+		p_fs->used_clusters = p_fs->fs_func->count_used_clusters(sb);
 
 	info->FatType = p_fs->vol_type;
 	info->ClusterSize = p_fs->cluster_size;
@@ -501,31 +511,31 @@ static int ffsGetVolInfo(struct super_block *sb, struct vol_info_t *info)
 	info->FreeClusters = info->NumClusters - info->UsedClusters;
 
 	if (p_fs->dev_ejected)
-		err = -EIO;
+		err = FFS_MEDIAERR;
 
 	/* release the lock for file system critical section */
-	mutex_unlock(&p_fs->v_mutex);
+	up(&p_fs->v_sem);
 
 	return err;
 }
 
 static int ffsSyncVol(struct super_block *sb, bool do_sync)
 {
-	int err = 0;
+	int err = FFS_SUCCESS;
 	struct fs_info_t *p_fs = &(EXFAT_SB(sb)->fs_info);
 
 	/* acquire the lock for file system critical section */
-	mutex_lock(&p_fs->v_mutex);
+	down(&p_fs->v_sem);
 
 	/* synchronize the file system */
 	fs_sync(sb, do_sync);
 	fs_set_vol_flags(sb, VOL_CLEAN);
 
 	if (p_fs->dev_ejected)
-		err = -EIO;
+		err = FFS_MEDIAERR;
 
 	/* release the lock for file system critical section */
-	mutex_unlock(&p_fs->v_mutex);
+	up(&p_fs->v_sem);
 
 	return err;
 }
@@ -549,10 +559,10 @@ static int ffsLookupFile(struct inode *inode, char *path, struct file_id_t *fid)
 
 	/* check the validity of pointer parameters */
 	if (!fid || !path || (*path == '\0'))
-		return -EINVAL;
+		return FFS_ERROR;
 
 	/* acquire the lock for file system critical section */
-	mutex_lock(&p_fs->v_mutex);
+	down(&p_fs->v_sem);
 
 	/* check the validity of directory name in the given pathname */
 	ret = resolve_path(inode, path, &dir, &uni_name);
@@ -565,10 +575,10 @@ static int ffsLookupFile(struct inode *inode, char *path, struct file_id_t *fid)
 		goto out;
 
 	/* search the file name for directories */
-	dentry = exfat_find_dir_entry(sb, &dir, &uni_name, num_entries,
-				      &dos_name, TYPE_ALL);
+	dentry = p_fs->fs_func->find_dir_entry(sb, &dir, &uni_name, num_entries,
+					       &dos_name, TYPE_ALL);
 	if (dentry < -1) {
-		ret = -ENOENT;
+		ret = FFS_NOTFOUND;
 		goto out;
 	}
 
@@ -587,36 +597,46 @@ static int ffsLookupFile(struct inode *inode, char *path, struct file_id_t *fid)
 		fid->size = 0;
 		fid->start_clu = p_fs->root_dir;
 	} else {
-		es = get_entry_set_in_dir(sb, &dir, dentry,
-					  ES_2_ENTRIES, &ep);
-		if (!es) {
-			ret =  -ENOENT;
-			goto out;
+		if (p_fs->vol_type == EXFAT) {
+			es = get_entry_set_in_dir(sb, &dir, dentry,
+						  ES_2_ENTRIES, &ep);
+			if (!es) {
+				ret =  FFS_MEDIAERR;
+				goto out;
+			}
+			ep2 = ep + 1;
+		} else {
+			ep = get_entry_in_dir(sb, &dir, dentry, NULL);
+			if (!ep) {
+				ret =  FFS_MEDIAERR;
+				goto out;
+			}
+			ep2 = ep;
 		}
-		ep2 = ep + 1;
 
-		fid->type = exfat_get_entry_type(ep);
+		fid->type = p_fs->fs_func->get_entry_type(ep);
 		fid->rwoffset = 0;
 		fid->hint_last_off = -1;
-		fid->attr = exfat_get_entry_attr(ep);
+		fid->attr = p_fs->fs_func->get_entry_attr(ep);
 
-		fid->size = exfat_get_entry_size(ep2);
+		fid->size = p_fs->fs_func->get_entry_size(ep2);
 		if ((fid->type == TYPE_FILE) && (fid->size == 0)) {
 			fid->flags = (p_fs->vol_type == EXFAT) ? 0x03 : 0x01;
 			fid->start_clu = CLUSTER_32(~0);
 		} else {
-			fid->flags = exfat_get_entry_flag(ep2);
-			fid->start_clu = exfat_get_entry_clu0(ep2);
+			fid->flags = p_fs->fs_func->get_entry_flag(ep2);
+			fid->start_clu = p_fs->fs_func->get_entry_clu0(ep2);
 		}
 
-		release_entry_set(es);
+		if (p_fs->vol_type == EXFAT)
+			release_entry_set(es);
 	}
 
 	if (p_fs->dev_ejected)
-		ret = -EIO;
+		ret = FFS_MEDIAERR;
 out:
 	/* release the lock for file system critical section */
-	mutex_unlock(&p_fs->v_mutex);
+	up(&p_fs->v_sem);
 
 	return ret;
 }
@@ -628,14 +648,14 @@ static int ffsCreateFile(struct inode *inode, char *path, u8 mode,
 	struct uni_name_t uni_name;
 	struct super_block *sb = inode->i_sb;
 	struct fs_info_t *p_fs = &(EXFAT_SB(sb)->fs_info);
-	int ret = 0;
+	int ret;
 
 	/* check the validity of pointer parameters */
 	if (!fid || !path || (*path == '\0'))
-		return -EINVAL;
+		return FFS_ERROR;
 
 	/* acquire the lock for file system critical section */
-	mutex_lock(&p_fs->v_mutex);
+	down(&p_fs->v_sem);
 
 	/* check the validity of directory name in the given pathname */
 	ret = resolve_path(inode, path, &dir, &uni_name);
@@ -647,17 +667,17 @@ static int ffsCreateFile(struct inode *inode, char *path, u8 mode,
 	/* create a new file */
 	ret = create_file(inode, &dir, &uni_name, mode, fid);
 
-#ifndef CONFIG_STAGING_EXFAT_DELAYED_SYNC
-	fs_sync(sb, true);
+#ifdef CONFIG_EXFAT_DELAYED_SYNC
+	fs_sync(sb, false);
 	fs_set_vol_flags(sb, VOL_CLEAN);
 #endif
 
 	if (p_fs->dev_ejected)
-		ret = -EIO;
+		ret = FFS_MEDIAERR;
 
 out:
 	/* release the lock for file system critical section */
-	mutex_unlock(&p_fs->v_mutex);
+	up(&p_fs->v_sem);
 
 	return ret;
 }
@@ -677,18 +697,18 @@ static int ffsReadFile(struct inode *inode, struct file_id_t *fid, void *buffer,
 
 	/* check the validity of the given file id */
 	if (!fid)
-		return -EINVAL;
+		return FFS_INVALIDFID;
 
 	/* check the validity of pointer parameters */
 	if (!buffer)
-		return -EINVAL;
+		return FFS_ERROR;
 
 	/* acquire the lock for file system critical section */
-	mutex_lock(&p_fs->v_mutex);
+	down(&p_fs->v_sem);
 
 	/* check if the given file ID is opened */
 	if (fid->type != TYPE_FILE) {
-		ret = -EPERM;
+		ret = FFS_PERMISSIONERR;
 		goto out;
 	}
 
@@ -701,7 +721,7 @@ static int ffsReadFile(struct inode *inode, struct file_id_t *fid, void *buffer,
 	if (count == 0) {
 		if (rcount)
 			*rcount = 0;
-		ret = 0;
+		ret = FFS_EOF;
 		goto out;
 	}
 
@@ -722,11 +742,9 @@ static int ffsReadFile(struct inode *inode, struct file_id_t *fid, void *buffer,
 			}
 
 			while (clu_offset > 0) {
-				/* clu = exfat_fat_read(sb, clu); */
-				if (exfat_fat_read(sb, clu, &clu) == -1) {
-					ret = -EIO;
-					goto out;
-				}
+				/* clu = FAT_read(sb, clu); */
+				if (FAT_read(sb, clu, &clu) == -1)
+					return FFS_MEDIAERR;
 
 				clu_offset--;
 			}
@@ -754,13 +772,13 @@ static int ffsReadFile(struct inode *inode, struct file_id_t *fid, void *buffer,
 
 		if ((offset == 0) && (oneblkread == p_bd->sector_size)) {
 			if (sector_read(sb, LogSector, &tmp_bh, 1) !=
-			    0)
+			    FFS_SUCCESS)
 				goto err_out;
 			memcpy((char *)buffer + read_bytes,
 			       (char *)tmp_bh->b_data, (s32)oneblkread);
 		} else {
 			if (sector_read(sb, LogSector, &tmp_bh, 1) !=
-			    0)
+			    FFS_SUCCESS)
 				goto err_out;
 			memcpy((char *)buffer + read_bytes,
 			       (char *)tmp_bh->b_data + offset,
@@ -779,11 +797,11 @@ err_out:
 		*rcount = read_bytes;
 
 	if (p_fs->dev_ejected)
-		ret = -EIO;
+		ret = FFS_MEDIAERR;
 
 out:
 	/* release the lock for file system critical section */
-	mutex_unlock(&p_fs->v_mutex);
+	up(&p_fs->v_sem);
 
 	return ret;
 }
@@ -796,7 +814,7 @@ static int ffsWriteFile(struct inode *inode, struct file_id_t *fid,
 	s32 num_clusters, num_alloc, num_alloced = (s32)~0;
 	int ret = 0;
 	u32 clu, last_clu;
-	sector_t LogSector;
+	sector_t LogSector, sector = 0;
 	u64 oneblkwrite, write_bytes;
 	struct chain_t new_clu;
 	struct timestamp_t tm;
@@ -809,18 +827,18 @@ static int ffsWriteFile(struct inode *inode, struct file_id_t *fid,
 
 	/* check the validity of the given file id */
 	if (!fid)
-		return -EINVAL;
+		return FFS_INVALIDFID;
 
 	/* check the validity of pointer parameters */
 	if (!buffer)
-		return -EINVAL;
+		return FFS_ERROR;
 
 	/* acquire the lock for file system critical section */
-	mutex_lock(&p_fs->v_mutex);
+	down(&p_fs->v_sem);
 
 	/* check if the given file ID is opened */
 	if (fid->type != TYPE_FILE) {
-		ret = -EPERM;
+		ret = FFS_PERMISSIONERR;
 		goto out;
 	}
 
@@ -830,7 +848,7 @@ static int ffsWriteFile(struct inode *inode, struct file_id_t *fid,
 	if (count == 0) {
 		if (wcount)
 			*wcount = 0;
-		ret = 0;
+		ret = FFS_SUCCESS;
 		goto out;
 	}
 
@@ -846,8 +864,7 @@ static int ffsWriteFile(struct inode *inode, struct file_id_t *fid,
 
 	while (count > 0) {
 		clu_offset = (s32)(fid->rwoffset >> p_fs->cluster_size_bits);
-		clu = fid->start_clu;
-		last_clu = fid->start_clu;
+		clu = last_clu = fid->start_clu;
 
 		if (fid->flags == 0x03) {
 			if ((clu_offset > 0) && (clu != CLUSTER_32(~0))) {
@@ -868,9 +885,9 @@ static int ffsWriteFile(struct inode *inode, struct file_id_t *fid,
 
 			while ((clu_offset > 0) && (clu != CLUSTER_32(~0))) {
 				last_clu = clu;
-				/* clu = exfat_fat_read(sb, clu); */
-				if (exfat_fat_read(sb, clu, &clu) == -1) {
-					ret = -EIO;
+				/* clu = FAT_read(sb, clu); */
+				if (FAT_read(sb, clu, &clu) == -1) {
+					ret = FFS_MEDIAERR;
 					goto out;
 				}
 				clu_offset--;
@@ -886,13 +903,13 @@ static int ffsWriteFile(struct inode *inode, struct file_id_t *fid,
 			new_clu.flags = fid->flags;
 
 			/* (1) allocate a chain of clusters */
-			num_alloced = exfat_alloc_cluster(sb,
-							  num_alloc,
-							  &new_clu);
+			num_alloced = p_fs->fs_func->alloc_cluster(sb,
+								   num_alloc,
+								   &new_clu);
 			if (num_alloced == 0)
 				break;
 			if (num_alloced < 0) {
-				ret = num_alloced;
+				ret = FFS_MEDIAERR;
 				goto out;
 			}
 
@@ -911,7 +928,7 @@ static int ffsWriteFile(struct inode *inode, struct file_id_t *fid,
 					modified = true;
 				}
 				if (new_clu.flags == 0x01)
-					exfat_fat_write(sb, last_clu, new_clu.dir);
+					FAT_write(sb, last_clu, new_clu.dir);
 			}
 
 			num_clusters += num_alloced;
@@ -940,12 +957,12 @@ static int ffsWriteFile(struct inode *inode, struct file_id_t *fid,
 
 		if ((offset == 0) && (oneblkwrite == p_bd->sector_size)) {
 			if (sector_read(sb, LogSector, &tmp_bh, 0) !=
-			    0)
+			    FFS_SUCCESS)
 				goto err_out;
 			memcpy((char *)tmp_bh->b_data,
 			       (char *)buffer + write_bytes, (s32)oneblkwrite);
 			if (sector_write(sb, LogSector, tmp_bh, 0) !=
-			    0) {
+			    FFS_SUCCESS) {
 				brelse(tmp_bh);
 				goto err_out;
 			}
@@ -953,18 +970,18 @@ static int ffsWriteFile(struct inode *inode, struct file_id_t *fid,
 			if ((offset > 0) ||
 			    ((fid->rwoffset + oneblkwrite) < fid->size)) {
 				if (sector_read(sb, LogSector, &tmp_bh, 1) !=
-				    0)
+				    FFS_SUCCESS)
 					goto err_out;
 			} else {
 				if (sector_read(sb, LogSector, &tmp_bh, 0) !=
-				    0)
+				    FFS_SUCCESS)
 					goto err_out;
 			}
 
 			memcpy((char *)tmp_bh->b_data + offset,
 			       (char *)buffer + write_bytes, (s32)oneblkwrite);
 			if (sector_write(sb, LogSector, tmp_bh, 0) !=
-			    0) {
+			    FFS_SUCCESS) {
 				brelse(tmp_bh);
 				goto err_out;
 			}
@@ -985,31 +1002,46 @@ static int ffsWriteFile(struct inode *inode, struct file_id_t *fid,
 	brelse(tmp_bh);
 
 	/* (3) update the direcoty entry */
-	es = get_entry_set_in_dir(sb, &fid->dir, fid->entry,
-				  ES_ALL_ENTRIES, &ep);
-	if (!es)
-		goto err_out;
-	ep2 = ep + 1;
-
-	exfat_set_entry_time(ep, tm_current(&tm), TM_MODIFY);
-	exfat_set_entry_attr(ep, fid->attr);
-
-	if (modified) {
-		if (exfat_get_entry_flag(ep2) != fid->flags)
-			exfat_set_entry_flag(ep2, fid->flags);
-
-		if (exfat_get_entry_size(ep2) != fid->size)
-			exfat_set_entry_size(ep2, fid->size);
-
-		if (exfat_get_entry_clu0(ep2) != fid->start_clu)
-			exfat_set_entry_clu0(ep2, fid->start_clu);
+	if (p_fs->vol_type == EXFAT) {
+		es = get_entry_set_in_dir(sb, &(fid->dir), fid->entry,
+					  ES_ALL_ENTRIES, &ep);
+		if (!es)
+			goto err_out;
+		ep2 = ep + 1;
+	} else {
+		ep = get_entry_in_dir(sb, &(fid->dir), fid->entry, &sector);
+		if (!ep)
+			goto err_out;
+		ep2 = ep;
 	}
 
-	update_dir_checksum_with_entry_set(sb, es);
-	release_entry_set(es);
+	p_fs->fs_func->set_entry_time(ep, tm_current(&tm), TM_MODIFY);
+	p_fs->fs_func->set_entry_attr(ep, fid->attr);
 
-#ifndef CONFIG_STAGING_EXFAT_DELAYED_SYNC
-	fs_sync(sb, true);
+	if (p_fs->vol_type != EXFAT)
+		buf_modify(sb, sector);
+
+	if (modified) {
+		if (p_fs->fs_func->get_entry_flag(ep2) != fid->flags)
+			p_fs->fs_func->set_entry_flag(ep2, fid->flags);
+
+		if (p_fs->fs_func->get_entry_size(ep2) != fid->size)
+			p_fs->fs_func->set_entry_size(ep2, fid->size);
+
+		if (p_fs->fs_func->get_entry_clu0(ep2) != fid->start_clu)
+			p_fs->fs_func->set_entry_clu0(ep2, fid->start_clu);
+
+		if (p_fs->vol_type != EXFAT)
+			buf_modify(sb, sector);
+	}
+
+	if (p_fs->vol_type == EXFAT) {
+		update_dir_checksum_with_entry_set(sb, es);
+		release_entry_set(es);
+	}
+
+#ifdef CONFIG_EXFAT_DELAYED_SYNC
+	fs_sync(sb, false);
 	fs_set_vol_flags(sb, VOL_CLEAN);
 #endif
 
@@ -1019,14 +1051,14 @@ err_out:
 		*wcount = write_bytes;
 
 	if (num_alloced == 0)
-		ret = -ENOSPC;
+		ret = FFS_FULL;
 
 	else if (p_fs->dev_ejected)
-		ret = -EIO;
+		ret = FFS_MEDIAERR;
 
 out:
 	/* release the lock for file system critical section */
-	mutex_unlock(&p_fs->v_mutex);
+	up(&p_fs->v_sem);
 
 	return ret;
 }
@@ -1036,6 +1068,7 @@ static int ffsTruncateFile(struct inode *inode, u64 old_size, u64 new_size)
 	s32 num_clusters;
 	u32 last_clu = CLUSTER_32(0);
 	int ret = 0;
+	sector_t sector = 0;
 	struct chain_t clu;
 	struct timestamp_t tm;
 	struct dentry_t *ep, *ep2;
@@ -1048,11 +1081,11 @@ static int ffsTruncateFile(struct inode *inode, u64 old_size, u64 new_size)
 		 new_size);
 
 	/* acquire the lock for file system critical section */
-	mutex_lock(&p_fs->v_mutex);
+	down(&p_fs->v_sem);
 
 	/* check if the given file ID is opened */
 	if (fid->type != TYPE_FILE) {
-		ret = -EPERM;
+		ret = FFS_PERMISSIONERR;
 		goto out;
 	}
 
@@ -1062,7 +1095,7 @@ static int ffsTruncateFile(struct inode *inode, u64 old_size, u64 new_size)
 	}
 
 	if (old_size <= new_size) {
-		ret = 0;
+		ret = FFS_SUCCESS;
 		goto out;
 	}
 
@@ -1081,8 +1114,8 @@ static int ffsTruncateFile(struct inode *inode, u64 old_size, u64 new_size)
 		} else {
 			while (num_clusters > 0) {
 				last_clu = clu.dir;
-				if (exfat_fat_read(sb, clu.dir, &clu.dir) == -1) {
-					ret = -EIO;
+				if (FAT_read(sb, clu.dir, &clu.dir) == -1) {
+					ret = FFS_MEDIAERR;
 					goto out;
 				}
 				num_clusters--;
@@ -1100,52 +1133,65 @@ static int ffsTruncateFile(struct inode *inode, u64 old_size, u64 new_size)
 	}
 
 	/* (1) update the directory entry */
-	es = get_entry_set_in_dir(sb, &fid->dir, fid->entry,
-				  ES_ALL_ENTRIES, &ep);
-	if (!es) {
-		ret = -ENOENT;
-		goto out;
+	if (p_fs->vol_type == EXFAT) {
+		es = get_entry_set_in_dir(sb, &fid->dir, fid->entry,
+					  ES_ALL_ENTRIES, &ep);
+		if (!es) {
+			ret = FFS_MEDIAERR;
+			goto out;
+			}
+		ep2 = ep + 1;
+	} else {
+		ep = get_entry_in_dir(sb, &(fid->dir), fid->entry, &sector);
+		if (!ep) {
+			ret = FFS_MEDIAERR;
+			goto out;
 		}
-	ep2 = ep + 1;
-
-	exfat_set_entry_time(ep, tm_current(&tm), TM_MODIFY);
-	exfat_set_entry_attr(ep, fid->attr);
-
-	exfat_set_entry_size(ep2, new_size);
-	if (new_size == 0) {
-		exfat_set_entry_flag(ep2, 0x01);
-		exfat_set_entry_clu0(ep2, CLUSTER_32(0));
+		ep2 = ep;
 	}
 
-	update_dir_checksum_with_entry_set(sb, es);
-	release_entry_set(es);
+	p_fs->fs_func->set_entry_time(ep, tm_current(&tm), TM_MODIFY);
+	p_fs->fs_func->set_entry_attr(ep, fid->attr);
+
+	p_fs->fs_func->set_entry_size(ep2, new_size);
+	if (new_size == 0) {
+		p_fs->fs_func->set_entry_flag(ep2, 0x01);
+		p_fs->fs_func->set_entry_clu0(ep2, CLUSTER_32(0));
+	}
+
+	if (p_fs->vol_type != EXFAT) {
+		buf_modify(sb, sector);
+	} else {
+		update_dir_checksum_with_entry_set(sb, es);
+		release_entry_set(es);
+	}
 
 	/* (2) cut off from the FAT chain */
 	if (last_clu != CLUSTER_32(0)) {
 		if (fid->flags == 0x01)
-			exfat_fat_write(sb, last_clu, CLUSTER_32(~0));
+			FAT_write(sb, last_clu, CLUSTER_32(~0));
 	}
 
 	/* (3) free the clusters */
-	exfat_free_cluster(sb, &clu, 0);
+	p_fs->fs_func->free_cluster(sb, &clu, 0);
 
 	/* hint information */
 	fid->hint_last_off = -1;
 	if (fid->rwoffset > fid->size)
 		fid->rwoffset = fid->size;
 
-#ifndef CONFIG_STAGING_EXFAT_DELAYED_SYNC
-	fs_sync(sb, true);
+#ifdef CONFIG_EXFAT_DELAYED_SYNC
+	fs_sync(sb, false);
 	fs_set_vol_flags(sb, VOL_CLEAN);
 #endif
 
 	if (p_fs->dev_ejected)
-		ret = -EIO;
+		ret = FFS_MEDIAERR;
 
 out:
 	pr_debug("%s exited (%d)\n", __func__, ret);
 	/* release the lock for file system critical section */
-	mutex_unlock(&p_fs->v_mutex);
+	up(&p_fs->v_sem);
 
 	return ret;
 }
@@ -1186,14 +1232,14 @@ static int ffsMoveFile(struct inode *old_parent_inode, struct file_id_t *fid,
 
 	/* check the validity of the given file id */
 	if (!fid)
-		return -EINVAL;
+		return FFS_INVALIDFID;
 
 	/* check the validity of pointer parameters */
 	if (!new_path || (*new_path == '\0'))
-		return -EINVAL;
+		return FFS_ERROR;
 
 	/* acquire the lock for file system critical section */
-	mutex_lock(&p_fs->v_mutex);
+	down(&p_fs->v_sem);
 
 	update_parent_info(fid, old_parent_inode);
 
@@ -1206,19 +1252,19 @@ static int ffsMoveFile(struct inode *old_parent_inode, struct file_id_t *fid,
 	/* check if the old file is "." or ".." */
 	if (p_fs->vol_type != EXFAT) {
 		if ((olddir.dir != p_fs->root_dir) && (dentry < 2)) {
-			ret = -EPERM;
+			ret = FFS_PERMISSIONERR;
 			goto out2;
 		}
 	}
 
 	ep = get_entry_in_dir(sb, &olddir, dentry, NULL);
 	if (!ep) {
-		ret = -ENOENT;
+		ret = FFS_MEDIAERR;
 		goto out2;
 	}
 
-	if (exfat_get_entry_attr(ep) & ATTR_READONLY) {
-		ret = -EPERM;
+	if (p_fs->fs_func->get_entry_attr(ep) & ATTR_READONLY) {
+		ret = FFS_PERMISSIONERR;
 		goto out2;
 	}
 
@@ -1226,18 +1272,18 @@ static int ffsMoveFile(struct inode *old_parent_inode, struct file_id_t *fid,
 	if (new_inode) {
 		u32 entry_type;
 
-		ret = -ENOENT;
+		ret = FFS_MEDIAERR;
 		new_fid = &EXFAT_I(new_inode)->fid;
 
 		update_parent_info(new_fid, new_parent_inode);
 
-		p_dir = &new_fid->dir;
+		p_dir = &(new_fid->dir);
 		new_entry = new_fid->entry;
 		ep = get_entry_in_dir(sb, p_dir, new_entry, NULL);
 		if (!ep)
 			goto out;
 
-		entry_type = exfat_get_entry_type(ep);
+		entry_type = p_fs->fs_func->get_entry_type(ep);
 
 		if (entry_type == TYPE_DIR) {
 			struct chain_t new_clu;
@@ -1248,7 +1294,7 @@ static int ffsMoveFile(struct inode *old_parent_inode, struct file_id_t *fid,
 			new_clu.flags = new_fid->flags;
 
 			if (!is_dir_empty(sb, &new_clu)) {
-				ret = -EEXIST;
+				ret = FFS_FILEEXIST;
 				goto out;
 			}
 		}
@@ -1262,36 +1308,36 @@ static int ffsMoveFile(struct inode *old_parent_inode, struct file_id_t *fid,
 	fs_set_vol_flags(sb, VOL_DIRTY);
 
 	if (olddir.dir == newdir.dir)
-		ret = exfat_rename_file(new_parent_inode, &olddir, dentry,
-					&uni_name, fid);
+		ret = rename_file(new_parent_inode, &olddir, dentry, &uni_name,
+				  fid);
 	else
 		ret = move_file(new_parent_inode, &olddir, dentry, &newdir,
 				&uni_name, fid);
 
-	if ((ret == 0) && new_inode) {
+	if ((ret == FFS_SUCCESS) && new_inode) {
 		/* delete entries of new_dir */
 		ep = get_entry_in_dir(sb, p_dir, new_entry, NULL);
 		if (!ep)
 			goto out;
 
-		num_entries = exfat_count_ext_entries(sb, p_dir,
-						      new_entry, ep);
+		num_entries = p_fs->fs_func->count_ext_entries(sb, p_dir,
+							       new_entry, ep);
 		if (num_entries < 0)
 			goto out;
-		exfat_delete_dir_entry(sb, p_dir, new_entry, 0,
-				       num_entries + 1);
+		p_fs->fs_func->delete_dir_entry(sb, p_dir, new_entry, 0,
+						num_entries + 1);
 	}
 out:
-#ifndef CONFIG_STAGING_EXFAT_DELAYED_SYNC
-	fs_sync(sb, true);
+#ifdef CONFIG_EXFAT_DELAYED_SYNC
+	fs_sync(sb, false);
 	fs_set_vol_flags(sb, VOL_CLEAN);
 #endif
 
 	if (p_fs->dev_ejected)
-		ret = -EIO;
+		ret = FFS_MEDIAERR;
 out2:
 	/* release the lock for file system critical section */
-	mutex_unlock(&p_fs->v_mutex);
+	up(&p_fs->v_sem);
 
 	return ret;
 }
@@ -1299,7 +1345,7 @@ out2:
 static int ffsRemoveFile(struct inode *inode, struct file_id_t *fid)
 {
 	s32 dentry;
-	int ret = 0;
+	int ret = FFS_SUCCESS;
 	struct chain_t dir, clu_to_free;
 	struct dentry_t *ep;
 	struct super_block *sb = inode->i_sb;
@@ -1307,10 +1353,10 @@ static int ffsRemoveFile(struct inode *inode, struct file_id_t *fid)
 
 	/* check the validity of the given file id */
 	if (!fid)
-		return -EINVAL;
+		return FFS_INVALIDFID;
 
 	/* acquire the lock for file system critical section */
-	mutex_lock(&p_fs->v_mutex);
+	down(&p_fs->v_sem);
 
 	dir.dir = fid->dir.dir;
 	dir.size = fid->dir.size;
@@ -1320,12 +1366,12 @@ static int ffsRemoveFile(struct inode *inode, struct file_id_t *fid)
 
 	ep = get_entry_in_dir(sb, &dir, dentry, NULL);
 	if (!ep) {
-		ret = -ENOENT;
+		ret = FFS_MEDIAERR;
 		goto out;
 	}
 
-	if (exfat_get_entry_attr(ep) & ATTR_READONLY) {
-		ret = -EPERM;
+	if (p_fs->fs_func->get_entry_attr(ep) & ATTR_READONLY) {
+		ret = FFS_PERMISSIONERR;
 		goto out;
 	}
 	fs_set_vol_flags(sb, VOL_DIRTY);
@@ -1338,22 +1384,22 @@ static int ffsRemoveFile(struct inode *inode, struct file_id_t *fid)
 	clu_to_free.flags = fid->flags;
 
 	/* (2) free the clusters */
-	exfat_free_cluster(sb, &clu_to_free, 0);
+	p_fs->fs_func->free_cluster(sb, &clu_to_free, 0);
 
 	fid->size = 0;
 	fid->start_clu = CLUSTER_32(~0);
 	fid->flags = (p_fs->vol_type == EXFAT) ? 0x03 : 0x01;
 
-#ifndef CONFIG_STAGING_EXFAT_DELAYED_SYNC
-	fs_sync(sb, true);
+#ifdef CONFIG_EXFAT_DELAYED_SYNC
+	fs_sync(sb, false);
 	fs_set_vol_flags(sb, VOL_CLEAN);
 #endif
 
 	if (p_fs->dev_ejected)
-		ret = -EIO;
+		ret = FFS_MEDIAERR;
 out:
 	/* release the lock for file system critical section */
-	mutex_unlock(&p_fs->v_mutex);
+	up(&p_fs->v_sem);
 
 	return ret;
 }
@@ -1363,7 +1409,7 @@ out:
 static int ffsSetAttr(struct inode *inode, u32 attr)
 {
 	u32 type;
-	int ret = 0;
+	int ret = FFS_SUCCESS;
 	sector_t sector = 0;
 	struct dentry_t *ep;
 	struct super_block *sb = inode->i_sb;
@@ -1374,40 +1420,49 @@ static int ffsSetAttr(struct inode *inode, u32 attr)
 
 	if (fid->attr == attr) {
 		if (p_fs->dev_ejected)
-			return -EIO;
-		return 0;
+			return FFS_MEDIAERR;
+		return FFS_SUCCESS;
 	}
 
 	if (is_dir) {
 		if ((fid->dir.dir == p_fs->root_dir) &&
 		    (fid->entry == -1)) {
 			if (p_fs->dev_ejected)
-				return -EIO;
-			return 0;
+				return FFS_MEDIAERR;
+			return FFS_SUCCESS;
 		}
 	}
 
 	/* acquire the lock for file system critical section */
-	mutex_lock(&p_fs->v_mutex);
+	down(&p_fs->v_sem);
 
 	/* get the directory entry of given file */
-	es = get_entry_set_in_dir(sb, &fid->dir, fid->entry,
-				  ES_ALL_ENTRIES, &ep);
-	if (!es) {
-		ret = -ENOENT;
-		goto out;
+	if (p_fs->vol_type == EXFAT) {
+		es = get_entry_set_in_dir(sb, &(fid->dir), fid->entry,
+					  ES_ALL_ENTRIES, &ep);
+		if (!es) {
+			ret = FFS_MEDIAERR;
+			goto out;
+		}
+	} else {
+		ep = get_entry_in_dir(sb, &(fid->dir), fid->entry, &sector);
+		if (!ep) {
+			ret = FFS_MEDIAERR;
+			goto out;
+		}
 	}
 
-	type = exfat_get_entry_type(ep);
+	type = p_fs->fs_func->get_entry_type(ep);
 
 	if (((type == TYPE_FILE) && (attr & ATTR_SUBDIR)) ||
 	    ((type == TYPE_DIR) && (!(attr & ATTR_SUBDIR)))) {
 		if (p_fs->dev_ejected)
-			ret = -EIO;
+			ret = FFS_MEDIAERR;
 		else
-			ret = -EINVAL;
+			ret = FFS_ERROR;
 
-		release_entry_set(es);
+		if (p_fs->vol_type == EXFAT)
+			release_entry_set(es);
 		goto out;
 	}
 
@@ -1415,21 +1470,25 @@ static int ffsSetAttr(struct inode *inode, u32 attr)
 
 	/* set the file attribute */
 	fid->attr = attr;
-	exfat_set_entry_attr(ep, attr);
+	p_fs->fs_func->set_entry_attr(ep, attr);
 
-	update_dir_checksum_with_entry_set(sb, es);
-	release_entry_set(es);
+	if (p_fs->vol_type != EXFAT) {
+		buf_modify(sb, sector);
+	} else {
+		update_dir_checksum_with_entry_set(sb, es);
+		release_entry_set(es);
+	}
 
-#ifndef CONFIG_STAGING_EXFAT_DELAYED_SYNC
-	fs_sync(sb, true);
+#ifdef CONFIG_EXFAT_DELAYED_SYNC
+	fs_sync(sb, false);
 	fs_set_vol_flags(sb, VOL_CLEAN);
 #endif
 
 	if (p_fs->dev_ejected)
-		ret = -EIO;
+		ret = FFS_MEDIAERR;
 out:
 	/* release the lock for file system critical section */
-	mutex_unlock(&p_fs->v_mutex);
+	up(&p_fs->v_sem);
 
 	return ret;
 }
@@ -1437,8 +1496,9 @@ out:
 
 static int ffsReadStat(struct inode *inode, struct dir_entry_t *info)
 {
+	sector_t sector = 0;
 	s32 count;
-	int ret = 0;
+	int ret = FFS_SUCCESS;
 	struct chain_t dir;
 	struct uni_name_t uni_name;
 	struct timestamp_t tm;
@@ -1452,7 +1512,7 @@ static int ffsReadStat(struct inode *inode, struct dir_entry_t *info)
 	pr_debug("%s entered\n", __func__);
 
 	/* acquire the lock for file system critical section */
-	mutex_lock(&p_fs->v_mutex);
+	down(&p_fs->v_sem);
 
 	if (is_dir) {
 		if ((fid->dir.dir == p_fs->root_dir) &&
@@ -1481,30 +1541,40 @@ static int ffsReadStat(struct inode *inode, struct dir_entry_t *info)
 
 			count = count_dos_name_entries(sb, &dir, TYPE_DIR);
 			if (count < 0) {
-				ret = count; /* propagate error upward */
+				ret = FFS_MEDIAERR;
 				goto out;
 			}
 			info->NumSubdirs = count;
 
 			if (p_fs->dev_ejected)
-				ret = -EIO;
+				ret = FFS_MEDIAERR;
 			goto out;
 		}
 	}
 
 	/* get the directory entry of given file or directory */
-	es = get_entry_set_in_dir(sb, &fid->dir, fid->entry,
-				  ES_2_ENTRIES, &ep);
-	if (!es) {
-		ret = -ENOENT;
-		goto out;
+	if (p_fs->vol_type == EXFAT) {
+		es = get_entry_set_in_dir(sb, &(fid->dir), fid->entry,
+					  ES_2_ENTRIES, &ep);
+		if (!es) {
+			ret = FFS_MEDIAERR;
+			goto out;
+		}
+		ep2 = ep + 1;
+	} else {
+		ep = get_entry_in_dir(sb, &(fid->dir), fid->entry, &sector);
+		if (!ep) {
+			ret = FFS_MEDIAERR;
+			goto out;
+		}
+		ep2 = ep;
+		buf_lock(sb, sector);
 	}
-	ep2 = ep + 1;
 
 	/* set FILE_INFO structure using the acquired struct dentry_t */
-	info->Attr = exfat_get_entry_attr(ep);
+	info->Attr = p_fs->fs_func->get_entry_attr(ep);
 
-	exfat_get_entry_time(ep, &tm, TM_CREATE);
+	p_fs->fs_func->get_entry_time(ep, &tm, TM_CREATE);
 	info->CreateTimestamp.Year = tm.year;
 	info->CreateTimestamp.Month = tm.mon;
 	info->CreateTimestamp.Day = tm.day;
@@ -1513,7 +1583,7 @@ static int ffsReadStat(struct inode *inode, struct dir_entry_t *info)
 	info->CreateTimestamp.Second = tm.sec;
 	info->CreateTimestamp.MilliSecond = 0;
 
-	exfat_get_entry_time(ep, &tm, TM_MODIFY);
+	p_fs->fs_func->get_entry_time(ep, &tm, TM_MODIFY);
 	info->ModifyTimestamp.Year = tm.year;
 	info->ModifyTimestamp.Month = tm.mon;
 	info->ModifyTimestamp.Day = tm.day;
@@ -1524,19 +1594,31 @@ static int ffsReadStat(struct inode *inode, struct dir_entry_t *info)
 
 	memset((char *)&info->AccessTimestamp, 0, sizeof(struct date_time_t));
 
-	*uni_name.name = 0x0;
+	*(uni_name.name) = 0x0;
 	/* XXX this is very bad for exfat cuz name is already included in es.
 	 * API should be revised
 	 */
-	exfat_get_uni_name_from_ext_entry(sb, &fid->dir, fid->entry,
-					  uni_name.name);
+	p_fs->fs_func->get_uni_name_from_ext_entry(sb, &(fid->dir), fid->entry,
+						   uni_name.name);
+	if (*uni_name.name == 0x0 && p_fs->vol_type != EXFAT)
+		get_uni_name_from_dos_entry(sb, (struct dos_dentry_t *)ep,
+					    &uni_name, 0x1);
 	nls_uniname_to_cstring(sb, info->Name, &uni_name);
 
-	info->NumSubdirs = 2;
+	if (p_fs->vol_type == EXFAT) {
+		info->NumSubdirs = 2;
+	} else {
+		buf_unlock(sb, sector);
+		get_uni_name_from_dos_entry(sb, (struct dos_dentry_t *)ep,
+					    &uni_name, 0x0);
+		nls_uniname_to_cstring(sb, info->ShortName, &uni_name);
+		info->NumSubdirs = 0;
+	}
 
-	info->Size = exfat_get_entry_size(ep2);
+	info->Size = p_fs->fs_func->get_entry_size(ep2);
 
-	release_entry_set(es);
+	if (p_fs->vol_type == EXFAT)
+		release_entry_set(es);
 
 	if (is_dir) {
 		dir.dir = fid->start_clu;
@@ -1548,18 +1630,18 @@ static int ffsReadStat(struct inode *inode, struct dir_entry_t *info)
 
 		count = count_dos_name_entries(sb, &dir, TYPE_DIR);
 		if (count < 0) {
-			ret = count; /* propagate error upward */
+			ret = FFS_MEDIAERR;
 			goto out;
 		}
 		info->NumSubdirs += count;
 	}
 
 	if (p_fs->dev_ejected)
-		ret = -EIO;
+		ret = FFS_MEDIAERR;
 
 out:
 	/* release the lock for file system critical section */
-	mutex_unlock(&p_fs->v_mutex);
+	up(&p_fs->v_sem);
 
 	pr_debug("%s exited successfully\n", __func__);
 	return ret;
@@ -1567,7 +1649,8 @@ out:
 
 static int ffsWriteStat(struct inode *inode, struct dir_entry_t *info)
 {
-	int ret = 0;
+	sector_t sector = 0;
+	int ret = FFS_SUCCESS;
 	struct timestamp_t tm;
 	struct dentry_t *ep, *ep2;
 	struct entry_set_cache_t *es = NULL;
@@ -1579,14 +1662,14 @@ static int ffsWriteStat(struct inode *inode, struct dir_entry_t *info)
 	pr_debug("%s entered (inode %p info %p\n", __func__, inode, info);
 
 	/* acquire the lock for file system critical section */
-	mutex_lock(&p_fs->v_mutex);
+	down(&p_fs->v_sem);
 
 	if (is_dir) {
 		if ((fid->dir.dir == p_fs->root_dir) &&
 		    (fid->entry == -1)) {
 			if (p_fs->dev_ejected)
-				ret = -EIO;
-			ret = 0;
+				ret = FFS_MEDIAERR;
+			ret = FFS_SUCCESS;
 			goto out;
 		}
 	}
@@ -1594,15 +1677,25 @@ static int ffsWriteStat(struct inode *inode, struct dir_entry_t *info)
 	fs_set_vol_flags(sb, VOL_DIRTY);
 
 	/* get the directory entry of given file or directory */
-	es = get_entry_set_in_dir(sb, &fid->dir, fid->entry,
-				  ES_ALL_ENTRIES, &ep);
-	if (!es) {
-		ret = -ENOENT;
-		goto out;
+	if (p_fs->vol_type == EXFAT) {
+		es = get_entry_set_in_dir(sb, &(fid->dir), fid->entry,
+					  ES_ALL_ENTRIES, &ep);
+		if (!es) {
+			ret = FFS_MEDIAERR;
+			goto out;
+		}
+		ep2 = ep + 1;
+	} else {
+		/* for other than exfat */
+		ep = get_entry_in_dir(sb, &(fid->dir), fid->entry, &sector);
+		if (!ep) {
+			ret = FFS_MEDIAERR;
+			goto out;
+		}
+		ep2 = ep;
 	}
-	ep2 = ep + 1;
 
-	exfat_set_entry_attr(ep, info->Attr);
+	p_fs->fs_func->set_entry_attr(ep, info->Attr);
 
 	/* set FILE_INFO structure using the acquired struct dentry_t */
 	tm.sec  = info->CreateTimestamp.Second;
@@ -1611,7 +1704,7 @@ static int ffsWriteStat(struct inode *inode, struct dir_entry_t *info)
 	tm.day  = info->CreateTimestamp.Day;
 	tm.mon  = info->CreateTimestamp.Month;
 	tm.year = info->CreateTimestamp.Year;
-	exfat_set_entry_time(ep, &tm, TM_CREATE);
+	p_fs->fs_func->set_entry_time(ep, &tm, TM_CREATE);
 
 	tm.sec  = info->ModifyTimestamp.Second;
 	tm.min  = info->ModifyTimestamp.Minute;
@@ -1619,19 +1712,23 @@ static int ffsWriteStat(struct inode *inode, struct dir_entry_t *info)
 	tm.day  = info->ModifyTimestamp.Day;
 	tm.mon  = info->ModifyTimestamp.Month;
 	tm.year = info->ModifyTimestamp.Year;
-	exfat_set_entry_time(ep, &tm, TM_MODIFY);
+	p_fs->fs_func->set_entry_time(ep, &tm, TM_MODIFY);
 
-	exfat_set_entry_size(ep2, info->Size);
+	p_fs->fs_func->set_entry_size(ep2, info->Size);
 
-	update_dir_checksum_with_entry_set(sb, es);
-	release_entry_set(es);
+	if (p_fs->vol_type != EXFAT) {
+		buf_modify(sb, sector);
+	} else {
+		update_dir_checksum_with_entry_set(sb, es);
+		release_entry_set(es);
+	}
 
 	if (p_fs->dev_ejected)
-		ret = -EIO;
+		ret = FFS_MEDIAERR;
 
 out:
 	/* release the lock for file system critical section */
-	mutex_unlock(&p_fs->v_mutex);
+	up(&p_fs->v_sem);
 
 	pr_debug("%s exited (%d)\n", __func__, ret);
 
@@ -1643,7 +1740,8 @@ static int ffsMapCluster(struct inode *inode, s32 clu_offset, u32 *clu)
 	s32 num_clusters, num_alloced;
 	bool modified = false;
 	u32 last_clu;
-	int ret = 0;
+	int ret = FFS_SUCCESS;
+	sector_t sector = 0;
 	struct chain_t new_clu;
 	struct dentry_t *ep;
 	struct entry_set_cache_t *es = NULL;
@@ -1653,10 +1751,10 @@ static int ffsMapCluster(struct inode *inode, s32 clu_offset, u32 *clu)
 
 	/* check the validity of pointer parameters */
 	if (!clu)
-		return -EINVAL;
+		return FFS_ERROR;
 
 	/* acquire the lock for file system critical section */
-	mutex_lock(&p_fs->v_mutex);
+	down(&p_fs->v_sem);
 
 	fid->rwoffset = (s64)(clu_offset) << p_fs->cluster_size_bits;
 
@@ -1687,8 +1785,8 @@ static int ffsMapCluster(struct inode *inode, s32 clu_offset, u32 *clu)
 
 		while ((clu_offset > 0) && (*clu != CLUSTER_32(~0))) {
 			last_clu = *clu;
-			if (exfat_fat_read(sb, *clu, clu) == -1) {
-				ret = -EIO;
+			if (FAT_read(sb, *clu, clu) == -1) {
+				ret = FFS_MEDIAERR;
 				goto out;
 			}
 			clu_offset--;
@@ -1704,12 +1802,12 @@ static int ffsMapCluster(struct inode *inode, s32 clu_offset, u32 *clu)
 		new_clu.flags = fid->flags;
 
 		/* (1) allocate a cluster */
-		num_alloced = exfat_alloc_cluster(sb, 1, &new_clu);
+		num_alloced = p_fs->fs_func->alloc_cluster(sb, 1, &new_clu);
 		if (num_alloced < 0) {
-			ret = -EIO;
+			ret = FFS_MEDIAERR;
 			goto out;
 		} else if (num_alloced == 0) {
-			ret = -ENOSPC;
+			ret = FFS_FULL;
 			goto out;
 		}
 
@@ -1727,32 +1825,49 @@ static int ffsMapCluster(struct inode *inode, s32 clu_offset, u32 *clu)
 				modified = true;
 			}
 			if (new_clu.flags == 0x01)
-				exfat_fat_write(sb, last_clu, new_clu.dir);
+				FAT_write(sb, last_clu, new_clu.dir);
 		}
 
 		num_clusters += num_alloced;
 		*clu = new_clu.dir;
 
-		es = get_entry_set_in_dir(sb, &fid->dir, fid->entry,
-					  ES_ALL_ENTRIES, &ep);
-		if (!es) {
-			ret = -ENOENT;
-			goto out;
+		if (p_fs->vol_type == EXFAT) {
+			es = get_entry_set_in_dir(sb, &fid->dir, fid->entry,
+						  ES_ALL_ENTRIES, &ep);
+			if (!es) {
+				ret = FFS_MEDIAERR;
+				goto out;
+			}
+			/* get stream entry */
+			ep++;
 		}
-		/* get stream entry */
-		ep++;
 
 		/* (3) update directory entry */
 		if (modified) {
-			if (exfat_get_entry_flag(ep) != fid->flags)
-				exfat_set_entry_flag(ep, fid->flags);
+			if (p_fs->vol_type != EXFAT) {
+				ep = get_entry_in_dir(sb, &(fid->dir),
+						      fid->entry, &sector);
+				if (!ep) {
+					ret = FFS_MEDIAERR;
+					goto out;
+				}
+			}
 
-			if (exfat_get_entry_clu0(ep) != fid->start_clu)
-				exfat_set_entry_clu0(ep, fid->start_clu);
+			if (p_fs->fs_func->get_entry_flag(ep) != fid->flags)
+				p_fs->fs_func->set_entry_flag(ep, fid->flags);
+
+			if (p_fs->fs_func->get_entry_clu0(ep) != fid->start_clu)
+				p_fs->fs_func->set_entry_clu0(ep,
+							      fid->start_clu);
+
+			if (p_fs->vol_type != EXFAT)
+				buf_modify(sb, sector);
 		}
 
-		update_dir_checksum_with_entry_set(sb, es);
-		release_entry_set(es);
+		if (p_fs->vol_type == EXFAT) {
+			update_dir_checksum_with_entry_set(sb, es);
+			release_entry_set(es);
+		}
 
 		/* add number of new blocks to inode */
 		inode->i_blocks += num_alloced << (p_fs->cluster_size_bits - 9);
@@ -1763,11 +1878,11 @@ static int ffsMapCluster(struct inode *inode, s32 clu_offset, u32 *clu)
 	fid->hint_last_clu = *clu;
 
 	if (p_fs->dev_ejected)
-		ret = -EIO;
+		ret = FFS_MEDIAERR;
 
 out:
 	/* release the lock for file system critical section */
-	mutex_unlock(&p_fs->v_mutex);
+	up(&p_fs->v_sem);
 
 	return ret;
 }
@@ -1778,7 +1893,7 @@ out:
 
 static int ffsCreateDir(struct inode *inode, char *path, struct file_id_t *fid)
 {
-	int ret = 0;
+	int ret = FFS_SUCCESS;
 	struct chain_t dir;
 	struct uni_name_t uni_name;
 	struct super_block *sb = inode->i_sb;
@@ -1788,10 +1903,10 @@ static int ffsCreateDir(struct inode *inode, char *path, struct file_id_t *fid)
 
 	/* check the validity of pointer parameters */
 	if (!fid || !path || (*path == '\0'))
-		return -EINVAL;
+		return FFS_ERROR;
 
 	/* acquire the lock for file system critical section */
-	mutex_lock(&p_fs->v_mutex);
+	down(&p_fs->v_sem);
 
 	/* check the validity of directory name in the given old pathname */
 	ret = resolve_path(inode, path, &dir, &uni_name);
@@ -1802,16 +1917,16 @@ static int ffsCreateDir(struct inode *inode, char *path, struct file_id_t *fid)
 
 	ret = create_dir(inode, &dir, &uni_name, fid);
 
-#ifndef CONFIG_STAGING_EXFAT_DELAYED_SYNC
-	fs_sync(sb, true);
+#ifdef CONFIG_EXFAT_DELAYED_SYNC
+	fs_sync(sb, false);
 	fs_set_vol_flags(sb, VOL_CLEAN);
 #endif
 
 	if (p_fs->dev_ejected)
-		ret = -EIO;
+		ret = FFS_MEDIAERR;
 out:
 	/* release the lock for file system critical section */
-	mutex_unlock(&p_fs->v_mutex);
+	up(&p_fs->v_sem);
 
 	return ret;
 }
@@ -1819,7 +1934,7 @@ out:
 static int ffsReadDir(struct inode *inode, struct dir_entry_t *dir_entry)
 {
 	int i, dentry, clu_offset;
-	int ret = 0;
+	int ret = FFS_SUCCESS;
 	s32 dentries_per_clu, dentries_per_clu_bits = 0;
 	u32 type;
 	sector_t sector;
@@ -1829,18 +1944,19 @@ static int ffsReadDir(struct inode *inode, struct dir_entry_t *dir_entry)
 	struct dentry_t *ep;
 	struct super_block *sb = inode->i_sb;
 	struct fs_info_t *p_fs = &(EXFAT_SB(sb)->fs_info);
+	struct fs_func *fs_func = p_fs->fs_func;
 	struct file_id_t *fid = &(EXFAT_I(inode)->fid);
 
 	/* check the validity of pointer parameters */
 	if (!dir_entry)
-		return -EINVAL;
+		return FFS_ERROR;
 
 	/* check if the given file ID is opened */
 	if (fid->type != TYPE_DIR)
-		return -ENOTDIR;
+		return FFS_PERMISSIONERR;
 
 	/* acquire the lock for file system critical section */
-	mutex_lock(&p_fs->v_mutex);
+	down(&p_fs->v_sem);
 
 	if (fid->entry == -1) {
 		dir.dir = p_fs->root_dir;
@@ -1885,9 +2001,9 @@ static int ffsReadDir(struct inode *inode, struct dir_entry_t *dir_entry)
 			}
 
 			while (clu_offset > 0) {
-				/* clu.dir = exfat_fat_read(sb, clu.dir); */
-				if (exfat_fat_read(sb, clu.dir, &clu.dir) == -1) {
-					ret = -EIO;
+				/* clu.dir = FAT_read(sb, clu.dir); */
+				if (FAT_read(sb, clu.dir, &clu.dir) == -1) {
+					ret = FFS_MEDIAERR;
 					goto out;
 				}
 				clu_offset--;
@@ -1907,10 +2023,10 @@ static int ffsReadDir(struct inode *inode, struct dir_entry_t *dir_entry)
 		for ( ; i < dentries_per_clu; i++, dentry++) {
 			ep = get_entry_in_dir(sb, &clu, i, &sector);
 			if (!ep) {
-				ret = -ENOENT;
+				ret = FFS_MEDIAERR;
 				goto out;
 			}
-			type = exfat_get_entry_type(ep);
+			type = fs_func->get_entry_type(ep);
 
 			if (type == TYPE_UNUSED)
 				break;
@@ -1918,10 +2034,10 @@ static int ffsReadDir(struct inode *inode, struct dir_entry_t *dir_entry)
 			if ((type != TYPE_FILE) && (type != TYPE_DIR))
 				continue;
 
-			exfat_buf_lock(sb, sector);
-			dir_entry->Attr = exfat_get_entry_attr(ep);
+			buf_lock(sb, sector);
+			dir_entry->Attr = fs_func->get_entry_attr(ep);
 
-			exfat_get_entry_time(ep, &tm, TM_CREATE);
+			fs_func->get_entry_time(ep, &tm, TM_CREATE);
 			dir_entry->CreateTimestamp.Year = tm.year;
 			dir_entry->CreateTimestamp.Month = tm.mon;
 			dir_entry->CreateTimestamp.Day = tm.day;
@@ -1930,7 +2046,7 @@ static int ffsReadDir(struct inode *inode, struct dir_entry_t *dir_entry)
 			dir_entry->CreateTimestamp.Second = tm.sec;
 			dir_entry->CreateTimestamp.MilliSecond = 0;
 
-			exfat_get_entry_time(ep, &tm, TM_MODIFY);
+			fs_func->get_entry_time(ep, &tm, TM_MODIFY);
 			dir_entry->ModifyTimestamp.Year = tm.year;
 			dir_entry->ModifyTimestamp.Month = tm.mon;
 			dir_entry->ModifyTimestamp.Day = tm.day;
@@ -1942,19 +2058,31 @@ static int ffsReadDir(struct inode *inode, struct dir_entry_t *dir_entry)
 			memset((char *)&dir_entry->AccessTimestamp, 0,
 			       sizeof(struct date_time_t));
 
-			*uni_name.name = 0x0;
-			exfat_get_uni_name_from_ext_entry(sb, &dir, dentry,
-							  uni_name.name);
+			*(uni_name.name) = 0x0;
+			fs_func->get_uni_name_from_ext_entry(sb, &dir, dentry,
+							     uni_name.name);
+			if (*uni_name.name == 0x0 && p_fs->vol_type != EXFAT)
+				get_uni_name_from_dos_entry(sb,
+						(struct dos_dentry_t *)ep,
+						&uni_name, 0x1);
 			nls_uniname_to_cstring(sb, dir_entry->Name, &uni_name);
-			exfat_buf_unlock(sb, sector);
+			buf_unlock(sb, sector);
 
-			ep = get_entry_in_dir(sb, &clu, i + 1, NULL);
-			if (!ep) {
-				ret = -ENOENT;
-				goto out;
+			if (p_fs->vol_type == EXFAT) {
+				ep = get_entry_in_dir(sb, &clu, i + 1, NULL);
+				if (!ep) {
+					ret = FFS_MEDIAERR;
+					goto out;
+				}
+			} else {
+				get_uni_name_from_dos_entry(sb,
+						(struct dos_dentry_t *)ep,
+						&uni_name, 0x0);
+				nls_uniname_to_cstring(sb, dir_entry->ShortName,
+						       &uni_name);
 			}
 
-			dir_entry->Size = exfat_get_entry_size(ep);
+			dir_entry->Size = fs_func->get_entry_size(ep);
 
 			/* hint information */
 			if (dir.dir == CLUSTER_32(0)) { /* FAT16 root_dir */
@@ -1967,7 +2095,7 @@ static int ffsReadDir(struct inode *inode, struct dir_entry_t *dir_entry)
 			fid->rwoffset = (s64)(++dentry);
 
 			if (p_fs->dev_ejected)
-				ret = -EIO;
+				ret = FFS_MEDIAERR;
 			goto out;
 		}
 
@@ -1980,24 +2108,24 @@ static int ffsReadDir(struct inode *inode, struct dir_entry_t *dir_entry)
 			else
 				clu.dir = CLUSTER_32(~0);
 		} else {
-			/* clu.dir = exfat_fat_read(sb, clu.dir); */
-			if (exfat_fat_read(sb, clu.dir, &clu.dir) == -1) {
-				ret = -EIO;
+			/* clu.dir = FAT_read(sb, clu.dir); */
+			if (FAT_read(sb, clu.dir, &clu.dir) == -1) {
+				ret = FFS_MEDIAERR;
 				goto out;
 			}
 		}
 	}
 
-	*dir_entry->Name = '\0';
+	*(dir_entry->Name) = '\0';
 
 	fid->rwoffset = (s64)(++dentry);
 
 	if (p_fs->dev_ejected)
-		ret = -EIO;
+		ret = FFS_MEDIAERR;
 
 out:
 	/* release the lock for file system critical section */
-	mutex_unlock(&p_fs->v_mutex);
+	up(&p_fs->v_sem);
 
 	return ret;
 }
@@ -2005,14 +2133,14 @@ out:
 static int ffsRemoveDir(struct inode *inode, struct file_id_t *fid)
 {
 	s32 dentry;
-	int ret = 0;
+	int ret = FFS_SUCCESS;
 	struct chain_t dir, clu_to_free;
 	struct super_block *sb = inode->i_sb;
 	struct fs_info_t *p_fs = &(EXFAT_SB(sb)->fs_info);
 
 	/* check the validity of the given file id */
 	if (!fid)
-		return -EINVAL;
+		return FFS_INVALIDFID;
 
 	dir.dir = fid->dir.dir;
 	dir.size = fid->dir.size;
@@ -2023,18 +2151,18 @@ static int ffsRemoveDir(struct inode *inode, struct file_id_t *fid)
 	/* check if the file is "." or ".." */
 	if (p_fs->vol_type != EXFAT) {
 		if ((dir.dir != p_fs->root_dir) && (dentry < 2))
-			return -EPERM;
+			return FFS_PERMISSIONERR;
 	}
 
 	/* acquire the lock for file system critical section */
-	mutex_lock(&p_fs->v_mutex);
+	down(&p_fs->v_sem);
 
 	clu_to_free.dir = fid->start_clu;
 	clu_to_free.size = (s32)((fid->size - 1) >> p_fs->cluster_size_bits) + 1;
 	clu_to_free.flags = fid->flags;
 
 	if (!is_dir_empty(sb, &clu_to_free)) {
-		ret = -ENOTEMPTY;
+		ret = FFS_FILEEXIST;
 		goto out;
 	}
 
@@ -2044,23 +2172,23 @@ static int ffsRemoveDir(struct inode *inode, struct file_id_t *fid)
 	remove_file(inode, &dir, dentry);
 
 	/* (2) free the clusters */
-	exfat_free_cluster(sb, &clu_to_free, 1);
+	p_fs->fs_func->free_cluster(sb, &clu_to_free, 1);
 
 	fid->size = 0;
 	fid->start_clu = CLUSTER_32(~0);
 	fid->flags = (p_fs->vol_type == EXFAT) ? 0x03 : 0x01;
 
-#ifndef CONFIG_STAGING_EXFAT_DELAYED_SYNC
-	fs_sync(sb, true);
+#ifdef CONFIG_EXFAT_DELAYED_SYNC
+	fs_sync(sb, false);
 	fs_set_vol_flags(sb, VOL_CLEAN);
 #endif
 
 	if (p_fs->dev_ejected)
-		ret = -EIO;
+		ret = FFS_MEDIAERR;
 
 out:
 	/* release the lock for file system critical section */
-	mutex_unlock(&p_fs->v_mutex);
+	up(&p_fs->v_sem);
 
 	return ret;
 }
@@ -2074,7 +2202,7 @@ static int exfat_readdir(struct file *filp, struct dir_context *ctx)
 	struct inode *inode = file_inode(filp);
 	struct super_block *sb = inode->i_sb;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
-	struct fs_info_t *p_fs = &sbi->fs_info;
+	struct fs_info_t *p_fs = &(sbi->fs_info);
 	struct bd_info_t *p_bd = &(EXFAT_SB(sb)->bd_info);
 	struct dir_entry_t de;
 	unsigned long inum;
@@ -2116,11 +2244,12 @@ get_new:
 		/* at least we tried to read a sector
 		 * move cpos to next sector position (should be aligned)
 		 */
-		if (err == -EIO) {
+		if (err == FFS_MEDIAERR) {
 			cpos += 1 << p_bd->sector_size_bits;
 			cpos &= ~((1 << p_bd->sector_size_bits) - 1);
 		}
 
+		err = -EIO;
 		goto end_of_dir;
 	}
 
@@ -2164,7 +2293,7 @@ static int exfat_ioctl_volume_id(struct inode *dir)
 {
 	struct super_block *sb = dir->i_sb;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
-	struct fs_info_t *p_fs = &sbi->fs_info;
+	struct fs_info_t *p_fs = &(sbi->fs_info);
 
 	return p_fs->vol_id;
 }
@@ -2172,15 +2301,15 @@ static int exfat_ioctl_volume_id(struct inode *dir)
 static long exfat_generic_ioctl(struct file *filp, unsigned int cmd,
 				unsigned long arg)
 {
-	struct inode *inode = filp->f_path.dentry->d_inode;
-#ifdef CONFIG_STAGING_EXFAT_KERNEL_DEBUG
+struct inode *inode = filp->f_path.dentry->d_inode;
+#ifdef CONFIG_EXFAT_KERNEL_DEBUG
 	unsigned int flags;
-#endif /* CONFIG_STAGING_EXFAT_KERNEL_DEBUG */
+#endif /* CONFIG_EXFAT_KERNEL_DEBUG */
 
 	switch (cmd) {
 	case EXFAT_IOCTL_GET_VOLUME_ID:
 		return exfat_ioctl_volume_id(inode);
-#ifdef CONFIG_STAGING_EXFAT_KERNEL_DEBUG
+#ifdef CONFIG_EXFAT_KERNEL_DEBUG
 	case EXFAT_IOC_GET_DEBUGFLAGS: {
 		struct super_block *sb = inode->i_sb;
 		struct exfat_sb_info *sbi = EXFAT_SB(sb);
@@ -2204,7 +2333,7 @@ static long exfat_generic_ioctl(struct file *filp, unsigned int cmd,
 
 		return 0;
 	}
-#endif /* CONFIG_STAGING_EXFAT_KERNEL_DEBUG */
+#endif /* CONFIG_EXFAT_KERNEL_DEBUG */
 	default:
 		return -ENOTTY; /* Inappropriate ioctl for device */
 	}
@@ -2222,7 +2351,6 @@ static int exfat_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 			bool excl)
 {
 	struct super_block *sb = dir->i_sb;
-	struct timespec64 curtime;
 	struct inode *inode;
 	struct file_id_t fid;
 	loff_t i_pos;
@@ -2233,14 +2361,21 @@ static int exfat_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 	pr_debug("%s entered\n", __func__);
 
 	err = ffsCreateFile(dir, (u8 *)dentry->d_name.name, FM_REGULAR, &fid);
-	if (err)
+	if (err) {
+		if (err == FFS_INVALIDPATH)
+			err = -EINVAL;
+		else if (err == FFS_FILEEXIST)
+			err = -EEXIST;
+		else if (err == FFS_FULL)
+			err = -ENOSPC;
+		else if (err == FFS_NAMETOOLONG)
+			err = -ENAMETOOLONG;
+		else
+			err = -EIO;
 		goto out;
-
+	}
 	INC_IVERSION(dir);
-	curtime = current_time(dir);
-	dir->i_ctime = curtime;
-	dir->i_mtime = curtime;
-	dir->i_atime = curtime;
+	dir->i_ctime = dir->i_mtime = dir->i_atime = current_time(dir);
 	if (IS_DIRSYNC(dir))
 		(void)exfat_sync_inode(dir);
 	else
@@ -2254,10 +2389,7 @@ static int exfat_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 		goto out;
 	}
 	INC_IVERSION(inode);
-	curtime = current_time(inode);
-	inode->i_mtime = curtime;
-	inode->i_atime = curtime;
-	inode->i_ctime = curtime;
+	inode->i_mtime = inode->i_atime = inode->i_ctime = current_time(inode);
 	/*
 	 * timestamp is already written, so mark_inode_dirty() is unnecessary.
 	 */
@@ -2390,7 +2522,6 @@ static int exfat_unlink(struct inode *dir, struct dentry *dentry)
 {
 	struct inode *inode = dentry->d_inode;
 	struct super_block *sb = dir->i_sb;
-	struct timespec64 curtime;
 	int err;
 
 	__lock_super(sb);
@@ -2400,22 +2531,22 @@ static int exfat_unlink(struct inode *dir, struct dentry *dentry)
 	EXFAT_I(inode)->fid.size = i_size_read(inode);
 
 	err = ffsRemoveFile(dir, &(EXFAT_I(inode)->fid));
-	if (err)
+	if (err) {
+		if (err == FFS_PERMISSIONERR)
+			err = -EPERM;
+		else
+			err = -EIO;
 		goto out;
-
+	}
 	INC_IVERSION(dir);
-	curtime = current_time(dir);
-	dir->i_mtime = curtime;
-	dir->i_atime = curtime;
+	dir->i_mtime = dir->i_atime = current_time(dir);
 	if (IS_DIRSYNC(dir))
 		(void)exfat_sync_inode(dir);
 	else
 		mark_inode_dirty(dir);
 
 	clear_nlink(inode);
-	curtime = current_time(inode);
-	inode->i_mtime = curtime;
-	inode->i_atime = curtime;
+	inode->i_mtime = inode->i_atime = current_time(inode);
 	exfat_detach(inode);
 	remove_inode_hash(inode);
 
@@ -2429,7 +2560,6 @@ static int exfat_symlink(struct inode *dir, struct dentry *dentry,
 			 const char *target)
 {
 	struct super_block *sb = dir->i_sb;
-	struct timespec64 curtime;
 	struct inode *inode;
 	struct file_id_t fid;
 	loff_t i_pos;
@@ -2442,22 +2572,32 @@ static int exfat_symlink(struct inode *dir, struct dentry *dentry,
 	pr_debug("%s entered\n", __func__);
 
 	err = ffsCreateFile(dir, (u8 *)dentry->d_name.name, FM_SYMLINK, &fid);
-	if (err)
+	if (err) {
+		if (err == FFS_INVALIDPATH)
+			err = -EINVAL;
+		else if (err == FFS_FILEEXIST)
+			err = -EEXIST;
+		else if (err == FFS_FULL)
+			err = -ENOSPC;
+		else
+			err = -EIO;
 		goto out;
-
+	}
 
 	err = ffsWriteFile(dir, &fid, (char *)target, len, &ret);
 
 	if (err) {
 		ffsRemoveFile(dir, &fid);
+
+		if (err == FFS_FULL)
+			err = -ENOSPC;
+		else
+			err = -EIO;
 		goto out;
 	}
 
 	INC_IVERSION(dir);
-	curtime = current_time(dir);
-	dir->i_ctime = curtime;
-	dir->i_mtime = curtime;
-	dir->i_atime = curtime;
+	dir->i_ctime = dir->i_mtime = dir->i_atime = current_time(dir);
 	if (IS_DIRSYNC(dir))
 		(void)exfat_sync_inode(dir);
 	else
@@ -2471,10 +2611,7 @@ static int exfat_symlink(struct inode *dir, struct dentry *dentry,
 		goto out;
 	}
 	INC_IVERSION(inode);
-	curtime = current_time(inode);
-	inode->i_mtime = curtime;
-	inode->i_atime = curtime;
-	inode->i_ctime = curtime;
+	inode->i_mtime = inode->i_atime = inode->i_ctime = current_time(inode);
 	/* timestamp is already written, so mark_inode_dirty() is unneeded. */
 
 	EXFAT_I(inode)->target = kmemdup(target, len + 1, GFP_KERNEL);
@@ -2495,7 +2632,6 @@ out:
 static int exfat_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 {
 	struct super_block *sb = dir->i_sb;
-	struct timespec64 curtime;
 	struct inode *inode;
 	struct file_id_t fid;
 	loff_t i_pos;
@@ -2506,14 +2642,21 @@ static int exfat_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 	pr_debug("%s entered\n", __func__);
 
 	err = ffsCreateDir(dir, (u8 *)dentry->d_name.name, &fid);
-	if (err)
+	if (err) {
+		if (err == FFS_INVALIDPATH)
+			err = -EINVAL;
+		else if (err == FFS_FILEEXIST)
+			err = -EEXIST;
+		else if (err == FFS_FULL)
+			err = -ENOSPC;
+		else if (err == FFS_NAMETOOLONG)
+			err = -ENAMETOOLONG;
+		else
+			err = -EIO;
 		goto out;
-
+	}
 	INC_IVERSION(dir);
-	curtime = current_time(dir);
-	dir->i_ctime = curtime;
-	dir->i_mtime = curtime;
-	dir->i_atime = curtime;
+	dir->i_ctime = dir->i_mtime = dir->i_atime = current_time(dir);
 	if (IS_DIRSYNC(dir))
 		(void)exfat_sync_inode(dir);
 	else
@@ -2528,10 +2671,7 @@ static int exfat_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 		goto out;
 	}
 	INC_IVERSION(inode);
-	curtime = current_time(inode);
-	inode->i_mtime = curtime;
-	inode->i_atime = curtime;
-	inode->i_ctime = curtime;
+	inode->i_mtime = inode->i_atime = inode->i_ctime = current_time(inode);
 	/* timestamp is already written, so mark_inode_dirty() is unneeded. */
 
 	dentry->d_time = GET_IVERSION(dentry->d_parent->d_inode);
@@ -2547,7 +2687,6 @@ static int exfat_rmdir(struct inode *dir, struct dentry *dentry)
 {
 	struct inode *inode = dentry->d_inode;
 	struct super_block *sb = dir->i_sb;
-	struct timespec64 curtime;
 	int err;
 
 	__lock_super(sb);
@@ -2557,13 +2696,21 @@ static int exfat_rmdir(struct inode *dir, struct dentry *dentry)
 	EXFAT_I(inode)->fid.size = i_size_read(inode);
 
 	err = ffsRemoveDir(dir, &(EXFAT_I(inode)->fid));
-	if (err)
+	if (err) {
+		if (err == FFS_INVALIDPATH)
+			err = -EINVAL;
+		else if (err == FFS_FILEEXIST)
+			err = -ENOTEMPTY;
+		else if (err == FFS_NOTFOUND)
+			err = -ENOENT;
+		else if (err == FFS_DIRBUSY)
+			err = -EBUSY;
+		else
+			err = -EIO;
 		goto out;
-
+	}
 	INC_IVERSION(dir);
-	curtime = current_time(dir);
-	dir->i_mtime = curtime;
-	dir->i_atime = curtime;
+	dir->i_mtime = dir->i_atime = current_time(dir);
 	if (IS_DIRSYNC(dir))
 		(void)exfat_sync_inode(dir);
 	else
@@ -2571,9 +2718,7 @@ static int exfat_rmdir(struct inode *dir, struct dentry *dentry)
 	drop_nlink(dir);
 
 	clear_nlink(inode);
-	curtime = current_time(inode);
-	inode->i_mtime = curtime;
-	inode->i_atime = curtime;
+	inode->i_mtime = inode->i_atime = current_time(inode);
 	exfat_detach(inode);
 	remove_inode_hash(inode);
 
@@ -2589,7 +2734,6 @@ static int exfat_rename(struct inode *old_dir, struct dentry *old_dentry,
 {
 	struct inode *old_inode, *new_inode;
 	struct super_block *sb = old_dir->i_sb;
-	struct timespec64 curtime;
 	loff_t i_pos;
 	int err;
 
@@ -2607,15 +2751,24 @@ static int exfat_rename(struct inode *old_dir, struct dentry *old_dentry,
 
 	err = ffsMoveFile(old_dir, &(EXFAT_I(old_inode)->fid), new_dir,
 			  new_dentry);
-	if (err)
+	if (err) {
+		if (err == FFS_PERMISSIONERR)
+			err = -EPERM;
+		else if (err == FFS_INVALIDPATH)
+			err = -EINVAL;
+		else if (err == FFS_FILEEXIST)
+			err = -EEXIST;
+		else if (err == FFS_NOTFOUND)
+			err = -ENOENT;
+		else if (err == FFS_FULL)
+			err = -ENOSPC;
+		else
+			err = -EIO;
 		goto out;
-
+	}
 	INC_IVERSION(new_dir);
-	curtime = current_time(new_dir);
-	new_dir->i_ctime = curtime;
-	new_dir->i_mtime = curtime;
-	new_dir->i_atime = curtime;
-
+	new_dir->i_ctime = new_dir->i_mtime = new_dir->i_atime =
+				current_time(new_dir);
 	if (IS_DIRSYNC(new_dir))
 		(void)exfat_sync_inode(new_dir);
 	else
@@ -2637,9 +2790,7 @@ static int exfat_rename(struct inode *old_dir, struct dentry *old_dentry,
 			inc_nlink(new_dir);
 	}
 	INC_IVERSION(old_dir);
-	curtime = current_time(old_dir);
-	old_dir->i_ctime = curtime;
-	old_dir->i_mtime = curtime;
+	old_dir->i_ctime = old_dir->i_mtime = current_time(old_dir);
 	if (IS_DIRSYNC(old_dir))
 		(void)exfat_sync_inode(old_dir);
 	else
@@ -2663,16 +2814,13 @@ static int exfat_cont_expand(struct inode *inode, loff_t size)
 {
 	struct address_space *mapping = inode->i_mapping;
 	loff_t start = i_size_read(inode), count = size - i_size_read(inode);
-	struct timespec64 curtime;
 	int err, err2;
 
 	err = generic_cont_expand_simple(inode, size);
 	if (err != 0)
 		return err;
 
-	curtime = current_time(inode);
-	inode->i_ctime = curtime;
-	inode->i_mtime = curtime;
+	inode->i_ctime = inode->i_mtime = current_time(inode);
 	mark_inode_dirty(inode);
 
 	if (IS_SYNC(inode)) {
@@ -2747,8 +2895,7 @@ static void exfat_truncate(struct inode *inode, loff_t old_size)
 {
 	struct super_block *sb = inode->i_sb;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
-	struct fs_info_t *p_fs = &sbi->fs_info;
-	struct timespec64 curtime;
+	struct fs_info_t *p_fs = &(sbi->fs_info);
 	int err;
 
 	__lock_super(sb);
@@ -2767,9 +2914,7 @@ static void exfat_truncate(struct inode *inode, loff_t old_size)
 	if (err)
 		goto out;
 
-	curtime = current_time(inode);
-	inode->i_ctime = curtime;
-	inode->i_mtime = curtime;
+	inode->i_ctime = inode->i_mtime = current_time(inode);
 	if (IS_DIRSYNC(inode))
 		(void)exfat_sync_inode(inode);
 	else
@@ -2791,8 +2936,8 @@ static int exfat_setattr(struct dentry *dentry, struct iattr *attr)
 
 	pr_debug("%s entered\n", __func__);
 
-	if ((attr->ia_valid & ATTR_SIZE) &&
-	    attr->ia_size > i_size_read(inode)) {
+	if ((attr->ia_valid & ATTR_SIZE)
+		&& (attr->ia_size > i_size_read(inode))) {
 		error = exfat_cont_expand(inode, attr->ia_size);
 		if (error || attr->ia_valid == ATTR_SIZE)
 			return error;
@@ -2801,8 +2946,8 @@ static int exfat_setattr(struct dentry *dentry, struct iattr *attr)
 
 	ia_valid = attr->ia_valid;
 
-	if ((ia_valid & (ATTR_MTIME_SET | ATTR_ATIME_SET | ATTR_TIMES_SET)) &&
-	    exfat_allow_set_time(sbi, inode)) {
+	if ((ia_valid & (ATTR_MTIME_SET | ATTR_ATIME_SET | ATTR_TIMES_SET))
+		&& exfat_allow_set_time(sbi, inode)) {
 		attr->ia_valid &= ~(ATTR_MTIME_SET |
 				    ATTR_ATIME_SET |
 				    ATTR_TIMES_SET);
@@ -2928,7 +3073,8 @@ static int exfat_bmap(struct inode *inode, sector_t sector, sector_t *phys,
 {
 	struct super_block *sb = inode->i_sb;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
-	struct fs_info_t *p_fs = &sbi->fs_info;
+	struct fs_info_t *p_fs = &(sbi->fs_info);
+	struct bd_info_t *p_bd = &(sbi->bd_info);
 	const unsigned long blocksize = sb->s_blocksize;
 	const unsigned char blocksize_bits = sb->s_blocksize_bits;
 	sector_t last_block;
@@ -2937,6 +3083,18 @@ static int exfat_bmap(struct inode *inode, sector_t sector, sector_t *phys,
 
 	*phys = 0;
 	*mapped_blocks = 0;
+
+	if ((p_fs->vol_type == FAT12) || (p_fs->vol_type == FAT16)) {
+		if (inode->i_ino == EXFAT_ROOT_INO) {
+			if (sector <
+			    (p_fs->dentries_in_root >>
+			     (p_bd->sector_size_bits - DENTRY_SIZE_BITS))) {
+				*phys = sector + p_fs->root_start_sector;
+				*mapped_blocks = 1;
+			}
+			return 0;
+		}
+	}
 
 	last_block = (i_size_read(inode) + (blocksize - 1)) >> blocksize_bits;
 	if (sector >= last_block) {
@@ -2956,7 +3114,12 @@ static int exfat_bmap(struct inode *inode, sector_t sector, sector_t *phys,
 
 	err = ffsMapCluster(inode, clu_offset, &cluster);
 
-	if (!err && (cluster != CLUSTER_32(~0))) {
+	if (err) {
+		if (err == FFS_FULL)
+			return -ENOSPC;
+		else
+			return -EIO;
+	} else if (cluster != CLUSTER_32(~0)) {
 		*phys = START_SECTOR(cluster) + sec_offset;
 		*mapped_blocks = p_fs->sectors_per_clu - sec_offset;
 	}
@@ -3052,7 +3215,6 @@ static int exfat_write_end(struct file *file, struct address_space *mapping,
 {
 	struct inode *inode = mapping->host;
 	struct file_id_t *fid = &(EXFAT_I(inode)->fid);
-	struct timespec64 curtime;
 	int err;
 
 	err = generic_write_end(file, mapping, pos, len, copied, pagep, fsdata);
@@ -3061,9 +3223,7 @@ static int exfat_write_end(struct file *file, struct address_space *mapping,
 		exfat_write_failed(mapping, pos + len);
 
 	if (!(err < 0) && !(fid->attr & ATTR_ARCHIVE)) {
-		curtime = current_time(inode);
-		inode->i_mtime = curtime;
-		inode->i_ctime = curtime;
+		inode->i_mtime = inode->i_ctime = current_time(inode);
 		fid->attr |= ATTR_ARCHIVE;
 		mark_inode_dirty(inode);
 	}
@@ -3142,7 +3302,7 @@ static struct inode *exfat_iget(struct super_block *sb, loff_t i_pos)
 static int exfat_fill_inode(struct inode *inode, struct file_id_t *fid)
 {
 	struct exfat_sb_info *sbi = EXFAT_SB(inode->i_sb);
-	struct fs_info_t *p_fs = &sbi->fs_info;
+	struct fs_info_t *p_fs = &(sbi->fs_info);
 	struct dir_entry_t info;
 
 	memcpy(&(EXFAT_I(inode)->fid), fid, sizeof(struct file_id_t));
@@ -3154,7 +3314,7 @@ static int exfat_fill_inode(struct inode *inode, struct file_id_t *fid)
 	inode->i_uid = sbi->options.fs_uid;
 	inode->i_gid = sbi->options.fs_gid;
 	INC_IVERSION(inode);
-	inode->i_generation = prandom_u32();
+	inode->i_generation = get_seconds();
 
 	if (info.Attr & ATTR_SUBDIR) { /* directory */
 		inode->i_generation &= ~1;
@@ -3341,7 +3501,7 @@ static int exfat_statfs(struct dentry *dentry, struct kstatfs *buf)
 	struct vol_info_t info;
 
 	if (p_fs->used_clusters == UINT_MAX) {
-		if (ffsGetVolInfo(sb, &info) == -EIO)
+		if (ffsGetVolInfo(sb, &info) == FFS_MEDIAERR)
 			return -EIO;
 
 	} else {
@@ -3397,7 +3557,7 @@ static int exfat_show_options(struct seq_file *m, struct dentry *root)
 		seq_puts(m, ",errors=panic");
 	else
 		seq_puts(m, ",errors=remount-ro");
-#ifdef CONFIG_STAGING_EXFAT_DISCARD
+#ifdef CONFIG_EXFAT_DISCARD
 	if (opts->discard)
 		seq_puts(m, ",discard");
 #endif
@@ -3478,7 +3638,7 @@ enum {
 	Opt_err_ro,
 	Opt_utf8_hack,
 	Opt_err,
-#ifdef CONFIG_STAGING_EXFAT_DISCARD
+#ifdef CONFIG_EXFAT_DISCARD
 	Opt_discard,
 #endif /* EXFAT_CONFIG_DISCARD */
 };
@@ -3498,9 +3658,9 @@ static const match_table_t exfat_tokens = {
 	{Opt_err_panic, "errors=panic"},
 	{Opt_err_ro, "errors=remount-ro"},
 	{Opt_utf8_hack, "utf8"},
-#ifdef CONFIG_STAGING_EXFAT_DISCARD
+#ifdef CONFIG_EXFAT_DISCARD
 	{Opt_discard, "discard"},
-#endif /* CONFIG_STAGING_EXFAT_DISCARD */
+#endif /* CONFIG_EXFAT_DISCARD */
 	{Opt_err, NULL}
 };
 
@@ -3514,14 +3674,13 @@ static int parse_options(char *options, int silent, int *debug,
 
 	opts->fs_uid = current_uid();
 	opts->fs_gid = current_gid();
-	opts->fs_fmask = current->fs->umask;
-	opts->fs_dmask = current->fs->umask;
+	opts->fs_fmask = opts->fs_dmask = current->fs->umask;
 	opts->allow_utime = U16_MAX;
 	opts->codepage = exfat_default_codepage;
 	opts->iocharset = exfat_default_iocharset;
 	opts->casesensitive = 0;
 	opts->errors = EXFAT_ERRORS_RO;
-#ifdef CONFIG_STAGING_EXFAT_DISCARD
+#ifdef CONFIG_EXFAT_DISCARD
 	opts->discard = 0;
 #endif
 	*debug = 0;
@@ -3592,11 +3751,11 @@ static int parse_options(char *options, int silent, int *debug,
 		case Opt_debug:
 			*debug = 1;
 			break;
-#ifdef CONFIG_STAGING_EXFAT_DISCARD
+#ifdef CONFIG_EXFAT_DISCARD
 		case Opt_discard:
 			opts->discard = 1;
 			break;
-#endif /* CONFIG_STAGING_EXFAT_DISCARD */
+#endif /* CONFIG_EXFAT_DISCARD */
 		case Opt_utf8_hack:
 			break;
 		default:
@@ -3628,8 +3787,7 @@ static int exfat_read_root(struct inode *inode)
 {
 	struct super_block *sb = inode->i_sb;
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
-	struct fs_info_t *p_fs = &sbi->fs_info;
-	struct timespec64 curtime;
+	struct fs_info_t *p_fs = &(sbi->fs_info);
 	struct dir_entry_t info;
 
 	EXFAT_I(inode)->fid.dir.dir = p_fs->root_dir;
@@ -3660,10 +3818,7 @@ static int exfat_read_root(struct inode *inode)
 	EXFAT_I(inode)->mmu_private = i_size_read(inode);
 
 	exfat_save_attr(inode, ATTR_SUBDIR);
-	curtime = current_time(inode);
-	inode->i_mtime = curtime;
-	inode->i_atime = curtime;
-	inode->i_ctime = curtime;
+	inode->i_mtime = inode->i_atime = inode->i_ctime = current_time(inode);
 	set_nlink(inode, info.NumSubdirs + 2);
 
 	return 0;
@@ -3683,6 +3838,7 @@ static int exfat_fill_super(struct super_block *sb, void *data, int silent)
 	struct exfat_sb_info *sbi;
 	int debug, ret;
 	long error;
+	char buf[50];
 
 	/*
 	 * GFP_KERNEL is ok here, because while we do hold the
@@ -3728,6 +3884,17 @@ static int exfat_fill_super(struct super_block *sb, void *data, int silent)
 	 *
 	 * if (FAT_FIRST_ENT(sb, media) != first)
 	 */
+
+	/* codepage is not meaningful in exfat */
+	if (sbi->fs_info.vol_type != EXFAT) {
+		error = -EINVAL;
+		sprintf(buf, "cp%d", sbi->options.codepage);
+		sbi->nls_disk = load_nls(buf);
+		if (!sbi->nls_disk) {
+			pr_err("[EXFAT] Codepage %s not found\n", buf);
+			goto out_fail2;
+		}
+	}
 
 	sbi->nls_io = load_nls(sbi->options.iocharset);
 
@@ -3800,7 +3967,7 @@ static void __exit exfat_destroy_inodecache(void)
 	kmem_cache_destroy(exfat_inode_cachep);
 }
 
-#ifdef CONFIG_STAGING_EXFAT_KERNEL_DEBUG
+#ifdef CONFIG_EXFAT_KERNEL_DEBUG
 static void exfat_debug_kill_sb(struct super_block *sb)
 {
 	struct exfat_sb_info *sbi = EXFAT_SB(sb);
@@ -3817,10 +3984,10 @@ static void exfat_debug_kill_sb(struct super_block *sb)
 			 * invalidate_bdev drops all device cache include
 			 * dirty. We use this to simulate device removal.
 			 */
-			mutex_lock(&p_fs->v_mutex);
-			exfat_fat_release_all(sb);
-			exfat_buf_release_all(sb);
-			mutex_unlock(&p_fs->v_mutex);
+			down(&p_fs->v_sem);
+			FAT_release_all(sb);
+			buf_release_all(sb);
+			up(&p_fs->v_sem);
 
 			invalidate_bdev(bdev);
 		}
@@ -3828,17 +3995,17 @@ static void exfat_debug_kill_sb(struct super_block *sb)
 
 	kill_block_super(sb);
 }
-#endif /* CONFIG_STAGING_EXFAT_KERNEL_DEBUG */
+#endif /* CONFIG_EXFAT_KERNEL_DEBUG */
 
 static struct file_system_type exfat_fs_type = {
 	.owner       = THIS_MODULE,
 	.name        = "exfat",
 	.mount       = exfat_fs_mount,
-#ifdef CONFIG_STAGING_EXFAT_KERNEL_DEBUG
+#ifdef CONFIG_EXFAT_KERNEL_DEBUG
 	.kill_sb    = exfat_debug_kill_sb,
 #else
 	.kill_sb    = kill_block_super,
-#endif /* CONFIG_STAGING_EXFAT_KERNEL_DEBUG */
+#endif /* CONFIG_EXFAT_KERNEL_DEBUG */
 	.fs_flags    = FS_REQUIRES_DEV,
 };
 

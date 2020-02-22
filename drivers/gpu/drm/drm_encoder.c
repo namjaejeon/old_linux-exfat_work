@@ -22,7 +22,6 @@
 
 #include <linux/export.h>
 
-#include <drm/drm_bridge.h>
 #include <drm/drm_device.h>
 #include <drm/drm_drv.h>
 #include <drm/drm_encoder.h>
@@ -140,7 +139,6 @@ int drm_encoder_init(struct drm_device *dev,
 		goto out_put;
 	}
 
-	INIT_LIST_HEAD(&encoder->bridge_chain);
 	list_add_tail(&encoder->head, &dev->mode_config.encoder_list);
 	encoder->index = dev->mode_config.num_encoder++;
 
@@ -161,16 +159,22 @@ EXPORT_SYMBOL(drm_encoder_init);
 void drm_encoder_cleanup(struct drm_encoder *encoder)
 {
 	struct drm_device *dev = encoder->dev;
-	struct drm_bridge *bridge, *next;
 
 	/* Note that the encoder_list is considered to be static; should we
 	 * remove the drm_encoder at runtime we would have to decrement all
 	 * the indices on the drm_encoder after us in the encoder_list.
 	 */
 
-	list_for_each_entry_safe(bridge, next, &encoder->bridge_chain,
-				 chain_node)
-		drm_bridge_detach(bridge);
+	if (encoder->bridge) {
+		struct drm_bridge *bridge = encoder->bridge;
+		struct drm_bridge *next;
+
+		while (bridge) {
+			next = bridge->next;
+			drm_bridge_detach(bridge);
+			bridge = next;
+		}
+	}
 
 	drm_mode_object_unregister(dev, &encoder->base);
 	kfree(encoder->name);

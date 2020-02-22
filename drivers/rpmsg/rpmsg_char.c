@@ -146,6 +146,7 @@ static int rpmsg_eptdev_release(struct inode *inode, struct file *filp)
 {
 	struct rpmsg_eptdev *eptdev = cdev_to_eptdev(inode->i_cdev);
 	struct device *dev = &eptdev->dev;
+	struct sk_buff *skb;
 
 	/* Close the endpoint, if it's not already destroyed by the parent */
 	mutex_lock(&eptdev->ept_lock);
@@ -156,7 +157,10 @@ static int rpmsg_eptdev_release(struct inode *inode, struct file *filp)
 	mutex_unlock(&eptdev->ept_lock);
 
 	/* Discard all SKBs */
-	skb_queue_purge(&eptdev->queue);
+	while (!skb_queue_empty(&eptdev->queue)) {
+		skb = skb_dequeue(&eptdev->queue);
+		kfree_skb(skb);
+	}
 
 	put_device(dev);
 
@@ -223,10 +227,8 @@ static ssize_t rpmsg_eptdev_write_iter(struct kiocb *iocb,
 	if (!kbuf)
 		return -ENOMEM;
 
-	if (!copy_from_iter_full(kbuf, len, from)) {
-		ret = -EFAULT;
-		goto free_kbuf;
-	}
+	if (!copy_from_iter_full(kbuf, len, from))
+		return -EFAULT;
 
 	if (mutex_lock_interruptible(&eptdev->ept_lock)) {
 		ret = -ERESTARTSYS;
@@ -288,7 +290,7 @@ static const struct file_operations rpmsg_eptdev_fops = {
 	.write_iter = rpmsg_eptdev_write_iter,
 	.poll = rpmsg_eptdev_poll,
 	.unlocked_ioctl = rpmsg_eptdev_ioctl,
-	.compat_ioctl = compat_ptr_ioctl,
+	.compat_ioctl = rpmsg_eptdev_ioctl,
 };
 
 static ssize_t name_show(struct device *dev, struct device_attribute *attr,
@@ -449,7 +451,7 @@ static const struct file_operations rpmsg_ctrldev_fops = {
 	.open = rpmsg_ctrldev_open,
 	.release = rpmsg_ctrldev_release,
 	.unlocked_ioctl = rpmsg_ctrldev_ioctl,
-	.compat_ioctl = compat_ptr_ioctl,
+	.compat_ioctl = rpmsg_ctrldev_ioctl,
 };
 
 static void rpmsg_ctrldev_release_device(struct device *dev)

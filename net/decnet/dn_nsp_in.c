@@ -328,7 +328,7 @@ static void dn_nsp_conn_init(struct sock *sk, struct sk_buff *skb)
 		return;
 	}
 
-	sk_acceptq_added(sk);
+	sk->sk_ack_backlog++;
 	skb_queue_tail(&sk->sk_receive_queue, skb);
 	sk->sk_state_change(sk);
 }

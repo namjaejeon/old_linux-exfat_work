@@ -203,7 +203,7 @@ nfsd3_proc_write(struct svc_rqst *rqstp)
 		RETURN_STATUS(nfserr_io);
 	nfserr = nfsd_write(rqstp, &resp->fh, argp->offset,
 			    rqstp->rq_vec, nvecs, &cnt,
-			    resp->committed, resp->verf);
+			    resp->committed);
 	resp->count = cnt;
 	RETURN_STATUS(nfserr);
 }
@@ -683,8 +683,7 @@ nfsd3_proc_commit(struct svc_rqst *rqstp)
 		RETURN_STATUS(nfserr_inval);
 
 	fh_copy(&resp->fh, &argp->fh);
-	nfserr = nfsd_commit(rqstp, &resp->fh, argp->offset, argp->count,
-			resp->verf);
+	nfserr = nfsd_commit(rqstp, &resp->fh, argp->offset, argp->count);
 
 	RETURN_STATUS(nfserr);
 }

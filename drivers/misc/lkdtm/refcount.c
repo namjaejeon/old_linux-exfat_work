@@ -6,6 +6,14 @@
 #include "lkdtm.h"
 #include <linux/refcount.h>
 
+#ifdef CONFIG_REFCOUNT_FULL
+#define REFCOUNT_MAX		(UINT_MAX - 1)
+#define REFCOUNT_SATURATED	UINT_MAX
+#else
+#define REFCOUNT_MAX		INT_MAX
+#define REFCOUNT_SATURATED	(INT_MIN / 2)
+#endif
+
 static void overflow_check(refcount_t *ref)
 {
 	switch (refcount_read(ref)) {
@@ -119,7 +127,7 @@ void lkdtm_REFCOUNT_DEC_ZERO(void)
 static void check_negative(refcount_t *ref, int start)
 {
 	/*
-	 * refcount_t refuses to move a refcount at all on an
+	 * CONFIG_REFCOUNT_FULL refuses to move a refcount at all on an
 	 * over-sub, so we have to track our starting position instead of
 	 * looking only at zero-pinning.
 	 */
@@ -202,6 +210,7 @@ static void check_from_zero(refcount_t *ref)
 
 /*
  * A refcount_inc() from zero should pin to zero or saturate and may WARN.
+ * Only CONFIG_REFCOUNT_FULL provides this protection currently.
  */
 void lkdtm_REFCOUNT_INC_ZERO(void)
 {

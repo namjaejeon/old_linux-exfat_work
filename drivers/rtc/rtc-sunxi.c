@@ -422,6 +422,7 @@ MODULE_DEVICE_TABLE(of, sunxi_rtc_dt_ids);
 static int sunxi_rtc_probe(struct platform_device *pdev)
 {
 	struct sunxi_rtc_dev *chip;
+	struct resource *res;
 	int ret;
 
 	chip = devm_kzalloc(&pdev->dev, sizeof(*chip), GFP_KERNEL);
@@ -435,7 +436,8 @@ static int sunxi_rtc_probe(struct platform_device *pdev)
 	if (IS_ERR(chip->rtc))
 		return PTR_ERR(chip->rtc);
 
-	chip->base = devm_platform_ioremap_resource(pdev, 0);
+	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+	chip->base = devm_ioremap_resource(&pdev->dev, res);
 	if (IS_ERR(chip->base))
 		return PTR_ERR(chip->base);
 

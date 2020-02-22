@@ -2,12 +2,7 @@
 #ifndef _M68K_PGTABLE_H
 #define _M68K_PGTABLE_H
 
-
-#if defined(CONFIG_SUN3) || defined(CONFIG_COLDFIRE)
-#include <asm-generic/pgtable-nopmd.h>
-#else
-#include <asm-generic/pgtable-nopud.h>
-#endif
+#include <asm-generic/4level-fixup.h>
 
 #include <asm/setup.h>
 
@@ -35,7 +30,9 @@
 
 
 /* PMD_SHIFT determines the size of the area a second-level page table can map */
-#if CONFIG_PGTABLE_LEVELS == 3
+#ifdef CONFIG_SUN3
+#define PMD_SHIFT       17
+#else
 #define PMD_SHIFT	22
 #endif
 #define PMD_SIZE	(1UL << PMD_SHIFT)

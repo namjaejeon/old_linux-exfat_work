@@ -28,8 +28,6 @@
 #include <stdbool.h>
 #include <dirent.h>
 
-static bool fs_frozen;
-
 /* Don't use syslog() in the function since that can cause write to disk */
 static int vss_do_freeze(char *dir, unsigned int cmd)
 {
@@ -157,26 +155,17 @@ static int vss_operate(int operation)
 			continue;
 		}
 		error |= vss_do_freeze(ent->mnt_dir, cmd);
-		if (operation == VSS_OP_FREEZE) {
-			if (error)
-				goto err;
-			fs_frozen = true;
-		}
+		if (error && operation == VSS_OP_FREEZE)
+			goto err;
 	}
 
 	endmntent(mounts);
 
 	if (root_seen) {
 		error |= vss_do_freeze("/", cmd);
-		if (operation == VSS_OP_FREEZE) {
-			if (error)
-				goto err;
-			fs_frozen = true;
-		}
+		if (error && operation == VSS_OP_FREEZE)
+			goto err;
 	}
-
-	if (operation == VSS_OP_THAW && !error)
-		fs_frozen = false;
 
 	goto out;
 err:
@@ -186,7 +175,6 @@ err:
 		endmntent(mounts);
 	}
 	vss_operate(VSS_OP_THAW);
-	fs_frozen = false;
 	/* Call syslog after we thaw all filesystems */
 	if (ent)
 		syslog(LOG_ERR, "FREEZE of %s failed; error:%d %s",
@@ -208,13 +196,13 @@ void print_usage(char *argv[])
 
 int main(int argc, char *argv[])
 {
-	int vss_fd = -1, len;
+	int vss_fd, len;
 	int error;
 	struct pollfd pfd;
 	int	op;
 	struct hv_vss_msg vss_msg[1];
 	int daemonize = 1, long_index = 0, opt;
-	int in_handshake;
+	int in_handshake = 1;
 	__u32 kernel_modver;
 
 	static struct option long_options[] = {
@@ -244,18 +232,6 @@ int main(int argc, char *argv[])
 	openlog("Hyper-V VSS", 0, LOG_USER);
 	syslog(LOG_INFO, "VSS starting; pid is:%d", getpid());
 
-reopen_vss_fd:
-	if (vss_fd != -1)
-		close(vss_fd);
-	if (fs_frozen) {
-		if (vss_operate(VSS_OP_THAW) || fs_frozen) {
-			syslog(LOG_ERR, "failed to thaw file system: err=%d",
-			       errno);
-			exit(EXIT_FAILURE);
-		}
-	}
-
-	in_handshake = 1;
 	vss_fd = open("/dev/vmbus/hv_vss", O_RDWR);
 	if (vss_fd < 0) {
 		syslog(LOG_ERR, "open /dev/vmbus/hv_vss failed; error: %d %s",
@@ -308,7 +284,8 @@ reopen_vss_fd:
 		if (len != sizeof(struct hv_vss_msg)) {
 			syslog(LOG_ERR, "read failed; error:%d %s",
 			       errno, strerror(errno));
-			goto reopen_vss_fd;
+			close(vss_fd);
+			return EXIT_FAILURE;
 		}
 
 		op = vss_msg->vss_hdr.operation;
@@ -335,18 +312,14 @@ reopen_vss_fd:
 		default:
 			syslog(LOG_ERR, "Illegal op:%d\n", op);
 		}
-
-		/*
-		 * The write() may return an error due to the faked VSS_OP_THAW
-		 * message upon hibernation. Ignore the error by resetting the
-		 * dev file, i.e. closing and re-opening it.
-		 */
 		vss_msg->error = error;
 		len = write(vss_fd, vss_msg, sizeof(struct hv_vss_msg));
 		if (len != sizeof(struct hv_vss_msg)) {
 			syslog(LOG_ERR, "write failed; error: %d %s", errno,
 			       strerror(errno));
-			goto reopen_vss_fd;
+
+			if (op == VSS_OP_FREEZE)
+				vss_operate(VSS_OP_THAW);
 		}
 	}
 

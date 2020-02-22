@@ -199,6 +199,7 @@ struct usdhi6_host {
 
 	/* Pin control */
 	struct pinctrl *pinctrl;
+	struct pinctrl_state *pins_default;
 	struct pinctrl_state *pins_uhs;
 };
 
@@ -676,14 +677,12 @@ static void usdhi6_dma_request(struct usdhi6_host *host, phys_addr_t start)
 	};
 	int ret;
 
-	host->chan_tx = dma_request_chan(mmc_dev(host->mmc), "tx");
+	host->chan_tx = dma_request_slave_channel(mmc_dev(host->mmc), "tx");
 	dev_dbg(mmc_dev(host->mmc), "%s: TX: got channel %p\n", __func__,
 		host->chan_tx);
 
-	if (IS_ERR(host->chan_tx)) {
-		host->chan_tx = NULL;
+	if (!host->chan_tx)
 		return;
-	}
 
 	cfg.direction = DMA_MEM_TO_DEV;
 	cfg.dst_addr = start + USDHI6_SD_BUF0;
@@ -693,14 +692,12 @@ static void usdhi6_dma_request(struct usdhi6_host *host, phys_addr_t start)
 	if (ret < 0)
 		goto e_release_tx;
 
-	host->chan_rx = dma_request_chan(mmc_dev(host->mmc), "rx");
+	host->chan_rx = dma_request_slave_channel(mmc_dev(host->mmc), "rx");
 	dev_dbg(mmc_dev(host->mmc), "%s: RX: got channel %p\n", __func__,
 		host->chan_rx);
 
-	if (IS_ERR(host->chan_rx)) {
-		host->chan_rx = NULL;
+	if (!host->chan_rx)
 		goto e_release_tx;
-	}
 
 	cfg.direction = DMA_DEV_TO_MEM;
 	cfg.src_addr = cfg.dst_addr;
@@ -1165,7 +1162,8 @@ static int usdhi6_set_pinstates(struct usdhi6_host *host, int voltage)
 					    host->pins_uhs);
 
 	default:
-		return pinctrl_select_default_state(mmc_dev(host->mmc));
+		return pinctrl_select_state(host->pinctrl,
+					    host->pins_default);
 	}
 }
 
@@ -1772,6 +1770,17 @@ static int usdhi6_probe(struct platform_device *pdev)
 	}
 
 	host->pins_uhs = pinctrl_lookup_state(host->pinctrl, "state_uhs");
+	if (!IS_ERR(host->pins_uhs)) {
+		host->pins_default = pinctrl_lookup_state(host->pinctrl,
+							  PINCTRL_STATE_DEFAULT);
+
+		if (IS_ERR(host->pins_default)) {
+			dev_err(dev,
+				"UHS pinctrl requires a default pin state.\n");
+			ret = PTR_ERR(host->pins_default);
+			goto e_free_mmc;
+		}
+	}
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	host->base = devm_ioremap_resource(dev, res);

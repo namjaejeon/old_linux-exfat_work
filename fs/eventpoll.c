@@ -354,6 +354,12 @@ static inline struct epitem *ep_item_from_epqueue(poll_table *p)
 	return container_of(p, struct ep_pqueue, pt)->epi;
 }
 
+/* Tells if the epoll_ctl(2) operation needs an event copy from userspace */
+static inline int ep_op_has_event(int op)
+{
+	return op != EPOLL_CTL_DEL;
+}
+
 /* Initialize the poll safe wake up structure */
 static void ep_nested_calls_init(struct nested_calls *ncalls)
 {
@@ -545,23 +551,28 @@ out_unlock:
  */
 #ifdef CONFIG_DEBUG_LOCK_ALLOC
 
-static DEFINE_PER_CPU(int, wakeup_nest);
+static struct nested_calls poll_safewake_ncalls;
+
+static int ep_poll_wakeup_proc(void *priv, void *cookie, int call_nests)
+{
+	unsigned long flags;
+	wait_queue_head_t *wqueue = (wait_queue_head_t *)cookie;
+
+	spin_lock_irqsave_nested(&wqueue->lock, flags, call_nests + 1);
+	wake_up_locked_poll(wqueue, EPOLLIN);
+	spin_unlock_irqrestore(&wqueue->lock, flags);
+
+	return 0;
+}
 
 static void ep_poll_safewake(wait_queue_head_t *wq)
 {
-	unsigned long flags;
-	int subclass;
+	int this_cpu = get_cpu();
 
-	local_irq_save(flags);
-	preempt_disable();
-	subclass = __this_cpu_read(wakeup_nest);
-	spin_lock_nested(&wq->lock, subclass + 1);
-	__this_cpu_inc(wakeup_nest);
-	wake_up_locked_poll(wq, POLLIN);
-	__this_cpu_dec(wakeup_nest);
-	spin_unlock(&wq->lock);
-	local_irq_restore(flags);
-	preempt_enable();
+	ep_call_nested(&poll_safewake_ncalls,
+		       ep_poll_wakeup_proc, NULL, wq, (void *) (long) this_cpu);
+
+	put_cpu();
 }
 
 #else
@@ -660,6 +671,7 @@ static __poll_t ep_scan_ready_list(struct eventpoll *ep,
 			      void *priv, int depth, bool ep_locked)
 {
 	__poll_t res;
+	int pwake = 0;
 	struct epitem *epi, *nepi;
 	LIST_HEAD(txlist);
 
@@ -726,10 +738,25 @@ static __poll_t ep_scan_ready_list(struct eventpoll *ep,
 	 */
 	list_splice(&txlist, &ep->rdllist);
 	__pm_relax(ep->ws);
+
+	if (!list_empty(&ep->rdllist)) {
+		/*
+		 * Wake up (if active) both the eventpoll wait list and
+		 * the ->poll() wait list (delayed after we release the lock).
+		 */
+		if (waitqueue_active(&ep->wq))
+			wake_up(&ep->wq);
+		if (waitqueue_active(&ep->poll_wait))
+			pwake++;
+	}
 	write_unlock_irq(&ep->lock);
 
 	if (!ep_locked)
 		mutex_unlock(&ep->mtx);
+
+	/* We have to call this outside the lock */
+	if (pwake)
+		ep_poll_safewake(&ep->poll_wait);
 
 	return res;
 }
@@ -2068,27 +2095,26 @@ SYSCALL_DEFINE1(epoll_create, int, size)
 	return do_epoll_create(0);
 }
 
-static inline int epoll_mutex_lock(struct mutex *mutex, int depth,
-				   bool nonblock)
-{
-	if (!nonblock) {
-		mutex_lock_nested(mutex, depth);
-		return 0;
-	}
-	if (mutex_trylock(mutex))
-		return 0;
-	return -EAGAIN;
-}
-
-int do_epoll_ctl(int epfd, int op, int fd, struct epoll_event *epds,
-		 bool nonblock)
+/*
+ * The following function implements the controller interface for
+ * the eventpoll file that enables the insertion/removal/change of
+ * file descriptors inside the interest set.
+ */
+SYSCALL_DEFINE4(epoll_ctl, int, epfd, int, op, int, fd,
+		struct epoll_event __user *, event)
 {
 	int error;
 	int full_check = 0;
 	struct fd f, tf;
 	struct eventpoll *ep;
 	struct epitem *epi;
+	struct epoll_event epds;
 	struct eventpoll *tep = NULL;
+
+	error = -EFAULT;
+	if (ep_op_has_event(op) &&
+	    copy_from_user(&epds, event, sizeof(struct epoll_event)))
+		goto error_return;
 
 	error = -EBADF;
 	f = fdget(epfd);
@@ -2107,7 +2133,7 @@ int do_epoll_ctl(int epfd, int op, int fd, struct epoll_event *epds,
 
 	/* Check if EPOLLWAKEUP is allowed */
 	if (ep_op_has_event(op))
-		ep_take_care_of_epollwakeup(epds);
+		ep_take_care_of_epollwakeup(&epds);
 
 	/*
 	 * We have to check that the file structure underneath the file descriptor
@@ -2123,11 +2149,11 @@ int do_epoll_ctl(int epfd, int op, int fd, struct epoll_event *epds,
 	 * so EPOLLEXCLUSIVE is not allowed for a EPOLL_CTL_MOD operation.
 	 * Also, we do not currently supported nested exclusive wakeups.
 	 */
-	if (ep_op_has_event(op) && (epds->events & EPOLLEXCLUSIVE)) {
+	if (ep_op_has_event(op) && (epds.events & EPOLLEXCLUSIVE)) {
 		if (op == EPOLL_CTL_MOD)
 			goto error_tgt_fput;
 		if (op == EPOLL_CTL_ADD && (is_file_epoll(tf.file) ||
-				(epds->events & ~EPOLLEXCLUSIVE_OK_BITS)))
+				(epds.events & ~EPOLLEXCLUSIVE_OK_BITS)))
 			goto error_tgt_fput;
 	}
 
@@ -2152,17 +2178,13 @@ int do_epoll_ctl(int epfd, int op, int fd, struct epoll_event *epds,
 	 * deep wakeup paths from forming in parallel through multiple
 	 * EPOLL_CTL_ADD operations.
 	 */
-	error = epoll_mutex_lock(&ep->mtx, 0, nonblock);
-	if (error)
-		goto error_tgt_fput;
+	mutex_lock_nested(&ep->mtx, 0);
 	if (op == EPOLL_CTL_ADD) {
 		if (!list_empty(&f.file->f_ep_links) ||
 						is_file_epoll(tf.file)) {
-			mutex_unlock(&ep->mtx);
-			error = epoll_mutex_lock(&epmutex, 0, nonblock);
-			if (error)
-				goto error_tgt_fput;
 			full_check = 1;
+			mutex_unlock(&ep->mtx);
+			mutex_lock(&epmutex);
 			if (is_file_epoll(tf.file)) {
 				error = -ELOOP;
 				if (ep_loop_check(ep, tf.file) != 0) {
@@ -2172,19 +2194,10 @@ int do_epoll_ctl(int epfd, int op, int fd, struct epoll_event *epds,
 			} else
 				list_add(&tf.file->f_tfile_llink,
 							&tfile_check_list);
-			error = epoll_mutex_lock(&ep->mtx, 0, nonblock);
-			if (error) {
-out_del:
-				list_del(&tf.file->f_tfile_llink);
-				goto error_tgt_fput;
-			}
+			mutex_lock_nested(&ep->mtx, 0);
 			if (is_file_epoll(tf.file)) {
 				tep = tf.file->private_data;
-				error = epoll_mutex_lock(&tep->mtx, 1, nonblock);
-				if (error) {
-					mutex_unlock(&ep->mtx);
-					goto out_del;
-				}
+				mutex_lock_nested(&tep->mtx, 1);
 			}
 		}
 	}
@@ -2200,8 +2213,8 @@ out_del:
 	switch (op) {
 	case EPOLL_CTL_ADD:
 		if (!epi) {
-			epds->events |= EPOLLERR | EPOLLHUP;
-			error = ep_insert(ep, epds, tf.file, fd, full_check);
+			epds.events |= EPOLLERR | EPOLLHUP;
+			error = ep_insert(ep, &epds, tf.file, fd, full_check);
 		} else
 			error = -EEXIST;
 		if (full_check)
@@ -2216,8 +2229,8 @@ out_del:
 	case EPOLL_CTL_MOD:
 		if (epi) {
 			if (!(epi->event.events & EPOLLEXCLUSIVE)) {
-				epds->events |= EPOLLERR | EPOLLHUP;
-				error = ep_modify(ep, epi, epds);
+				epds.events |= EPOLLERR | EPOLLHUP;
+				error = ep_modify(ep, epi, &epds);
 			}
 		} else
 			error = -ENOENT;
@@ -2237,23 +2250,6 @@ error_fput:
 error_return:
 
 	return error;
-}
-
-/*
- * The following function implements the controller interface for
- * the eventpoll file that enables the insertion/removal/change of
- * file descriptors inside the interest set.
- */
-SYSCALL_DEFINE4(epoll_ctl, int, epfd, int, op, int, fd,
-		struct epoll_event __user *, event)
-{
-	struct epoll_event epds;
-
-	if (ep_op_has_event(op) &&
-	    copy_from_user(&epds, event, sizeof(struct epoll_event)))
-		return -EFAULT;
-
-	return do_epoll_ctl(epfd, op, fd, &epds, false);
 }
 
 /*
@@ -2373,6 +2369,11 @@ static int __init eventpoll_init(void)
 	 * inclusion loops checks.
 	 */
 	ep_nested_calls_init(&poll_loop_ncalls);
+
+#ifdef CONFIG_DEBUG_LOCK_ALLOC
+	/* Initialize the structure used to perform safe poll wait head wake ups */
+	ep_nested_calls_init(&poll_safewake_ncalls);
+#endif
 
 	/*
 	 * We can have many thousands of epitems, so prevent this from

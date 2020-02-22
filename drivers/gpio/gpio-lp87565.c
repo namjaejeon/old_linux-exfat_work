@@ -57,10 +57,7 @@ static int lp87565_gpio_get_direction(struct gpio_chip *chip,
 	if (ret < 0)
 		return ret;
 
-	if (val & BIT(offset))
-		return GPIO_LINE_DIRECTION_OUT;
-
-	return GPIO_LINE_DIRECTION_IN;
+	return !(val & BIT(offset));
 }
 
 static int lp87565_gpio_direction_input(struct gpio_chip *chip,

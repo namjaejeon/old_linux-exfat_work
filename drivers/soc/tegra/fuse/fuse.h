@@ -13,8 +13,6 @@
 #include <linux/dmaengine.h>
 #include <linux/types.h>
 
-struct nvmem_cell_lookup;
-struct nvmem_device;
 struct tegra_fuse;
 
 struct tegra_fuse_info {
@@ -29,9 +27,6 @@ struct tegra_fuse_soc {
 	int (*probe)(struct tegra_fuse *fuse);
 
 	const struct tegra_fuse_info *info;
-
-	const struct nvmem_cell_lookup *lookups;
-	unsigned int num_lookups;
 };
 
 struct tegra_fuse {
@@ -53,9 +48,6 @@ struct tegra_fuse {
 		dma_addr_t phys;
 		u32 *virt;
 	} apbdma;
-
-	struct nvmem_device *nvmem;
-	struct nvmem_cell_lookup *lookups;
 };
 
 void tegra_init_revision(void);
@@ -106,10 +98,6 @@ extern const struct tegra_fuse_soc tegra210_fuse_soc;
 
 #ifdef CONFIG_ARCH_TEGRA_186_SOC
 extern const struct tegra_fuse_soc tegra186_fuse_soc;
-#endif
-
-#ifdef CONFIG_ARCH_TEGRA_194_SOC
-extern const struct tegra_fuse_soc tegra194_fuse_soc;
 #endif
 
 #endif

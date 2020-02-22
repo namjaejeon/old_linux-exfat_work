@@ -24,7 +24,6 @@ whole; patches welcome!
    gdb-kernel-debugging
    kgdb
    kselftest
-   kunit/index
 
 
 .. only::  subproject and html

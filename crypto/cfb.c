@@ -203,11 +203,9 @@ static int crypto_cfb_create(struct crypto_template *tmpl, struct rtattr **tb)
 	struct crypto_alg *alg;
 	int err;
 
-	inst = skcipher_alloc_instance_simple(tmpl, tb);
+	inst = skcipher_alloc_instance_simple(tmpl, tb, &alg);
 	if (IS_ERR(inst))
 		return PTR_ERR(inst);
-
-	alg = skcipher_ialg_simple(inst);
 
 	/* CFB mode is a stream cipher. */
 	inst->alg.base.cra_blocksize = 1;
@@ -225,6 +223,7 @@ static int crypto_cfb_create(struct crypto_template *tmpl, struct rtattr **tb)
 	if (err)
 		inst->free(inst);
 
+	crypto_mod_put(alg);
 	return err;
 }
 

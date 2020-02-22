@@ -183,6 +183,11 @@
 					#address-cells = <1>;
 					#size-cells = <0>;
 
+					port@1 {
+						reg = <1>;
+						label = "internal_j9";
+					};
+
 					port@2 {
 						reg = <2>;
 						label = "eth_fc_1000_2";
@@ -265,6 +270,11 @@
 				ports {
 					#address-cells = <1>;
 					#size-cells = <0>;
+
+					port@1 {
+						reg = <1>;
+						label = "internal_j8";
+					};
 
 					port@2 {
 						reg = <2>;
@@ -407,7 +417,7 @@
 	pinctrl-0 = <&pinctrl_dspi1>;
 	status = "okay";
 
-	flash@0 {
+	spi-flash@0 {
 		#address-cells = <1>;
 		#size-cells = <1>;
 		compatible = "jedec,spi-nor";
@@ -420,7 +430,7 @@
 		};
 	};
 
-	flash@1 {
+	spi-flash@1 {
 		#address-cells = <1>;
 		#size-cells = <1>;
 		compatible = "jedec,spi-nor";
@@ -509,7 +519,7 @@
 		#gpio-cells = <2>;
 	};
 
-	temp-sensor@48 {
+	lm75@48 {
 		compatible = "national,lm75";
 		reg = <0x48>;
 	};
@@ -524,7 +534,7 @@
 		reg = <0x52>;
 	};
 
-	elapsed-time-recorder@6b {
+	ds1682@6b {
 		compatible = "dallas,ds1682";
 		reg = <0x6b>;
 	};
@@ -536,12 +546,7 @@
 	pinctrl-0 = <&pinctrl_i2c1>;
 	status = "okay";
 
-	watchdog@38 {
-		compatible = "zii,rave-wdt";
-		reg = <0x38>;
-	};
-
-	adc@4a {
+	adt7411@4a {
 		compatible = "adi,adt7411";
 		reg = <0x4a>;
 	};
@@ -553,7 +558,7 @@
 	pinctrl-0 = <&pinctrl_i2c2>;
 	status = "okay";
 
-	gpio9: io-expander@20 {
+	gpio9: sx1503q@20 {
 		compatible = "semtech,sx1503q";
 		pinctrl-names = "default";
 		pinctrl-0 = <&pinctrl_sx1503_20>;
@@ -564,12 +569,12 @@
 		interrupts = <31 IRQ_TYPE_EDGE_FALLING>;
 	};
 
-	temp-sensor@4e {
+	lm75@4e {
 		compatible = "national,lm75";
 		reg = <0x4e>;
 	};
 
-	temp-sensor@4f {
+	lm75@4f {
 		compatible = "national,lm75";
 		reg = <0x4f>;
 	};
@@ -581,17 +586,17 @@
 		reg = <0x23>;
 	};
 
-	adc@4a {
+	adt7411@4a {
 		compatible = "adi,adt7411";
 		reg = <0x4a>;
 	};
 
-	eeprom@54 {
+	at24c08@54 {
 		compatible = "atmel,24c08";
 		reg = <0x54>;
 	};
 
-	i2c-mux@70 {
+	tca9548@70 {
 		compatible = "nxp,pca9548";
 		pinctrl-names = "default";
 		#address-cells = <1>;
@@ -630,7 +635,7 @@
 		};
 	};
 
-	i2c-mux@71 {
+	tca9548@71 {
 		compatible = "nxp,pca9548";
 		pinctrl-names = "default";
 		reg = <0x71>;
@@ -684,6 +689,7 @@
 	linux,rs485-enabled-at-boot-time;
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_uart1>;
+	rs485-rts-delay = <0 200>;
 	status = "okay";
 };
 
@@ -691,6 +697,7 @@
 	linux,rs485-enabled-at-boot-time;
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_uart2>;
+	rs485-rts-delay = <0 200>;
 	status = "okay";
 };
 
