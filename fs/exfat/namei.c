@@ -555,7 +555,7 @@ static int exfat_add_entry(struct inode *inode, const char *path,
 			return -EIO;
 		info->num_subdirs = count + EXFAT_MIN_SUBDIR;
 	}
-	memset(&info->ctime, 0, sizeof(info->ctime));
+	memset(&info->crtime, 0, sizeof(info->crtime));
 	memset(&info->mtime, 0, sizeof(info->mtime));
 	memset(&info->atime, 0, sizeof(info->atime));
 out:
@@ -581,7 +581,7 @@ static int exfat_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 		goto unlock;
 
 	inode_inc_iversion(dir);
-	dir->i_ctime = dir->i_mtime = dir->i_atime = current_time(dir);
+	dir->i_ctime = dir->i_mtime = current_time(dir);
 	if (IS_DIRSYNC(dir))
 		exfat_sync_inode(dir);
 	else
@@ -593,7 +593,8 @@ static int exfat_create(struct inode *dir, struct dentry *dentry, umode_t mode,
 		goto unlock;
 
 	inode_inc_iversion(inode);
-	inode->i_mtime = inode->i_atime = inode->i_ctime = current_time(inode);
+	inode->i_mtime = inode->i_atime = inode->i_ctime =
+		EXFAT_I(inode)->i_crtime = current_time(inode);
 	/* timestamp is already written, so mark_inode_dirty() is unneeded. */
 
 	d_instantiate(dentry, inode);
@@ -654,7 +655,7 @@ static int exfat_find(struct inode *dir, struct qstr *qname,
 		info->attr = ATTR_SUBDIR;
 		info->flags = ALLOC_FAT_CHAIN;
 		info->start_clu = sbi->root_dir;
-		memset(&info->ctime, 0, sizeof(info->ctime));
+		memset(&info->crtime, 0, sizeof(info->crtime));
 		memset(&info->mtime, 0, sizeof(info->mtime));
 		memset(&info->atime, 0, sizeof(info->atime));
 
@@ -693,18 +694,21 @@ static int exfat_find(struct inode *dir, struct qstr *qname,
 			return -EIO;
 		}
 
-		exfat_get_entry_time(sbi, &info->ctime,
+		exfat_get_entry_time(sbi, &info->crtime,
+				ep->dentry.file.create_tz,
 				ep->dentry.file.create_time,
 				ep->dentry.file.create_date,
-				ep->dentry.file.create_tz);
+				ep->dentry.file.create_time_ms);
 		exfat_get_entry_time(sbi, &info->mtime,
+				ep->dentry.file.modify_tz,
 				ep->dentry.file.modify_time,
 				ep->dentry.file.modify_date,
-				ep->dentry.file.modify_tz);
+				ep->dentry.file.modify_time_ms);
 		exfat_get_entry_time(sbi, &info->atime,
+				ep->dentry.file.access_tz,
 				ep->dentry.file.access_time,
 				ep->dentry.file.access_date,
-				ep->dentry.file.access_tz);
+				0);
 		kfree(es);
 
 		if (info->type == TYPE_DIR) {
@@ -882,7 +886,7 @@ static int exfat_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 		goto unlock;
 
 	inode_inc_iversion(dir);
-	dir->i_ctime = dir->i_mtime = dir->i_atime = current_time(dir);
+	dir->i_ctime = dir->i_mtime = current_time(dir);
 	if (IS_DIRSYNC(dir))
 		exfat_sync_inode(dir);
 	else
@@ -897,7 +901,8 @@ static int exfat_mkdir(struct inode *dir, struct dentry *dentry, umode_t mode)
 	}
 
 	inode_inc_iversion(inode);
-	inode->i_mtime = inode->i_atime = inode->i_ctime = current_time(inode);
+	inode->i_mtime = inode->i_atime = inode->i_ctime =
+		EXFAT_I(inode)->i_crtime = current_time(inode);
 	/* timestamp is already written, so mark_inode_dirty() is unneeded. */
 
 	d_instantiate(dentry, inode);
@@ -1381,7 +1386,7 @@ static int exfat_rename(struct inode *old_dir, struct dentry *old_dentry,
 
 	inode_inc_iversion(new_dir);
 	new_dir->i_ctime = new_dir->i_mtime = new_dir->i_atime =
-		current_time(new_dir);
+		EXFAT_I(new_dir)->i_crtime = current_time(new_dir);
 	if (IS_DIRSYNC(new_dir))
 		exfat_sync_inode(new_dir);
 	else
@@ -1422,7 +1427,8 @@ static int exfat_rename(struct inode *old_dir, struct dentry *old_dentry,
 					"abnormal access to an inode dropped");
 			WARN_ON(new_inode->i_nlink == 0);
 		}
-		new_inode->i_ctime = current_time(new_inode);
+		new_inode->i_ctime = EXFAT_I(new_inode)->i_crtime =
+			current_time(new_inode);
 	}
 
 unlock:
